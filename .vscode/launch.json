@@ -1,0 +1,33 @@
+
+{
+    "version": "0.2.0",
+    "inputs": [
+        {
+            "id": "vscodeQtLaunchPath",
+            "type": "command",
+            "command": "cmake.launchTargetPath",
+            "args": {
+                "targetName": "VSCodeQt"
+            }
+        }
+    ],
+    "configurations": [
+        {
+            "name": "QtBuild",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${input:vscodeQtLaunchPath}",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceRoot}",
+            "environment": [
+                {
+                    "name": "PATH",
+                    "value": "C:/Qt/6.5.3/msvc2019_64/bin"
+                }
+            ],
+            "console": "integratedTerminal",
+            "visualizerFile": "c:\\Users\\sr291\\AppData\\Roaming\\Code\\User\\workspaceStorage\\726c55054bfa57693498874fd2c55455\\tonka3000.qtvsctools\\qt.natvis.xml"
+        }
+    ]
+}

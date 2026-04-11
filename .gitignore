@@ -1,0 +1,35 @@
+# Build directories
+build/
+build-*/
+
+# Visual Studio
+*.vcxproj*
+*.sln
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+*.ipch
+*.pdb
+*.obj
+*.idb
+*.ipdb
+
+# Qt build artifacts
+*.moc
+*.qrc.cpp
+*.ui.h
+*.qrc
+*.qmake.stash
+*.qmake.cache
+
+# Deployment
+*.exe
+*.dll
+*.lib
+*.exp
+*.manifest
+
+# OS files
+.DS_Store
+Thumbs.db
