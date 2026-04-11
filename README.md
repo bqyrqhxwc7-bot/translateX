@@ -31,7 +31,7 @@ cmake --build build-vs2026-x64 --config Release
 
 推荐安装方法：
 
-- Windows: 从 https://nsis.sourceforge.io/ 下载并安装
+- Windows: 从 <https://nsis.sourceforge.io/> 下载并安装
 - 或者使用 `choco install nsis`（如果已安装 Chocolatey）
 
 然后在构建目录中运行：
@@ -49,8 +49,3 @@ cmake --build build-vs2026-x64 --config Release --target package
 ## 许可证
 
 本项目采用 MIT 许可证，详见 `LICENSE` 文件。
-
-## 许可证
-
-本项目采用 MIT 许可证，详见 `LICENSE` 文件。
->>>>>>> 95f43f9 (Initial translateX project commit)
