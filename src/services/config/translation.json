@@ -1,0 +1,126 @@
+{
+  "id": "translation",
+  "displayName": "翻译",
+  "settings": [
+    {
+      "key": "backend",
+      "displayName": "翻译后端",
+      "description": "当前使用的翻译后端（可插拔：本地 Ollama / 内置云端 / 网络大模型）",
+      "type": "enum",
+      "options": [],
+      "default": "translation.online",
+      "group": "基本"
+    },
+    {
+      "key": "contextRadius",
+      "displayName": "上下文行数",
+      "description": "翻译时参考前后 N 行，增强语义一致性",
+      "type": "number",
+      "default": 2,
+      "min": 0,
+      "max": 10,
+      "group": "翻译选项"
+    },
+    {
+      "key": "sourceLang",
+      "displayName": "源语言",
+      "description": "原文语言（auto 由后端检测；免费云端不支持 auto）",
+      "type": "enum",
+      "options": ["auto", "en", "zh-CN", "ja", "ko", "fr", "de", "es", "ru"],
+      "default": "en",
+      "group": "翻译选项"
+    },
+    {
+      "key": "targetLang",
+      "displayName": "目标语言",
+      "description": "译文语言",
+      "type": "enum",
+      "options": ["zh-CN", "en", "ja", "ko", "fr", "de", "es", "ru"],
+      "default": "zh-CN",
+      "group": "翻译选项"
+    },
+    {
+      "key": "strictOutput",
+      "displayName": "严格输出",
+      "description": "只输出译文，减少模型解释性废话，降低 token 成本",
+      "type": "bool",
+      "default": true,
+      "group": "翻译选项"
+    },
+    {
+      "key": "cacheEnabled",
+      "displayName": "缓存复用",
+      "description": "内存 + 磁盘缓存，重复内容零成本",
+      "type": "bool",
+      "default": true,
+      "group": "成本"
+    },
+    {
+      "key": "fallbackEnabled",
+      "displayName": "失败自动降级",
+      "description": "网络失败时自动回退到免费云端",
+      "type": "bool",
+      "default": true,
+      "group": "成本"
+    },
+    {
+      "key": "smartChunking",
+      "displayName": "智能分块",
+      "description": "合并连续相邻行批量请求，降低请求数",
+      "type": "bool",
+      "default": true,
+      "group": "成本"
+    },
+    {
+      "key": "maxChunkChars",
+      "displayName": "单块最大字符",
+      "description": "智能分块的单块字符预算",
+      "type": "number",
+      "default": 14000,
+      "min": 256,
+      "max": 100000,
+      "step": 256,
+      "group": "成本"
+    },
+    {
+      "key": "qualityGateEnabled",
+      "displayName": "质量自检",
+      "description": "翻译后规则自检（回显/长度/Token 保留/术语一致），异常时提示人工复核",
+      "type": "bool",
+      "default": true,
+      "group": "质量"
+    },
+    {
+      "key": "enableCustomPrompt",
+      "displayName": "启用自定义提示词",
+      "description": "使用自定义 AI 提示词模板（%1=原文，%2=上下文）",
+      "type": "bool",
+      "default": false,
+      "group": "高级"
+    },
+    {
+      "key": "customPrompt",
+      "displayName": "普通翻译提示词",
+      "description": "%1 将被替换为原文",
+      "type": "multiline",
+      "default": "你是专业翻译。请将下面的原文翻译成中文，只输出译文，不要解释，不要附加说明，不要保留原文。\n原文：\n%1",
+      "group": "高级"
+    },
+    {
+      "key": "customContextPrompt",
+      "displayName": "上下文翻译提示词",
+      "description": "%1 原文、%2 上下文",
+      "type": "multiline",
+      "default": "你是专业翻译。请结合上下文，将标记为[目标]的这一行翻译成中文。要求：\n1. 只输出目标行的中文译文。\n2. 不要解释，不要附加说明，不要重复原文。\n3. 参考上下文统一代词、时态、语气和术语。\n4. 如果上下文不足，就按目标行原意自然翻译。\n上下文：\n%2\n目标行：\n%1",
+      "group": "高级"
+    },
+    {
+      "key": "glossary",
+      "displayName": "术语表",
+      "description": "术语对照（JSON），保证术语一致",
+      "type": "multiline",
+      "default": "",
+      "group": "质量"
+    }
+  ]
+}

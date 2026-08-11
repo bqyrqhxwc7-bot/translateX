@@ -2,6 +2,14 @@
 
 #include <QApplication>
 
+#ifdef FLUENTUI_BUILD_STATIC_LIB
+#  include <QtQml/qqmlextensionplugin.h>
+#  if (QT_VERSION > QT_VERSION_CHECK(6, 2, 0))
+Q_IMPORT_QML_PLUGIN(FluentUIPlugin)
+#  endif
+#  include <FluentUI.h>
+#endif
+
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);

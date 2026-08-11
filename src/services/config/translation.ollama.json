@@ -1,0 +1,24 @@
+{
+  "id": "translation.ollama",
+  "displayName": "本地 Ollama",
+  "settings": [
+    {
+      "key": "endpoint",
+      "displayName": "服务端点",
+      "description": "Ollama 服务地址",
+      "type": "string",
+      "default": "http://localhost:11434",
+      "placeholder": "http://localhost:11434",
+      "group": "连接"
+    },
+    {
+      "key": "model",
+      "displayName": "模型",
+      "description": "使用的本地模型名称（留空使用默认）",
+      "type": "string",
+      "default": "",
+      "placeholder": "qwen2.5:7b",
+      "group": "模型"
+    }
+  ]
+}

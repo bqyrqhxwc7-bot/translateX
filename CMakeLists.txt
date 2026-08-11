@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(translateX LANGUAGES CXX)
+project(translateX VERSION 1.0.0 LANGUAGES CXX)
+
+set(TRANSLATEX_VERSION "${PROJECT_VERSION}")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -8,11 +10,21 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-if(NOT DEFINED CMAKE_PREFIX_PATH AND EXISTS "C:/Qt/6.5.3/msvc2019_64")
-    list(PREPEND CMAKE_PREFIX_PATH "C:/Qt/6.5.3/msvc2019_64")
+if(NOT DEFINED CMAKE_PREFIX_PATH)
+    if(EXISTS "D:/Software/Qt/6.5.3/msvc2019_64")
+        list(PREPEND CMAKE_PREFIX_PATH "D:/Software/Qt/6.5.3/msvc2019_64")
+    elseif(EXISTS "C:/Qt/6.5.3/msvc2019_64")
+        list(PREPEND CMAKE_PREFIX_PATH "C:/Qt/6.5.3/msvc2019_64")
+    endif()
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Concurrent Network)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Concurrent Network Qml Quick QuickWidgets Svg ShaderTools PrintSupport)
+
+# ---- FluentUI (BSD-3-Clause) : Microsoft Fluent Design component library for Qt QML ----
+# 全量迁移到 QML：FluentUI 静态库作为子目录集成（third_party/FluentUI）。
+set(FLUENTUI_BUILD_EXAMPLES OFF CACHE BOOL "Build FluentUI demo applications." FORCE)
+set(FLUENTUI_BUILD_STATIC_LIB ON CACHE BOOL "Build FluentUI as a static library." FORCE)
+add_subdirectory(third_party/FluentUI)
 
 add_executable(translateX
     src/main.cpp
@@ -23,7 +35,79 @@ add_executable(translateX
     src/mainwindow.ui
 )
 
-target_link_libraries(translateX PRIVATE Qt6::Widgets Qt6::Concurrent Qt6::Network)
+target_link_libraries(translateX PRIVATE
+    Qt6::Widgets Qt6::Concurrent Qt6::Network
+    Qt6::Qml Qt6::Quick Qt6::QuickWidgets Qt6::Svg Qt6::ShaderTools Qt6::PrintSupport
+    fluentuiplugin
+)
+target_compile_definitions(translateX PRIVATE FLUENTUI_BUILD_STATIC_LIB)
+target_include_directories(translateX PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/FluentUI/src")
+
+# QML 版独立版本号（与 Widget 版区分，避免混淆）
+set(TRANSLATEX_QML_VERSION "1.1.0-qml")
+
+# ---- QML 骨架（FluentUI 全量迁移目标）----
+qt_add_executable(translateXqml
+    src/main_qml.cpp
+    src/services/appguard.cpp
+    src/services/appguard.h
+    src/services/documentmodel.cpp
+    src/services/documentmodel.h
+    src/services/securestorage.cpp
+    src/services/securestorage.h
+    src/services/itranslationbackend.h
+    src/services/serviceregistry.cpp
+    src/services/serviceregistry.h
+    src/services/translationbackend.cpp
+    src/services/translationbackend.h
+    src/services/translationcache.cpp
+    src/services/translationcache.h
+    src/services/translationservice.cpp
+    src/services/translationservice.h
+    src/services/termglossary.cpp
+    src/services/termglossary.h
+    src/services/qualitygate.cpp
+    src/services/qualitygate.h
+    src/services/configservice.cpp
+    src/services/configservice.h
+    src/services/config/config.qrc
+    src/services/commentservice.cpp
+    src/services/commentservice.h
+    src/services/documentmanager.cpp
+    src/services/documentmanager.h
+    src/services/chapterservice.cpp
+    src/services/chapterservice.h
+    src/services/findservice.cpp
+    src/services/findservice.h
+)
+
+qt_add_qml_module(translateXqml
+    URI translateX
+    VERSION 1.0
+    RESOURCE_PREFIX /qt/qml
+    QML_FILES
+        qml/Main.qml
+        qml/TranslateHomePage.qml
+        qml/TranslateSettingsPage.qml
+        qml/ConfigSectionCard.qml
+        qml/TranslatePanelContent.qml
+)
+
+target_link_libraries(translateXqml PRIVATE
+    Qt6::Quick Qt6::Qml Qt6::Widgets Qt6::Svg Qt6::ShaderTools Qt6::PrintSupport Qt6::Network Qt6::Concurrent
+    fluentuiplugin
+)
+target_compile_definitions(translateXqml PRIVATE
+    FLUENTUI_BUILD_STATIC_LIB
+    TRANSLATEX_VERSION="${TRANSLATEX_QML_VERSION}"
+)
+target_include_directories(translateXqml PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/FluentUI/src")
+
+# FluentUI 生成大量 QML cache 源文件，MSVC 并发编译共享 PDB 会触发 C1041；
+# 改用 /Z7 将调试信息嵌入 .obj，避免共享 PDB 竞争。
+if(MSVC AND TARGET fluentui)
+    target_compile_options(fluentui PRIVATE /Z7)
+endif()
 
 if(WIN32)
     get_target_property(QT_QMAKE_EXECUTABLE Qt6::qmake IMPORTED_LOCATION)
@@ -37,7 +121,16 @@ if(WIN32)
         )
     endif()
 
-    install(TARGETS translateX
+    if(QT_WINDEPLOYQT_EXECUTABLE)
+        get_filename_component(QT_QML_SRC_DIR "${QT_BIN_DIR}/../qml" ABSOLUTE)
+        add_custom_command(TARGET translateXqml POST_BUILD
+            COMMAND "${QT_WINDEPLOYQT_EXECUTABLE}" --no-translations --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml" "$<TARGET_FILE:translateXqml>"
+            COMMAND "${CMAKE_COMMAND}" -E copy_directory "${QT_QML_SRC_DIR}" "$<TARGET_FILE_DIR:translateXqml>/qml"
+            COMMENT "Deploying Qt runtime (incl. all QML modules) for translateXqml"
+        )
+    endif()
+
+    install(TARGETS translateX translateXqml
         RUNTIME DESTINATION .
     )
 
@@ -46,6 +139,7 @@ if(WIN32)
             DESTINATION .
             FILES_MATCHING
             PATTERN "translateX.exe"
+            PATTERN "translateXqml.exe"
             PATTERN "*.dll")
     endif()
 endif()
@@ -70,6 +164,12 @@ if(WIN32)
     endif()
 else()
     set(CPACK_GENERATOR "ZIP")
+endif()
+
+# ---- 测试（默认开启；发布构建可用 -DBUILD_TESTING=OFF 关闭）----
+include(CTest)
+if(BUILD_TESTING)
+    add_subdirectory(tests)
 endif()
 
 set(CPACK_PACKAGE_NAME "translateX")

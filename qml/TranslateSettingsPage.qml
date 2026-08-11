@@ -1,0 +1,421 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import QtQuick.Window
+import FluentUI
+
+FluScrollablePage {
+    id: page
+    // NoStack 模式下由 FluNavigationView 的 FluLoader 直接加载，须显式填满父级
+    //（否则页面宽度不跟随窗口，全屏/最大化后右侧出现透明空白）
+    anchors.fill: parent
+    title: qsTr("设置")
+    launchMode: FluPageType.SingleTask
+
+    // ---------- 本地状态 ----------
+    property var glossaryMap: ({})          // 术语表（原文 → 标准译文）
+    property var backendModel: []           // [{ id, name }]
+    property string backendSection: ""      // 当前后端对应的配置 section（schema 渲染用）
+
+    // 通知条：NoStack 模式下 Window.window 附加属性解析失败，改用页面内 InfoBar 实例
+    FluInfoBar {
+        id: infoBar
+        root: page
+    }
+
+    // ---------- 初始化 ----------
+    Component.onCompleted: {
+        glossaryMap = translationService.glossary()
+        rebuildTermList()
+        rebuildBackendModel()
+        updateBackendSection()
+    }
+
+    // ---------- 术语表操作 ----------
+    function addTerm() {
+        const s = termSourceBox.text.trim()
+        const t = termTargetBox.text.trim()
+        if (!s || !t) {
+            infoBar.showWarning(qsTr("原文术语和标准译文都不能为空"))
+            return
+        }
+        glossaryMap[s] = t
+        translationService.setGlossary(glossaryMap)
+        rebuildTermList()
+        termSourceBox.text = ""
+        termTargetBox.text = ""
+        infoBar.showSuccess(qsTr("已添加术语：%1 → %2").arg(s).arg(t))
+    }
+
+    function removeTerm(src) {
+        delete glossaryMap[src]
+        translationService.setGlossary(glossaryMap)
+        rebuildTermList()
+    }
+
+    function clearTerms() {
+        glossaryMap = ({})
+        translationService.clearGlossary()
+        rebuildTermList()
+        infoBar.showInfo(qsTr("已清空术语表"))
+    }
+
+    function rebuildTermList() {
+        termModel.clear()
+        for (const key of Object.keys(glossaryMap)) {
+            termModel.append({ source: key, translation: glossaryMap[key] })
+        }
+    }
+
+    // ---------- 后端列表 ----------
+    function rebuildBackendModel() {
+        const ids = translationService.availableBackends()
+        const arr = []
+        for (let i = 0; i < ids.length; ++i) {
+            arr.push({ id: ids[i], name: translationService.backendDisplayName(ids[i]) })
+        }
+        backendModel = arr
+        const cur = translationService.backend()
+        for (let i = 0; i < arr.length; ++i) {
+            if (arr[i].id === cur) {
+                backendCombo.currentIndex = i
+                break
+            }
+        }
+    }
+
+    // 当前后端 → 对应配置 section（仅已知带参数的后端显示参数区）
+    function updateBackendSection() {
+        const id = translationService.backend()
+        backendSection = (id === "translation.ollama" || id === "translation.network_model") ? id : ""
+    }
+
+    // ---------- 服务信号 ----------
+    Connections {
+        target: translationService
+        function onBackendChanged(id) {
+            for (let i = 0; i < backendModel.length; ++i) {
+                if (backendModel[i].id === id) {
+                    backendCombo.currentIndex = i
+                    break
+                }
+            }
+            updateBackendSection()
+        }
+        function onQualityWarning(lineNumber, issue) {
+            const loc = lineNumber >= 0 ? qsTr("第 %1 行：").arg(lineNumber + 1) : ""
+            infoBar.showWarning(loc + issue, 4000)
+        }
+    }
+
+    // ================= 界面 =================
+    spacing: 16
+
+    // ---------- 页头 ----------
+    FluText {
+        text: qsTr("翻译设置")
+        font.pixelSize: 22
+        font.bold: true
+        Layout.fillWidth: true
+    }
+    FluText {
+        text: qsTr("可插拔翻译后端、翻译选项与术语一致性配置，实时生效并持久化。")
+        font.pixelSize: 12
+        color: FluTheme.fontSecondaryColor
+        wrapMode: Text.WordWrap
+        Layout.fillWidth: true
+    }
+
+    // ---------- 卡片：翻译后端 ----------
+    Rectangle {
+        Layout.fillWidth: true
+        radius: 8
+        color: FluTheme.dark ? Qt.rgba(1, 1, 1, 0.03) : Qt.rgba(1, 1, 1, 1)
+        border.color: FluTheme.dividerColor
+        implicitHeight: cardBackendCol.implicitHeight + 32
+
+        ColumnLayout {
+            id: cardBackendCol
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 12
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                FluIcon { iconSource: FluentIcons.Sync; iconSize: 16; color: FluTheme.primaryColor }
+                FluText { text: qsTr("翻译后端"); font.pixelSize: 16; font.bold: true }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+                FluText {
+                    text: qsTr("后端")
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                FluComboBox {
+                    id: backendCombo
+                    Layout.fillWidth: true
+                    model: backendModel
+                    textRole: "name"
+                    onActivated: (index) => {
+                        if (index >= 0 && index < backendModel.length) {
+                            translationService.setBackend(backendModel[index].id)
+                        }
+                    }
+                }
+            }
+            FluText {
+                text: qsTr("可插拔后端：本地 Ollama、内置免费云端、网络大模型（OpenAI 兼容）。")
+                font.pixelSize: 12
+                color: FluTheme.fontSecondaryColor
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            // 后端参数（schema 驱动：当前后端的 config section）
+            ConfigSectionCard {
+                id: backendConfigCard
+                sectionId: backendSection
+                Layout.fillWidth: true
+                visible: backendSection.length > 0
+            }
+        }
+    }
+
+    // ---------- 卡片：翻译选项 ----------
+    Rectangle {
+        Layout.fillWidth: true
+        radius: 8
+        color: FluTheme.dark ? Qt.rgba(1, 1, 1, 0.03) : Qt.rgba(1, 1, 1, 1)
+        border.color: FluTheme.dividerColor
+        implicitHeight: cardOptionsCol.implicitHeight + 32
+
+        ColumnLayout {
+            id: cardOptionsCol
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 12
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                FluIcon { iconSource: FluentIcons.Edit; iconSize: 16; color: FluTheme.primaryColor }
+                FluText { text: qsTr("翻译选项"); font.pixelSize: 16; font.bold: true }
+            }
+
+            // 语言选择（手动渲染，保证可用；含 auto）
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+                FluText {
+                    text: qsTr("源语言")
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                FluComboBox {
+                    id: sourceLangCombo
+                    Layout.preferredWidth: 140
+                    model: ["auto", "en", "zh-CN", "ja", "ko", "fr", "de", "es", "ru"]
+                    Component.onCompleted: {
+                        const v = configService.get("translation", "sourceLang")
+                        currentIndex = model.indexOf(v)
+                    }
+                    onActivated: configService.set("translation", "sourceLang", currentText)
+                }
+                FluText {
+                    text: qsTr("目标语言")
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                FluComboBox {
+                    id: targetLangCombo
+                    Layout.preferredWidth: 140
+                    model: ["zh-CN", "en", "ja", "ko", "fr", "de", "es", "ru"]
+                    Component.onCompleted: {
+                        const v = configService.get("translation", "targetLang")
+                        currentIndex = model.indexOf(v)
+                    }
+                    onActivated: configService.set("translation", "targetLang", currentText)
+                }
+            }
+
+            ConfigSectionCard {
+                sectionId: "translation"
+                excludeKeys: ["backend", "glossary", "sourceLang", "targetLang"]
+                excludeGroups: ["高级"]
+                showSectionTitle: false
+                Layout.fillWidth: true
+            }
+
+            // 翻译面板设置（模式切换统一在 Ribbon「翻译」标签的浮窗开关；此处仅启动显示）
+            FluExpander {
+                Layout.fillWidth: true
+                headerText: qsTr("翻译面板")
+                contentHeight: 200
+                ColumnLayout {
+                    width: parent.width - 16
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 8
+                    FluText {
+                        text: qsTr("翻译支持两种呈现：功能区（顶部 Ribbon「翻译」标签）与悬浮窗。在「翻译」标签页点「浮窗」开关即可切换；悬浮窗位置拖动标题栏即自动记忆，无需设置。下方仅设置启动时是否自动显示悬浮窗。")
+                        font.pixelSize: 12
+                        color: FluTheme.fontSecondaryColor
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    ConfigSectionCard {
+                        sectionId: "ui"
+                        // 模式由 Ribbon 浮窗开关统一切换；位置与当前标签为内部状态
+                        excludeKeys: ["translatePanelMode", "currentRibbonTab", "translatePanelX", "translatePanelY"]
+                        showSectionTitle: false
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            // 高级设置（自定义提示词，可折叠）
+            FluExpander {
+                Layout.fillWidth: true
+                headerText: qsTr("高级：自定义提示词")
+                contentHeight: 400
+                ColumnLayout {
+                    width: parent.width - 16
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 8
+                    FluText {
+                        text: qsTr("自定义提示词仅对本地 Ollama 与网络大模型生效（免费云端 API 不支持自定义提示词）。")
+                        font.pixelSize: 12
+                        color: FluTheme.fontSecondaryColor
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        FluText {
+                            text: qsTr("启用自定义提示词（%1=原文，%2=上下文）")
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        FluToggleSwitch {
+                            checked: configService.get("translation", "enableCustomPrompt")
+                            onToggled: configService.set("translation", "enableCustomPrompt", checked)
+                        }
+                    }
+                    FluText {
+                        text: qsTr("普通翻译提示词（%1 将被替换为原文）")
+                        font.pixelSize: 12
+                        color: FluTheme.fontSecondaryColor
+                    }
+                    FluMultilineTextBox {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 120
+                        text: configService.get("translation", "customPrompt")
+                        onEditingFinished: configService.set("translation", "customPrompt", text)
+                    }
+                    FluText {
+                        text: qsTr("上下文翻译提示词（%1 原文，%2 上下文）")
+                        font.pixelSize: 12
+                        color: FluTheme.fontSecondaryColor
+                    }
+                    FluMultilineTextBox {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 120
+                        text: configService.get("translation", "customContextPrompt")
+                        onEditingFinished: configService.set("translation", "customContextPrompt", text)
+                    }
+                }
+            }
+        }
+    }
+
+    // ---------- 卡片：术语表 ----------
+    Rectangle {
+        Layout.fillWidth: true
+        radius: 8
+        color: FluTheme.dark ? Qt.rgba(1, 1, 1, 0.03) : Qt.rgba(1, 1, 1, 1)
+        border.color: FluTheme.dividerColor
+        implicitHeight: cardTermsCol.implicitHeight + 32
+
+        ColumnLayout {
+            id: cardTermsCol
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 12
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                FluIcon { iconSource: FluentIcons.DictionaryAdd; iconSize: 16; color: FluTheme.primaryColor }
+                FluText { text: qsTr("术语表（保证术语翻译一致）"); font.pixelSize: 16; font.bold: true }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                FluTextBox {
+                    id: termSourceBox
+                    Layout.fillWidth: true
+                    placeholderText: qsTr("原文术语，如 API")
+                }
+                FluTextBox {
+                    id: termTargetBox
+                    Layout.fillWidth: true
+                    placeholderText: qsTr("标准译文，如 应用程序接口")
+                    onAccepted: addTerm()
+                }
+                FluButton {
+                    text: qsTr("添加")
+                    onClicked: addTerm()
+                }
+            }
+
+            ListModel {
+                id: termModel
+            }
+
+            ListView {
+                id: termList
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(contentHeight, 220)
+                model: termModel
+                clip: true
+                spacing: 4
+                delegate: RowLayout {
+                    width: termList.width
+                    spacing: 8
+                    FluText {
+                        text: "“%1” → “%2”".arg(model.source).arg(model.translation)
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignVCenter
+                        elide: Text.ElideRight
+                    }
+                    FluButton {
+                        text: qsTr("删除")
+                        onClicked: removeTerm(model.source)
+                    }
+                }
+                FluText {
+                    anchors.centerIn: parent
+                    visible: termModel.count === 0
+                    text: qsTr("暂无术语，添加后将注入翻译提示词并做一致性校验")
+                    color: FluTheme.fontSecondaryColor
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                FluText {
+                    text: qsTr("共 %1 条术语").arg(termModel.count)
+                    color: FluTheme.fontSecondaryColor
+                    Layout.fillWidth: true
+                }
+                FluButton {
+                    text: qsTr("清空术语表")
+                    enabled: termModel.count > 0
+                    onClicked: clearTerms()
+                }
+            }
+        }
+    }
+}

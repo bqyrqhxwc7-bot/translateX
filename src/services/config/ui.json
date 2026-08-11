@@ -1,0 +1,47 @@
+{
+  "id": "ui",
+  "displayName": "界面",
+  "settings": [
+    {
+      "key": "translatePanelMode",
+      "displayName": "翻译面板模式",
+      "description": "ppt=功能区（Ribbon 翻译标签）；floating=悬浮窗（可自由拖动，位置自动记忆）",
+      "type": "enum",
+      "options": ["ppt", "floating"],
+      "default": "ppt",
+      "group": "翻译面板"
+    },
+    {
+      "key": "translatePanelVisible",
+      "displayName": "启动时显示翻译面板",
+      "description": "floating 模式下打开应用时自动显示悬浮窗",
+      "type": "bool",
+      "default": false,
+      "group": "翻译面板"
+    },
+    {
+      "key": "translatePanelX",
+      "displayName": "悬浮窗位置 X（内部）",
+      "description": "悬浮窗拖动记忆的横坐标（内部状态，不在设置页显示）",
+      "type": "number",
+      "default": 16,
+      "group": "翻译面板"
+    },
+    {
+      "key": "translatePanelY",
+      "displayName": "悬浮窗位置 Y（内部）",
+      "description": "悬浮窗拖动记忆的纵坐标（内部状态，不在设置页显示）",
+      "type": "number",
+      "default": 170,
+      "group": "翻译面板"
+    },
+    {
+      "key": "currentRibbonTab",
+      "displayName": "当前功能区标签（内部）",
+      "description": "Ribbon 当前选中的标签索引，NoStack 页面重建后恢复（内部状态）",
+      "type": "number",
+      "default": 0,
+      "group": "翻译面板"
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+#include <QApplication>
+#include <QQmlApplicationEngine>
+#include <QQmlContext>
+
+#include "services/appguard.h"
+#include "services/documentmodel.h"
+#include "services/translationservice.h"
+#include "services/configservice.h"
+#include "services/commentservice.h"
+#include "services/documentmanager.h"
+#include "services/chapterservice.h"
+#include "services/findservice.h"
+
+#ifdef FLUENTUI_BUILD_STATIC_LIB
+#  include <QtQml/qqmlextensionplugin.h>
+#  if (QT_VERSION > QT_VERSION_CHECK(6, 2, 0))
+Q_IMPORT_QML_PLUGIN(FluentUIPlugin)
+#  endif
+#  include <FluentUI.h>
+#endif
+
+int main(int argc, char *argv[])
+{
+    QApplication app(argc, argv);
+    app.setApplicationName(QStringLiteral("translateX"));
+    app.setApplicationVersion(QStringLiteral(TRANSLATEX_VERSION));
+    app.setOrganizationName(QStringLiteral("sr291"));
+    app.setOrganizationDomain(QStringLiteral("local.translatex"));
+
+    // 稳定性：安装全局日志与崩溃诊断
+    AppGuard guard(&app);
+    AppGuard::install();
+
+    QQmlApplicationEngine engine;
+    QObject::connect(
+        &engine, &QQmlApplicationEngine::objectCreationFailed,
+        &app, []() { QCoreApplication::exit(-1); },
+        Qt::QueuedConnection);
+
+    // 注册核心服务（可插拔服务层）
+    qmlRegisterType<DocumentModel>("TranslateX.Services", 1, 0, "DocumentModel");
+
+    // 翻译服务单例（供 QML 直接调用）
+    TranslationService translationService;
+    engine.rootContext()->setContextProperty("translationService", &translationService);
+
+    // 配置服务单例（VSCode-like：schema 驱动设置 UI、统一读写/持久化/加密）
+    ConfigService *configService = ConfigService::instance();
+    engine.rootContext()->setContextProperty("configService", configService);
+
+    // 批注服务（批注单一数据源；DocumentModel 经 provider 委托读取/平移）
+    CommentService commentService;
+    engine.rootContext()->setContextProperty("commentService", &commentService);
+
+    // 文档管理服务（打开/保存/新建，批注随文档持久化）
+    DocumentManager documentManager;
+    engine.rootContext()->setContextProperty("documentManager", &documentManager);
+
+    // 章节服务（章节索引）与查找替换服务（大文件全文查找）
+    ChapterService chapterService;
+    engine.rootContext()->setContextProperty("chapterService", &chapterService);
+    FindService findService;
+    engine.rootContext()->setContextProperty("findService", &findService);
+
+    // 暴露主窗口（浮窗 Qt.Tool 经 transientParent 与主窗口关联）：先置空占位，避免 QML
+    // 早期求值报"未定义"；load 完成后更新为实际根窗口（FluWindow）
+    engine.rootContext()->setContextProperty("mainWindow", (QObject *)nullptr);
+    engine.loadFromModule("translateX", "Main");
+
+    const auto roots = engine.rootObjects();
+    if (!roots.isEmpty()) {
+        engine.rootContext()->setContextProperty("mainWindow", roots.first());
+    }
+
+    return app.exec();
+}

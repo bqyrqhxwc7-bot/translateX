@@ -33,3 +33,13 @@ build-*/
 # OS files
 .DS_Store
 Thumbs.db
+
+# 本地 agent 技能（个人/编辑器定制，不入库）
+.agents/
+
+# 构建/调试日志与临时截图
+build*.log
+cmake-config.log
+reconfigure.log
+shot*.png
+shot*.jpg

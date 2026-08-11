@@ -7,7 +7,7 @@
             "type": "command",
             "command": "cmake.launchTargetPath",
             "args": {
-                "targetName": "VSCodeQt"
+                "targetName": "translateX"
             }
         }
     ],
@@ -23,7 +23,7 @@
             "environment": [
                 {
                     "name": "PATH",
-                    "value": "C:/Qt/6.5.3/msvc2019_64/bin"
+                    "value": "D:/Software/Qt/6.5.3/msvc2019_64/bin"
                 }
             ],
             "console": "integratedTerminal",

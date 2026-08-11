@@ -1,0 +1,32 @@
+{
+  "id": "translation.network_model",
+  "displayName": "网络大模型 API",
+  "settings": [
+    {
+      "key": "apiEndpoint",
+      "displayName": "接口地址",
+      "description": "OpenAI 兼容的 /chat/completions 地址",
+      "type": "string",
+      "default": "https://api.deepseek.com/v1",
+      "placeholder": "https://api.deepseek.com/v1",
+      "group": "连接"
+    },
+    {
+      "key": "apiKey",
+      "displayName": "API Key",
+      "description": "访问密钥（加密存储，仅本机可读）",
+      "type": "secret",
+      "default": "",
+      "group": "连接"
+    },
+    {
+      "key": "model",
+      "displayName": "模型",
+      "description": "使用的模型名称",
+      "type": "string",
+      "default": "deepseek-chat",
+      "placeholder": "deepseek-chat",
+      "group": "模型"
+    }
+  ]
+}

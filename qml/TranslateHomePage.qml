@@ -1,0 +1,1296 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import QtQuick.Dialogs
+import QtQuick.Window
+import FluentUI
+import TranslateX.Services 1.0
+
+FluContentPage {
+    id: page
+    // NoStack 模式下由 FluNavigationView 的 FluLoader 直接加载，须显式填满父级
+    //（否则页面宽度不跟随窗口，全屏/最大化后右侧出现透明空白）
+    anchors.fill: parent
+    title: qsTr("编辑")
+    launchMode: FluPageType.SingleTask
+
+    // 页面标题：自定义 header（FluPage 默认用 Title 字号偏大，缩小以留出更多编辑空间）
+    header: Item {
+        implicitHeight: 28
+        FluText {
+            text: page.title
+            font.pixelSize: 14
+            font.bold: true
+            color: FluTheme.fontPrimaryColor
+            anchors.left: parent.left
+            anchors.leftMargin: 14
+            anchors.verticalCenter: parent.verticalCenter
+        }
+    }
+
+    // 核心文档模型（懒加载，大文件只渲染可见行）
+    property DocumentModel documentModel: DocumentModel {
+        id: docModel
+    }
+
+    property int currentLine: -1
+
+    // 翻译服务（主进程提供，context property 全局可见）
+    readonly property var translator: translationService
+
+    // 状态栏图标（0=无图标）
+    property int statusIconSource: 0
+    property color statusIconColor: FluTheme.fontSecondaryColor
+    // 翻译进度状态
+    property bool translating: false
+    property int progressDone: 0
+    property int progressTotal: 0
+    // 翻译面板宽度（分隔条可拖拽调整，200~380）
+    property real panelWidth: 280
+    // 多选翻译：Ctrl+点击 加入/移出选中集
+    property var selectedLines: []
+    // 翻译面板模式（floating=悬浮窗 / docked=停靠）与默认显示
+    property string panelMode: "floating"
+    property bool panelVisible: false
+    // 翻译面板当前是否显示（运行状态；同步持久化到 ui.translatePanelVisible）
+    property bool panelShown: false
+    // Ribbon 功能区状态（Component 内按钮通过 page.xxx 访问）
+    property bool canUndo: false
+    property bool canRedo: false
+    property bool hasRecent: false
+    // 章节标签状态
+    property var chapterTitles: []
+    property int currentChapterIndex: -1
+    // 批注标签状态
+    property int commentCount: 0
+    property var commentLines: []
+    // 查找标签状态
+    property int findResultCount: 0
+    property string findQuery: ""
+    property bool findCaseSensitive: false
+    property bool findWholeWord: false
+
+    // 当前行变化 → 同步「章节」指示
+    onCurrentLineChanged: {
+        page.currentChapterIndex = page.currentLine >= 0
+            ? chapterService.chapterAtLine(page.currentLine) : -1
+    }
+
+    function isLineSelected(lineNumber) {
+        return page.selectedLines.indexOf(lineNumber) >= 0
+    }
+
+    Component.onCompleted: {
+        // 批注统一由 CommentService 管理（单一数据源），模型经 provider 委托
+        documentModel.setCommentProvider(commentService)
+        // 文档管理 / 章节 / 查找服务关联当前文档模型
+        documentManager.setDocument(documentModel)
+        documentManager.setComments(commentService)
+        chapterService.setDocument(documentModel)
+        findService.setDocument(documentModel)
+        loadDemoDocument()
+        chapterService.rebuild()
+        rebuildRecentMenu()
+        refreshDocStatus()
+        // 翻译面板模式/默认显示（ConfigService 持久化；ppt=Ribbon 标签，floating=浮窗）
+        let panelMode0 = String(configService.get("ui", "translatePanelMode") || "ppt")
+        if (panelMode0 === "docked") {
+            // 旧版 docked（停靠面板）已由 Ribbon 标签替代，迁移为 ppt
+            panelMode0 = "ppt"
+            configService.set("ui", "translatePanelMode", "ppt")
+        }
+        page.panelMode = panelMode0
+        page.panelShown = Boolean(configService.get("ui", "translatePanelVisible"))
+        // 浮窗位置在 floatWindow.Component.onCompleted 中恢复（真实窗口屏幕坐标）
+        // 翻译选项已由 TranslationService 从 ConfigService 持久化恢复，无需在此强制覆盖
+    }
+
+    // 通知条：NoStack 模式下页面由 FluLoader 加载，Window.window 附加属性解析失败
+    // （运行时报 showWarning of null），故改用页面内 FluInfoBar 实例
+    FluInfoBar {
+        id: infoBar
+        root: page
+    }
+
+    // 翻译结果回调 → 写入批注（走 CommentService，单一数据源）
+    Connections {
+        target: translationService
+        function onLineTranslated(lineNumber, text, success) {
+            if (success && text) {
+                commentService.setComment(lineNumber, text)
+                statusLabel.text = qsTr("第 %1 行翻译完成").arg(lineNumber + 1)
+                statusIconSource = FluentIcons.Message
+                statusIconColor = Qt.rgba(0.10, 0.55, 0.34, 1)   // Fluent 成功绿
+            } else {
+                // 翻译失败：清除该行旧译文批注（避免残留过时/回显原文）
+                commentService.removeComment(lineNumber)
+                statusLabel.text = qsTr("第 %1 行翻译失败").arg(lineNumber + 1)
+                statusIconSource = FluentIcons.Warning
+                statusIconColor = Qt.rgba(0.77, 0.17, 0.11, 1)   // Fluent 错误红
+            }
+        }
+        function onBatchFinished(total, ok, failed) {
+            page.translating = false
+            statusLabel.text = qsTr("翻译完成：成功 %1 / 失败 %2（共 %3 行）")
+                                .arg(ok).arg(failed).arg(total)
+        }
+        function onTranslationStarted(total) {
+            page.translating = true
+            page.progressTotal = total
+            page.progressDone = 0
+        }
+        function onTranslationProgress(done, total) {
+            page.progressDone = done
+            page.progressTotal = total
+            statusLabel.text = qsTr("正在翻译 %1/%2 行...").arg(done).arg(total)
+        }
+        function onTranslationCanceled() {
+            page.translating = false
+            statusLabel.text = qsTr("翻译已取消")
+            statusIconSource = FluentIcons.Cancel
+            statusIconColor = FluTheme.fontSecondaryColor
+        }
+        function onTranslationFailed(lineNumber, errorMessage) {
+            const loc = lineNumber >= 0 ? qsTr("第 %1 行：").arg(lineNumber + 1) : ""
+            infoBar.showWarning(loc + errorMessage, 6000)
+        }
+        function onQualityWarning(lineNumber, issue) {
+            const loc = lineNumber >= 0 ? qsTr("第 %1 行：").arg(lineNumber + 1) : ""
+            infoBar.showWarning(loc + issue, 6000)
+        }
+    }
+
+    // 编辑历史 → 刷新撤销/重做按钮（Ribbon 内按钮经 page 属性访问）
+    Connections {
+        target: documentModel
+        function onUndoStackChanged() {
+            page.canUndo = documentModel.canUndo()
+            page.canRedo = documentModel.canRedo()
+        }
+    }
+
+    // 设置页修改「翻译面板」配置 → 实时生效（NoStack 页面不会自动重建）
+    Connections {
+        target: configService
+        function onConfigChanged(section, key, value) {
+            if (section !== "ui") {
+                return
+            }
+            // 浮层 visible 绑定 panelMode/panelShown，仅需更新状态即可自动显示/隐藏
+            if (key === "translatePanelMode") {
+                page.panelMode = String(value || "ppt")
+            } else if (key === "translatePanelVisible") {
+                page.panelShown = Boolean(value)
+            }
+        }
+    }
+
+    // 章节 / 批注 / 查找 标签状态刷新（service 变更 → 更新 Ribbon 功能区）
+    Connections {
+        target: chapterService
+        function onChaptersChanged() {
+            page.refreshChapterState()
+        }
+    }
+    Connections {
+        target: commentService
+        function onCommentChanged(lineNumber) {
+            page.refreshCommentState()
+        }
+        function onCommentsReset() {
+            page.refreshCommentState()
+        }
+    }
+    Connections {
+        target: findService
+        function onSearchCompleted(resultCount) {
+            page.findResultCount = resultCount
+        }
+    }
+
+    // 编辑快捷键（Ctrl+Z / Ctrl+Y）
+    Shortcut {
+        sequence: "Ctrl+Z"
+        onActivated: {
+            if (documentModel.canUndo()) {
+                documentModel.undo()
+                afterUndoRedo()
+            }
+        }
+    }
+    Shortcut {
+        sequence: "Ctrl+Y"
+        onActivated: {
+            if (documentModel.canRedo()) {
+                documentModel.redo()
+                afterUndoRedo()
+            }
+        }
+    }
+    // 翻译快捷键（与旧版 QtWidgets 一致）
+    Shortcut {
+        sequence: "Ctrl+Alt+T"
+        onActivated: translateCurrent()
+    }
+    Shortcut {
+        sequence: "Ctrl+Alt+Shift+T"
+        onActivated: translateAllPending()
+    }
+
+    // 撤销/重做后：钳制当前行并刷新编辑行文本（TextEdit 用户输入会解除绑定）
+    function afterUndoRedo() {
+        if (currentLine >= documentModel.lineCount()) {
+            currentLine = documentModel.lineCount() - 1
+        }
+        if (currentLine >= 0) {
+            const del = lineView.itemAtIndex(currentLine)
+            if (del) {
+                del.refreshEditor()
+            }
+        }
+    }
+
+    // 清除全部译文/批注（清理历史残留，如旧版本回显的原文批注）
+    function clearAllComments() {
+        commentService.clear()
+        statusLabel.text = qsTr("已清除全部译文/批注")
+        statusIconSource = 0
+        statusIconColor = FluTheme.fontSecondaryColor
+    }
+
+    // ---------- 文档操作 ----------
+    function urlToPath(url) {
+        let s = url.toString()
+        s = s.replace(/^file:\/\//, "")
+        if (s.length > 2 && s[0] === "/" && s[2] === ":") {
+            s = s.substring(1)   // /C:/x → C:/x
+        }
+        return decodeURIComponent(s)
+    }
+
+    function openDocument() {
+        openDialog.open()
+    }
+
+    function saveDocument() {
+        if (documentManager.saveFile()) {
+            refreshDocStatus()
+        } else {
+            saveAsDialog.open()
+        }
+    }
+
+    function saveDocumentAs() {
+        saveAsDialog.open()
+    }
+
+    function newDocument() {
+        if (documentManager.isDirty()) {
+            confirmNewDialog.open()
+        } else {
+            doNewDocument()
+        }
+    }
+
+    function doNewDocument() {
+        documentManager.newDocument([])
+        refreshDocStatus()
+        statusLabel.text = qsTr("已新建文档")
+        statusIconSource = 0
+        statusIconColor = FluTheme.fontSecondaryColor
+        chapterService.rebuild()
+    }
+
+    function openRecent(path) {
+        if (documentManager.openFile(path)) {
+            statusLabel.text = qsTr("已打开：%1").arg(documentManager.documentName())
+            statusIconSource = 0
+            statusIconColor = FluTheme.fontSecondaryColor
+        } else {
+            statusLabel.text = qsTr("打开失败：%1").arg(path)
+            statusIconSource = FluentIcons.Warning
+            statusIconColor = Qt.rgba(0.77, 0.17, 0.11, 1)
+        }
+        refreshDocStatus()
+        chapterService.rebuild()
+    }
+
+    // 刷新状态栏：文档名 + 修改标记
+    function refreshDocStatus() {
+        documentNameLabel.text = documentManager.documentName()
+        dirtyDot.visible = documentManager.isDirty()
+    }
+
+    // 最近文件菜单重建（打开文件后自动记录）
+    function rebuildRecentMenu() {
+        // T.Menu 无 clear()，用 removeItem 清空
+        while (recentMenu.count > 0) {
+            recentMenu.removeItem(recentMenu.itemAt(0))
+        }
+        const files = documentManager.recentFiles()
+        for (let i = 0; i < files.length; ++i) {
+            const item = recentItemComp.createObject(recentMenu, { text: files[i] })
+            item.triggered.connect(() => openRecent(files[i]))
+        }
+        page.hasRecent = files.length > 0
+    }
+
+    function loadDemoDocument() {
+        const sample = [
+            "第一章：开始",
+            "这是第一行待翻译的英文文本。",
+            "This is the second line to translate.",
+            "The quick brown fox jumps over the lazy dog.",
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+            "第二段：继续",
+            "Another paragraph to be translated into Chinese.",
+            "Etiam quis risus vel justo tempor ultricies.",
+            "Donec vitae nisi vitae nunc faucibus commodo.",
+            "第三段：结束",
+            "The final paragraph of the sample document.",
+            "Curabitur malesuada est vitae nunc tempus, sed dictum velit feugiat."
+        ];
+        documentModel.setLines(sample);
+        documentModel.setComment(2, "这是第一条翻译批注示例。");
+        documentModel.setComment(4, "Lorem 示例段落的中文翻译。");
+        statusLabel.text = qsTr("已加载 %1 行示例文档").arg(documentModel.lineCount())
+    }
+
+    // 聚焦指定行并进入编辑
+    function focusLine(lineNumber) {
+        currentLine = lineNumber
+        lineView.currentIndex = lineNumber
+        lineView.positionViewAtIndex(lineNumber, ListView.Contain)
+        const del = lineView.itemAtIndex(lineNumber)
+        if (del) {
+            del.startEdit()
+        }
+    }
+
+    // Enter 换行：在光标处拆分当前行
+    function splitCurrentLine(cursorPosition) {
+        const line = documentModel.lineText(currentLine)
+        const before = line.substring(0, cursorPosition)
+        const after = line.substring(cursorPosition)
+        documentModel.updateLineText(currentLine, before)
+        const newIndex = documentModel.insertLine(currentLine + 1, after)
+        currentLine = newIndex
+        focusLine(currentLine)
+    }
+
+    // Backspace 行首：合并到上一行
+    function mergeWithPrevious() {
+        if (currentLine <= 0) {
+            return
+        }
+        const prevText = documentModel.lineText(currentLine - 1)
+        const curText = documentModel.lineText(currentLine)
+        documentModel.updateLineText(currentLine - 1, prevText + curText)
+        const newIndex = documentModel.removeLine(currentLine)
+        currentLine = newIndex - 1
+        focusLine(currentLine)
+    }
+
+    // 翻译当前行
+    function translateCurrent() {
+        if (currentLine < 0) {
+            statusLabel.text = qsTr("请先点击选择一行")
+            return
+        }
+        const text = documentModel.lineText(currentLine)
+        if (!text.trim()) {
+            statusLabel.text = qsTr("当前行为空，无需翻译")
+            return
+        }
+        if (translator.isTargetLanguageText(text)) {
+            statusLabel.text = qsTr("当前行已是目标语言，无需翻译")
+            statusIconSource = FluentIcons.Info
+            statusIconColor = FluTheme.fontSecondaryColor
+            return
+        }
+        // 传完整文档（translateBatchSync 用行号取上下文行，sourceLines 须为全文）
+        const all = []
+        for (let i = 0; i < documentModel.lineCount(); ++i) {
+            all.push(documentModel.lineText(i))
+        }
+        statusLabel.text = qsTr("正在翻译第 %1 行...").arg(currentLine + 1)
+        statusIconSource = FluentIcons.Sync
+        statusIconColor = FluTheme.primaryColor
+        translator.translateLines([currentLine], all)
+    }
+
+    // 翻译所有待译行（支持多语言：所有非空、无批注、且非目标语言的行）
+    function translateAllPending() {
+        const lines = []
+        const all = []
+        let skipped = 0
+        for (let i = 0; i < documentModel.lineCount(); ++i) {
+            const text = documentModel.lineText(i)
+            all.push(text)
+            if (!text.trim()) continue
+            if (!documentModel.hasCommentAt(i)) {
+                if (translator.isTargetLanguageText(text)) {
+                    ++skipped
+                    continue
+                }
+                lines.push(i)
+            }
+        }
+        if (lines.length === 0) {
+            statusLabel.text = skipped > 0
+                ? qsTr("没有需要翻译的行（已跳过 %1 行目标语言文本）").arg(skipped)
+                : qsTr("没有可翻译的行")
+            return
+        }
+        statusLabel.text = skipped > 0
+            ? qsTr("正在批量翻译 %1 行（已跳过 %2 行目标语言文本）...").arg(lines.length).arg(skipped)
+            : qsTr("正在批量翻译 %1 行...").arg(lines.length)
+        statusIconSource = FluentIcons.Sync
+        statusIconColor = FluTheme.primaryColor
+        translator.translateLines(lines, all)
+    }
+
+    // 翻译选中的行（Ctrl+点击多选；跳过空行/目标语言行）
+    function translateSelected() {
+        if (selectedLines.length === 0) {
+            statusLabel.text = qsTr("请先选中要翻译的行（Ctrl+点击可多选）")
+            return
+        }
+        const lines = []
+        const all = []
+        let skipped = 0
+        for (let i = 0; i < documentModel.lineCount(); ++i) {
+            all.push(documentModel.lineText(i))
+        }
+        for (const ln of selectedLines) {
+            const text = documentModel.lineText(ln)
+            if (!text.trim()) continue
+            if (translator.isTargetLanguageText(text)) {
+                ++skipped
+                continue
+            }
+            lines.push(ln)
+        }
+        if (lines.length === 0) {
+            statusLabel.text = skipped > 0
+                ? qsTr("选中的行均为目标语言，无需翻译")
+                : qsTr("没有可翻译的选中行")
+            return
+        }
+        statusLabel.text = skipped > 0
+            ? qsTr("正在翻译选中 %1 行（已跳过 %2 行目标语言文本）...").arg(lines.length).arg(skipped)
+            : qsTr("正在翻译选中 %1 行...").arg(lines.length)
+        statusIconSource = FluentIcons.Sync
+        statusIconColor = FluTheme.primaryColor
+        translator.translateLines(lines, all)
+    }
+
+    // ---------- 章节（ChapterService） ----------
+    function refreshChapterState() {
+        page.chapterTitles = chapterService.chapterTitles()
+        page.currentChapterIndex = page.currentLine >= 0
+            ? chapterService.chapterAtLine(page.currentLine) : -1
+    }
+    function goChapter(delta) {
+        const n = chapterService.chapterCount()
+        if (n === 0) {
+            statusLabel.text = qsTr("文档中没有识别到章节")
+            return
+        }
+        let idx = page.currentChapterIndex
+        if (idx < 0 || idx >= n) idx = 0
+        idx = (idx + delta + n) % n
+        page.currentChapterIndex = idx
+        page.focusLine(chapterService.chapterStartLine(idx))
+    }
+    function goPrevChapter() { goChapter(-1) }
+    function goNextChapter() { goChapter(1) }
+    function rebuildChapters() {
+        chapterService.rebuild()
+        refreshChapterState()
+        statusLabel.text = qsTr("已重新检测 %1 个章节").arg(chapterService.chapterCount())
+    }
+
+    // ---------- 批注（CommentService） ----------
+    function refreshCommentState() {
+        const map = commentService.allComments()
+        const lines = []
+        for (const k in map) {
+            lines.push(Number(k))
+        }
+        lines.sort((a, b) => a - b)
+        page.commentLines = lines
+        page.commentCount = lines.length
+    }
+    function gotoComment(delta) {
+        const n = page.commentLines.length
+        if (n === 0) {
+            statusLabel.text = qsTr("当前没有批注")
+            return
+        }
+        let idx = page.commentLines.indexOf(page.currentLine)
+        if (idx < 0) {
+            idx = 0
+            while (idx < n && page.commentLines[idx] < page.currentLine) ++idx
+            if (idx >= n) idx = n - 1
+        }
+        idx = (idx + delta + n) % n
+        page.focusLine(page.commentLines[idx])
+    }
+    function goPrevComment() { gotoComment(-1) }
+    function goNextComment() { gotoComment(1) }
+    function exportComments() { exportCommentsDialog.open() }
+    function importComments() { importCommentsDialog.open() }
+
+    // ---------- 查找/替换（FindService） ----------
+    function doFindNext(query) {
+        const q = String(query || "").trim()
+        if (!q) {
+            statusLabel.text = qsTr("请输入查找内容")
+            return
+        }
+        // 换了新查询 → 从文档开头找第一个匹配；否则从当前行之后继续（避免原地不跳）
+        const newQuery = q !== page.findQuery
+        const from = newQuery ? 0 : (page.currentLine + 1)
+        const line = findService.findNext(q, from, page.findCaseSensitive, page.findWholeWord, true)
+        page.findQuery = q
+        page.findResultCount = findService.count(q, page.findCaseSensitive, page.findWholeWord)
+        if (line >= 0) {
+            page.focusLine(line)
+            statusLabel.text = qsTr("找到 %1 处，已定位第 %2 行").arg(page.findResultCount).arg(line + 1)
+        } else {
+            statusLabel.text = qsTr("未找到匹配（共 0 处）")
+        }
+    }
+    function doFindPrev(query) {
+        const q = String(query || "").trim()
+        if (!q) {
+            statusLabel.text = qsTr("请输入查找内容")
+            return
+        }
+        // 换了新查询 → 从文档末尾找最后一个匹配；否则从当前行之前继续
+        const newQuery = q !== page.findQuery
+        const from = newQuery ? (documentModel.lineCount() - 1) : (page.currentLine - 1)
+        const line = findService.findPrevious(q, from, page.findCaseSensitive, page.findWholeWord, true)
+        page.findQuery = q
+        page.findResultCount = findService.count(q, page.findCaseSensitive, page.findWholeWord)
+        if (line >= 0) {
+            page.focusLine(line)
+            statusLabel.text = qsTr("找到 %1 处，已定位第 %2 行").arg(page.findResultCount).arg(line + 1)
+        } else {
+            statusLabel.text = qsTr("未找到匹配（共 0 处）")
+        }
+    }
+    function doReplace(query, replacement) {
+        const q = String(query || "")
+        if (!q || page.currentLine < 0) {
+            statusLabel.text = qsTr("请先输入查找内容并定位到一行")
+            return
+        }
+        const ok = findService.replaceLine(page.currentLine, q, String(replacement || ""),
+                                           page.findCaseSensitive, page.findWholeWord)
+        if (ok) {
+            const del = lineView.itemAtIndex(page.currentLine)
+            if (del) del.refreshEditor()
+            refreshDocStatus()
+            statusLabel.text = qsTr("已替换当前行")
+        } else {
+            statusLabel.text = qsTr("当前行无匹配")
+        }
+    }
+    function doReplaceAll(query, replacement) {
+        const q = String(query || "")
+        if (!q) {
+            statusLabel.text = qsTr("请输入查找内容")
+            return
+        }
+        const n = findService.replaceAll(q, String(replacement || ""),
+                                         page.findCaseSensitive, page.findWholeWord)
+        if (n > 0) {
+            refreshDocStatus()
+            afterUndoRedo()
+        }
+        statusLabel.text = n > 0 ? qsTr("已替换 %1 处").arg(n) : qsTr("无匹配可替换")
+    }
+
+    // ---------- 浮窗位置（真实窗口，屏幕坐标持久化） ----------
+    function saveFloatWindowPos() {
+        configService.set("ui", "translatePanelX", Math.round(floatWindow.x))
+        configService.set("ui", "translatePanelY", Math.round(floatWindow.y))
+    }
+    function restoreFloatWindowPos() {
+        // 真实窗口无任务栏（Qt.Tool），必须钳制到桌面内，防止开到屏幕外找不到
+        const scr = floatWindow.screen
+        const sx = scr ? scr.virtualX : 0
+        const sy = scr ? scr.virtualY : 0
+        const sw = scr ? scr.virtualWidth : 1536
+        const sh = scr ? scr.virtualHeight : 864
+        let px = Number(configService.get("ui", "translatePanelX"))
+        let py = Number(configService.get("ui", "translatePanelY"))
+        if (!isFinite(px)) px = sx + sw - 340
+        if (!isFinite(py)) py = sy + 80
+        floatWindow.x = Math.max(sx, Math.min(px, sx + Math.max(0, sw - 300)))
+        floatWindow.y = Math.max(sy, Math.min(py, sy + Math.max(0, sh - 240)))
+    }
+
+    ColumnLayout {
+        anchors.fill: parent
+        // 顶边距收紧：减少「编辑」标题与 Ribbon 工具栏之间的空白
+        anchors.leftMargin: 16
+        anchors.rightMargin: 16
+        anchors.topMargin: 6
+        anchors.bottomMargin: 16
+        spacing: 12
+
+        // ---------- Ribbon 工具栏（PPT 式标签页 + 功能区，替代旧菜单栏/工具栏） ----------
+        // 每个 service 提供 PPT 式（标签功能区）；翻译额外提供浮窗（翻译标签内切换）
+        // NoStack 页面每次导航重建，当前标签持久化到 config，重建后恢复
+        FluPivot {
+            id: ribbonPivot
+            property bool ribbonInitialized: false   // 初始化完成前不保存（避免把 0 覆盖掉用户值）
+            Layout.fillWidth: true
+            Layout.preferredHeight: 84   // header 40 + 功能区 44
+            Component.onCompleted: {
+                const idx = Number(configService.get("ui", "currentRibbonTab"))
+                if (isFinite(idx) && idx >= 0 && idx < 6) {
+                    ribbonPivot.currentIndex = idx
+                }
+                ribbonInitialized = true
+            }
+            onCurrentIndexChanged: {
+                if (ribbonInitialized) {
+                    configService.set("ui", "currentRibbonTab", ribbonPivot.currentIndex)
+                }
+            }
+            font.pixelSize: 14
+
+            // 文件标签（DocumentManager service 的 PPT 式功能区）
+            FluPivotItem {
+                title: qsTr("文件")
+                contentItem: Component {
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
+                        spacing: 8
+                        FluButton { text: qsTr("新建"); onClicked: newDocument() }
+                        FluButton { text: qsTr("打开"); onClicked: openDocument() }
+                        FluButton { text: qsTr("最近"); enabled: page.hasRecent; onClicked: recentMenu.popup() }
+                        FluButton { text: qsTr("保存"); onClicked: saveDocument() }
+                        FluButton { text: qsTr("另存为"); onClicked: saveDocumentAs() }
+                        FluDivider { orientation: Qt.Vertical; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
+                        FluButton { text: qsTr("加载示例"); onClicked: loadDemoDocument() }
+                        FluButton { text: qsTr("清除译文"); onClicked: clearAllComments() }
+                        Item { Layout.fillWidth: true }
+                    }
+                }
+            }
+
+            // 开始标签（DocumentModel 编辑操作的 PPT 式功能区）
+            FluPivotItem {
+                title: qsTr("开始")
+                contentItem: Component {
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
+                        spacing: 8
+                        FluButton { text: qsTr("撤销"); enabled: page.canUndo; onClicked: { documentModel.undo(); afterUndoRedo() } }
+                        FluButton { text: qsTr("重做"); enabled: page.canRedo; onClicked: { documentModel.redo(); afterUndoRedo() } }
+                        FluDivider { orientation: Qt.Vertical; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
+                        FluText { text: qsTr("共 %1 行").arg(documentModel.lineCount()); font.pixelSize: 12; color: FluTheme.fontSecondaryColor }
+                        Item { Layout.fillWidth: true }
+                    }
+                }
+            }
+
+            // 翻译标签（TranslationService：PPT 式功能区 + 浮窗切换）
+            FluPivotItem {
+                title: qsTr("翻译")
+                contentItem: Component {
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
+                        spacing: 8
+                        FluFilledButton { text: qsTr("翻译当前行"); onClicked: translateCurrent() }
+                        FluButton { text: qsTr("翻译全部待译行"); onClicked: translateAllPending() }
+                        FluButton { text: qsTr("翻译选中行"); enabled: page.selectedLines.length > 0; onClicked: translateSelected() }
+                        FluDivider { orientation: Qt.Vertical; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
+                        // 浮窗切换（PPT 式 ↔ 浮窗；唯一模式入口）
+                        // checked 反映「浮窗是否实际显示」；覆盖 clickListener 直接切换（不依赖
+                        // checked 绑定的 toggled——绑定会干扰点击赋值，导致开关“点了没反应”）
+                        FluToggleSwitch {
+                            text: qsTr("浮窗")
+                            checked: page.panelMode === "floating" && page.panelShown
+                            clickListener: () => {
+                                const wantOpen = !(page.panelMode === "floating" && page.panelShown)
+                                if (wantOpen) {
+                                    // 开浮窗：切模式 + 显示浮层
+                                    page.panelMode = "floating"
+                                    page.panelShown = true
+                                    configService.set("ui", "translatePanelMode", "floating")
+                                    configService.set("ui", "translatePanelVisible", true)
+                                } else {
+                                    // 关浮窗：回功能区（ppt）+ 隐藏浮窗 + 记忆屏幕位置
+                                    page.panelMode = "ppt"
+                                    page.panelShown = false
+                                    configService.set("ui", "translatePanelMode", "ppt")
+                                    configService.set("ui", "translatePanelVisible", false)
+                                    page.saveFloatWindowPos()
+                                }
+                            }
+                        }
+                        Item { Layout.fillWidth: true }
+                        // 翻译进度（翻译中显示在右侧）
+                        FluProgressBar {
+                            visible: page.translating
+                            Layout.preferredWidth: 160
+                            from: 0
+                            to: Math.max(page.progressTotal, 1)
+                            value: page.progressDone
+                        }
+                        FluText { visible: page.translating; text: qsTr("%1/%2").arg(page.progressDone).arg(page.progressTotal); font.pixelSize: 12 }
+                        FluButton { visible: page.translating; text: qsTr("取消"); onClicked: translator.cancelTranslation() }
+                    }
+                }
+            }
+
+            // 章节标签（ChapterService：章节导航 + 重新检测）
+            FluPivotItem {
+                title: qsTr("章节")
+                contentItem: Component {
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
+                        spacing: 8
+                        FluText { text: qsTr("章节"); font.pixelSize: 12; color: FluTheme.fontSecondaryColor }
+                        FluButton { text: qsTr("上一章"); enabled: page.chapterTitles.length > 1; onClicked: page.goPrevChapter() }
+                        FluButton { text: qsTr("下一章"); enabled: page.chapterTitles.length > 1; onClicked: page.goNextChapter() }
+                        FluText {
+                            text: page.currentChapterIndex >= 0
+                                ? qsTr("%1 · 共 %2 章").arg(page.chapterTitles[page.currentChapterIndex] || "").arg(page.chapterTitles.length)
+                                : qsTr("共 %1 章").arg(page.chapterTitles.length)
+                            Layout.maximumWidth: 260
+                            elide: Text.ElideRight
+                            font.pixelSize: 12
+                            color: FluTheme.fontSecondaryColor
+                        }
+                        Item { Layout.fillWidth: true }
+                        FluButton { text: qsTr("重新检测"); onClicked: page.rebuildChapters() }
+                    }
+                }
+            }
+
+            // 批注标签（CommentService：统计 + 导航 + 清空 + 导入导出）
+            FluPivotItem {
+                title: qsTr("批注")
+                contentItem: Component {
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
+                        spacing: 8
+                        FluText { text: qsTr("批注 %1 条").arg(page.commentCount); font.pixelSize: 12; color: FluTheme.fontSecondaryColor }
+                        FluButton { text: qsTr("上一条"); enabled: page.commentCount > 1; onClicked: page.goPrevComment() }
+                        FluButton { text: qsTr("下一条"); enabled: page.commentCount > 1; onClicked: page.goNextComment() }
+                        FluDivider { orientation: Qt.Vertical; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
+                        FluButton { text: qsTr("清空"); onClicked: page.clearAllComments() }
+                        FluButton { text: qsTr("导出"); onClicked: page.exportComments() }
+                        FluButton { text: qsTr("导入"); onClicked: page.importComments() }
+                        Item { Layout.fillWidth: true }
+                    }
+                }
+            }
+
+            // 查找标签（FindService：查找/替换 + 大小写/整词）
+            // 注：FluComboBox 在 NoStack 下 Popup 不可用，故章节/查找均用按钮+文本框而非下拉框
+            FluPivotItem {
+                title: qsTr("查找")
+                contentItem: Component {
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
+                        spacing: 8
+                        FluTextBox {
+                            id: findInput
+                            placeholderText: qsTr("查找")
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 180
+                            Layout.maximumWidth: 240
+                            onAccepted: page.doFindNext(findInput.text)
+                        }
+                        FluButton { text: qsTr("上一个"); onClicked: page.doFindPrev(findInput.text) }
+                        FluButton { text: qsTr("下一个"); onClicked: page.doFindNext(findInput.text) }
+                        FluText { text: qsTr("%1 处").arg(page.findResultCount); font.pixelSize: 12; color: FluTheme.fontSecondaryColor }
+                        FluDivider { orientation: Qt.Vertical; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
+                        FluTextBox {
+                            id: replaceInput
+                            placeholderText: qsTr("替换为")
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 140
+                            Layout.maximumWidth: 200
+                        }
+                        FluButton { text: qsTr("替换"); onClicked: page.doReplace(findInput.text, replaceInput.text) }
+                        FluButton { text: qsTr("全部替换"); onClicked: page.doReplaceAll(findInput.text, replaceInput.text) }
+                        FluDivider { orientation: Qt.Vertical; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
+                        FluToggleSwitch {
+                            text: qsTr("大小写")
+                            checked: page.findCaseSensitive
+                            clickListener: () => { page.findCaseSensitive = !page.findCaseSensitive }
+                        }
+                        FluToggleSwitch {
+                            text: qsTr("整词")
+                            checked: page.findWholeWord
+                            clickListener: () => { page.findWholeWord = !page.findWholeWord }
+                        }
+                        Item { Layout.fillWidth: true }
+                    }
+                }
+            }
+        }
+
+        // ---------- 编辑器卡片（占满剩余空间；PPT 式功能区在顶部 Ribbon，浮窗为可选） ----------
+        FluFrame {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            radius: 6
+
+            ListView {
+                id: lineView
+                anchors.fill: parent
+                anchors.margins: 4
+                model: documentModel
+                clip: true
+                cacheBuffer: 600
+                focus: true
+                keyNavigationWraps: false
+                ScrollBar.vertical: FluScrollBar { }
+
+                // 上下键在行间移动
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Up && currentLine > 0) {
+                        focusLine(currentLine - 1)
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Down && currentLine < documentModel.lineCount() - 1) {
+                        focusLine(currentLine + 1)
+                        event.accepted = true
+                    }
+                }
+
+                delegate: Rectangle {
+                    id: row
+                    required property var model
+                    required property int index
+                    width: lineView.width
+                    height: 36 + (row.model.hasComment ? 20 : 0)
+                    radius: 4
+                    // 当前行 → 主题色浅背景；多选行 → 主题色更浅；批注行 → 主题色最浅；hover → itemHoverColor；否则透明
+                    color: {
+                        if (index === page.currentLine) {
+                            return Qt.rgba(FluTheme.primaryColor.r, FluTheme.primaryColor.g,
+                                           FluTheme.primaryColor.b, FluTheme.dark ? 0.22 : 0.08)
+                        }
+                        if (page.isLineSelected(index)) {
+                            return Qt.rgba(FluTheme.primaryColor.r, FluTheme.primaryColor.g,
+                                           FluTheme.primaryColor.b, FluTheme.dark ? 0.16 : 0.06)
+                        }
+                        if (row.model.hasComment) {
+                            return Qt.rgba(FluTheme.primaryColor.r, FluTheme.primaryColor.g,
+                                           FluTheme.primaryColor.b, FluTheme.dark ? 0.12 : 0.05)
+                        }
+                        return row.hovered ? FluTheme.itemHoverColor : "transparent"
+                    }
+
+                    property bool hovered: false
+                    HoverHandler {
+                        onHoveredChanged: row.hovered = hovered
+                    }
+
+                    // 进入编辑：聚焦行内编辑器（供 page.focusLine 通过 itemAtIndex 调用）
+                    function startEdit() {
+                        lineEditor.forceActiveFocus()
+                        lineEditor.cursorPosition = lineEditor.length
+                    }
+
+                    // 撤销/重做后刷新编辑行文本（TextEdit 用户输入会解除绑定）
+                    function refreshEditor() {
+                        lineEditor.text = row.model.text
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: (mouse) => {
+                            if (mouse.modifiers & Qt.ControlModifier) {
+                                // Ctrl+点击：切换多选状态（不改当前行）
+                                const idx = page.selectedLines.indexOf(index)
+                                if (idx >= 0) {
+                                    page.selectedLines.splice(idx, 1)
+                                } else {
+                                    page.selectedLines.push(index)
+                                }
+                                page.selectedLines = page.selectedLines.slice()   // 触发重算
+                                page.currentLine = index
+                                page.focusLine(index)
+                            } else {
+                                // 普通点击：设为当前行并清空多选
+                                page.currentLine = index
+                                page.selectedLines = []
+                                page.focusLine(index)
+                            }
+                        }
+                    }
+
+                    // 当前行左侧强调条（Fluent 选中指示）
+                    Rectangle {
+                        visible: index === page.currentLine
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        width: 3
+                        radius: 1.5
+                        color: FluTheme.primaryColor
+                    }
+
+                    // 原文行（顶部 36px）
+                    RowLayout {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        height: 36
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 12
+                        spacing: 10
+
+                        FluText {
+                            text: String(row.model.lineNumber)
+                            font.pixelSize: 12
+                            color: FluTheme.fontTertiaryColor
+                            Layout.preferredWidth: 44
+                            horizontalAlignment: Text.AlignRight
+                        }
+
+                        // 可编辑文本（虚拟化下每行一个 TextEdit，仅可见行实例化）
+                        TextEdit {
+                            id: lineEditor
+                            text: row.model.text
+                            font.pixelSize: 14
+                            color: FluTheme.fontPrimaryColor
+                            Layout.fillWidth: true
+                            verticalAlignment: Text.AlignVCenter
+                            selectByMouse: true
+                            clip: true
+                            visible: page.currentLine === index
+                            readOnly: page.currentLine !== index
+
+                            // 编辑实时同步到模型（只在当前行时）
+                            onTextChanged: {
+                                if (page.currentLine === index) {
+                                    documentModel.updateLineText(index, text)
+                                }
+                            }
+
+                            Keys.onPressed: (event) => {
+                                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                    page.splitCurrentLine(cursorPosition)
+                                    event.accepted = true
+                                } else if (event.key === Qt.Key_Backspace && cursorPosition === 0) {
+                                    page.mergeWithPrevious()
+                                    event.accepted = true
+                                } else if (event.key === Qt.Key_Up) {
+                                    if (page.currentLine > 0) {
+                                        page.focusLine(page.currentLine - 1)
+                                        event.accepted = true
+                                    }
+                                } else if (event.key === Qt.Key_Down) {
+                                    if (page.currentLine < documentModel.lineCount() - 1) {
+                                        page.focusLine(page.currentLine + 1)
+                                        event.accepted = true
+                                    }
+                                }
+                            }
+
+                            // 当前行编辑下划线（Fluent 输入指示）
+                            Rectangle {
+                                visible: page.currentLine === index
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                height: 2
+                                radius: 1
+                                color: FluTheme.primaryColor
+                            }
+                        }
+
+                        // 非编辑状态显示只读文本（性能：仅当前行用 TextEdit）
+                        Text {
+                            text: row.model.text
+                            font.pixelSize: 14
+                            color: FluTheme.fontPrimaryColor
+                            Layout.fillWidth: true
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                            visible: page.currentLine !== index
+                        }
+
+                        // 批注图标
+                        FluIcon {
+                            visible: row.model.hasComment
+                            iconSource: FluentIcons.Message
+                            iconSize: 15
+                            color: FluTheme.accentColor
+                        }
+                    }
+
+                    // 译文（批注文本）显示在原文下方
+                    FluText {
+                        visible: row.model.hasComment
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.topMargin: 36
+                        height: 20
+                        anchors.leftMargin: 12 + 44 + 10   // 对齐原文文本（行号宽 + 间距）
+                        anchors.rightMargin: 12
+                        text: row.model.commentText
+                        font.pixelSize: 12
+                        color: FluTheme.accentColor
+                        elide: Text.ElideRight
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                }
+            }
+        }
+
+        // ---------- Fluent 状态栏 ----------
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 34
+            radius: 6
+            color: FluTheme.dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(0, 0, 0, 0.03)
+            border.color: FluTheme.dividerColor
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
+                spacing: 8
+
+                FluIcon {
+                    visible: statusIconSource !== 0
+                    iconSource: statusIconSource
+                    iconSize: 15
+                    color: statusIconColor
+                }
+                FluText {
+                    id: statusLabel
+                    text: qsTr("就绪")
+                    font.pixelSize: 12
+                    color: FluTheme.fontSecondaryColor
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                }
+                // 修改标记 + 文档名
+                Rectangle {
+                    id: dirtyDot
+                    visible: false
+                    width: 8
+                    height: 8
+                    radius: 4
+                    color: FluTheme.primaryColor
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                FluText {
+                    id: documentNameLabel
+                    text: qsTr("未命名")
+                    font.pixelSize: 12
+                    font.bold: true
+                    color: FluTheme.fontPrimaryColor
+                }
+                FluText {
+                    text: currentLine >= 0 ? qsTr("当前行 %1").arg(currentLine + 1) : ""
+                    font.pixelSize: 12
+                    color: FluTheme.fontTertiaryColor
+                }
+            }
+        }
+    }
+
+    // ---------- 文件对话框 ----------
+    FileDialog {
+        id: openDialog
+        title: qsTr("打开文档")
+        nameFilters: [qsTr("文本文件 (*.txt)"), qsTr("所有文件 (*)")]
+        onAccepted: openRecent(urlToPath(selectedFile))
+    }
+    FileDialog {
+        id: saveAsDialog
+        title: qsTr("另存为")
+        nameFilters: [qsTr("文本文件 (*.txt)"), qsTr("所有文件 (*)")]
+        fileMode: FileDialog.SaveFile
+        onAccepted: {
+            documentManager.saveFileAs(urlToPath(selectedFile))
+            refreshDocStatus()
+        }
+    }
+    // 批注导出 / 导入（CommentService 持久化 JSON）
+    FileDialog {
+        id: exportCommentsDialog
+        title: qsTr("导出批注")
+        nameFilters: [qsTr("批注文件 (*.json)"), qsTr("所有文件 (*)")]
+        fileMode: FileDialog.SaveFile
+        onAccepted: {
+            if (commentService.exportToFile(urlToPath(selectedFile))) {
+                statusLabel.text = qsTr("批注已导出")
+            } else {
+                statusLabel.text = qsTr("批注导出失败")
+                statusIconSource = FluentIcons.Warning
+                statusIconColor = Qt.rgba(0.77, 0.17, 0.11, 1)
+            }
+        }
+    }
+    FileDialog {
+        id: importCommentsDialog
+        title: qsTr("导入批注")
+        nameFilters: [qsTr("批注文件 (*.json)"), qsTr("所有文件 (*)")]
+        onAccepted: {
+            if (commentService.importFromFile(urlToPath(selectedFile))) {
+                refreshCommentState()
+                statusLabel.text = qsTr("批注已导入")
+            } else {
+                statusLabel.text = qsTr("批注导入失败")
+                statusIconSource = FluentIcons.Warning
+                statusIconColor = Qt.rgba(0.77, 0.17, 0.11, 1)
+            }
+        }
+    }
+
+    // ---------- 新建确认 ----------
+    FluContentDialog {
+        id: confirmNewDialog
+        title: qsTr("新建文档")
+        message: qsTr("当前文档有未保存的修改，确定丢弃并新建吗？")
+        negativeText: qsTr("取消")
+        positiveText: qsTr("新建")
+        onPositiveClicked: doNewDocument()
+    }
+
+    // ---------- 浮动翻译窗口（真独立 Window：可拖到屏幕任意位置，不再受页面范围限制） ----------
+    // 页面内浮层会被导航视图/窗口边界裁剪，拖出页面即失效（用户确认）；改用真 Window。
+    // Qt.Tool：无任务栏、经 transientParent 跟随主窗口；FramelessWindowHint：去掉系统原生
+    // 标题栏（否则与 Fluent 风格违和）；自绘卡片（圆角+边框）+ 标题栏（startSystemMove 原生
+    // 拖动 + ✕）。位置持久化为屏幕坐标，恢复时钳制到桌面内防止无任务栏找不到。
+    Window {
+        id: floatWindow
+        visible: page.panelMode === "floating" && page.panelShown
+        transientParent: mainWindow
+        flags: Qt.Tool | Qt.FramelessWindowHint
+        title: qsTr("翻译工具")
+        width: 300
+        height: Math.max(200, floatCol.implicitHeight + 2)
+        color: "transparent"
+        onVisibleChanged: {
+            if (!floatWindow.visible) {
+                saveFloatWindowPos()
+            }
+        }
+        onClosing: (close) => {
+            // 隐藏而非销毁：保留对象供「浮窗」开关再次显示
+            page.panelShown = false
+            configService.set("ui", "translatePanelVisible", false)
+            saveFloatWindowPos()
+            floatWindow.visibility = Window.Hidden
+            close.accepted = false
+        }
+        Component.onCompleted: restoreFloatWindowPos()
+        Component.onDestruction: saveFloatWindowPos()
+
+        // 自绘卡片（透明窗口 + 圆角 + 边框，保持 Fluent 观感）
+        Rectangle {
+            anchors.fill: parent
+            radius: 8
+            border.width: 1
+            border.color: FluTheme.dividerColor
+            color: FluTheme.dark ? Qt.rgba(0.13, 0.13, 0.13, 0.98) : Qt.rgba(1, 1, 1, 0.98)
+            clip: true
+
+            ColumnLayout {
+                id: floatCol
+                anchors.fill: parent
+                spacing: 0
+
+                // 标题栏（原生系统拖动 + ✕ 关闭）
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 30
+                    color: "transparent"
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 40
+                        FluText {
+                            text: qsTr("翻译工具")
+                            font.pixelSize: 13
+                            font.bold: true
+                            color: FluTheme.fontPrimaryColor
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                    }
+                    // ✕（z 高于拖动区，同父级比较才生效）
+                    FluButton {
+                        id: closeFloatBtn
+                        text: qsTr("✕")
+                        anchors.right: parent.right
+                        anchors.rightMargin: 4
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 24
+                        height: 24
+                        z: 2
+                        onClicked: {
+                            page.panelShown = false
+                            configService.set("ui", "translatePanelVisible", false)
+                            saveFloatWindowPos()
+                            floatWindow.visibility = Window.Hidden
+                        }
+                    }
+                    // 原生系统拖动（startSystemMove）：可拖到屏幕任意位置/跨屏，系统接管
+                    MouseArea {
+                        anchors.fill: parent
+                        onPressed: (mouse) => {
+                            if (mouse.button === Qt.LeftButton) {
+                                floatWindow.startSystemMove()
+                            }
+                        }
+                    }
+                }
+                FluDivider { Layout.fillWidth: true }
+
+                TranslatePanelContent {
+                    id: floatingContent
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    translating: page.translating
+                    progressDone: page.progressDone
+                    progressTotal: page.progressTotal
+                    hasSelection: page.selectedLines.length > 0
+                    onTranslateCurrentRequested: translateCurrent()
+                    onTranslateAllRequested: translateAllPending()
+                    onTranslateSelectedRequested: translateSelected()
+                    onCancelRequested: translator.cancelTranslation()
+                }
+            }
+        }
+    }
+
+    // ---------- 最近文件菜单 ----------
+    FluMenu {
+        id: recentMenu
+    }
+    Component {
+        id: recentItemComp
+        FluMenuItem { }
+    }
+}
