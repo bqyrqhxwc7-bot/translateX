@@ -33,7 +33,6 @@ translateX 是一个基于 Qt 6 的桌面翻译写作工具。它提供了一个
 │   └── ConfigSectionCard.qml   # 设置项 schema 渲染卡片
 ├── src/
 │   ├── main_qml.cpp            # QML 版入口（当前主线）
-│   ├── main.cpp                # Widgets 版入口（旧版，保留兼容）
 │   └── services/               # ★ 可插拔服务层（Q_INVOKABLE，QML 直接调用）
 │       ├── documentmodel.*     # 懒加载文档行模型（大文件性能核心）
 │       ├── translationservice.* # 翻译编排：上下文/分块/降级/回显拦截/缓存
@@ -58,12 +57,13 @@ translateX 是一个基于 Qt 6 的桌面翻译写作工具。它提供了一个
 
 ## 构建
 
-### 两个可执行目标
+### 可执行目标
 
 | 目标 | 说明 |
 | --- | --- |
-| `translateX` | Widgets 版（旧版，功能完整，迁移期间保留） |
-| `translateXqml` | QML 版（当前主线，FluentUI 界面） |
+| `translateXqml` | QML 版（当前主线，FluentUI + Ribbon） |
+
+> 旧 QtWidgets 版已拆分到 `widgets` 分支维护，本分支（main）仅保留 QML 版。
 
 ## 构建要求
 
@@ -81,7 +81,7 @@ cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.5.3/msvc201
 cmake --build build-vs2026-x64 --config Debug
 ```
 
-构建成功后，可执行文件位于 `build-vs2026-x64\Debug\translateXqml.exe`（QML 版）与 `translateX.exe`（Widgets 版），Qt 运行时会通过 `windeployqt` 自动部署。
+构建成功后，可执行文件位于 `build-vs2026-x64\Debug\translateXqml.exe`，Qt 运行时会通过 `windeployqt` 自动部署。
 
 > 提示：如果构建时出现 “找不到 Qt6”，请检查是否在 `D:\Software\Qt\<版本>\<套件>\` 下存在 `lib\cmake\Qt6\Qt6Config.cmake`，并确保 `CMAKE_PREFIX_PATH` 指向该套件目录。
 

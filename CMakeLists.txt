@@ -26,24 +26,7 @@ set(FLUENTUI_BUILD_EXAMPLES OFF CACHE BOOL "Build FluentUI demo applications." F
 set(FLUENTUI_BUILD_STATIC_LIB ON CACHE BOOL "Build FluentUI as a static library." FORCE)
 add_subdirectory(third_party/FluentUI)
 
-add_executable(translateX
-    src/main.cpp
-    src/annotatedtexteditor.cpp
-    src/annotatedtexteditor.h
-    src/mainwindow.cpp
-    src/mainwindow.h
-    src/mainwindow.ui
-)
-
-target_link_libraries(translateX PRIVATE
-    Qt6::Widgets Qt6::Concurrent Qt6::Network
-    Qt6::Qml Qt6::Quick Qt6::QuickWidgets Qt6::Svg Qt6::ShaderTools Qt6::PrintSupport
-    fluentuiplugin
-)
-target_compile_definitions(translateX PRIVATE FLUENTUI_BUILD_STATIC_LIB)
-target_include_directories(translateX PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/FluentUI/src")
-
-# QML 版独立版本号（与 Widget 版区分，避免混淆）
+# QML 版版本号（Widgets 版已迁移至 widgets 分支）
 set(TRANSLATEX_QML_VERSION "1.1.0-qml")
 
 # ---- QML 骨架（FluentUI 全量迁移目标）----
@@ -115,13 +98,6 @@ if(WIN32)
     find_program(QT_WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${QT_BIN_DIR}")
 
     if(QT_WINDEPLOYQT_EXECUTABLE)
-        add_custom_command(TARGET translateX POST_BUILD
-            COMMAND "${QT_WINDEPLOYQT_EXECUTABLE}" --no-translations "$<TARGET_FILE:translateX>"
-            COMMENT "Deploying Qt runtime for translateX"
-        )
-    endif()
-
-    if(QT_WINDEPLOYQT_EXECUTABLE)
         get_filename_component(QT_QML_SRC_DIR "${QT_BIN_DIR}/../qml" ABSOLUTE)
         add_custom_command(TARGET translateXqml POST_BUILD
             COMMAND "${QT_WINDEPLOYQT_EXECUTABLE}" --no-translations --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml" "$<TARGET_FILE:translateXqml>"
@@ -130,7 +106,7 @@ if(WIN32)
         )
     endif()
 
-    install(TARGETS translateX translateXqml
+    install(TARGETS translateXqml
         RUNTIME DESTINATION .
     )
 
@@ -138,7 +114,6 @@ if(WIN32)
         install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/"
             DESTINATION .
             FILES_MATCHING
-            PATTERN "translateX.exe"
             PATTERN "translateXqml.exe"
             PATTERN "*.dll")
     endif()
