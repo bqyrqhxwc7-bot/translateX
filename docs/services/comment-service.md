@@ -82,6 +82,26 @@ Q_INVOKABLE void setCommentProvider(CommentService *provider);
 - `main_qml.cpp`：创建 `CommentService` 暴露 context property `commentService`
 - `TranslateHomePage`：`Component.onCompleted` 里 `documentModel.setCommentProvider(commentService)`；翻译写入改走 `commentService.setComment(...)`（或保持 `documentModel.setComment`，内部已委托）
 
+### 6.1 行内直编（A1.1，2026-08-12）
+
+> 用户反馈：弹窗编辑批注"太呆"，改为与原文一致的行内直编，超宽自动换行；字号独立可设。
+
+- **编辑器**：`TranslateHomePage.qml` 的 delegate 内 `commentBox` 区域：
+  - 当前行 → `commentEditor`（`TextEdit`，`wrapMode: Text.Wrap`，`selectByMouse`，实时 `commentService.setComment(index, text)`）
+  - 非当前行 → `commentReadonly`（`Text` 只读，同样自动换行）
+  - `commentMeasurer`（`opacity:0`）测量换行高度，行高 `36 + 批注高度` 随内容增高
+- **draft 会话**：`page.commentDraftLine`。无批注行选「添加批注」时进入 draft，编辑框保持可见不塌缩；`setComment` 空文本=删除，离开当前行时 draft 清除（未输入则不残留）
+- **入口**：点击批注图标 / 批注文本 → `page.focusComment(line)`；行右键菜单「添加/编辑批注」「删除批注」
+- **删除**：右键菜单「删除批注」，或编辑中清空全部文本（空=删除）
+- **右键修复**：delegate 顶层新增 `acceptedButtons: Qt.RightButton` 的 `MouseArea`（覆盖整行，含当前行 TextEdit 上方；左键穿透），右键任意位置弹出行菜单
+  - ⚠️ 大坑：子对象 `id` 不是父对象属性。delegate 内必须写 `lineMenu.openForLine(...)`（同组件作用域直接引用 id），写 `page.lineMenu` 是 undefined → 报 "Cannot call method 'openForLine' of undefined"，这是最初"右键无效"的根因
+
+### 6.2 批注字号独立设置
+
+- 配置键：`ui/commentFontSize`（ConfigService，默认 12）
+- 右键菜单末项「批注设置…」→ 页面内 `commentSettings` 浮层（小/中/大/特大 = 10/12/14/16）
+- 仅影响批注区域（`commentEditor`/`commentReadonly`/`commentMeasurer` 的 `font.pixelSize: page.commentFontSize`），与原文 14px 无关
+
 ## 7. 测试计划（`tst_comment`）
 
 - 增删查/空文本删除/count/clear

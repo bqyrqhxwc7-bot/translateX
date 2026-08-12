@@ -70,11 +70,17 @@ FluContentPage {
     property bool findCaseSensitive: false
     property bool findWholeWord: false
     property var findMatches: []   // 当前查询的命中行号列表（供行高亮）
+    // 批注编辑：字号独立可设；draftLine = 当前行的批注编辑会话（清空内容时不塌缩）
+    property int commentFontSize: 12
+    property int commentDraftLine: -1
 
-    // 当前行变化 → 同步「章节」指示
+    // 当前行变化 → 同步「章节」指示；离开批注编辑会话时清除 draft
     onCurrentLineChanged: {
         page.currentChapterIndex = page.currentLine >= 0
             ? chapterService.chapterAtLine(page.currentLine) : -1
+        if (page.commentDraftLine >= 0 && page.commentDraftLine !== page.currentLine) {
+            page.commentDraftLine = -1
+        }
     }
 
     function isLineSelected(lineNumber) {
@@ -106,6 +112,9 @@ FluContentPage {
         }
         page.panelMode = panelMode0
         page.panelShown = Boolean(configService.get("ui", "translatePanelVisible"))
+        // 批注字号（独立于原文字号，持久化）
+        const fs = Number(configService.get("ui", "commentFontSize"))
+        page.commentFontSize = isFinite(fs) && fs > 0 ? Math.round(fs) : 12
         // 浮窗位置在 floatWindow.Component.onCompleted 中恢复（真实窗口屏幕坐标）
         // 翻译选项已由 TranslationService 从 ConfigService 持久化恢复，无需在此强制覆盖
     }
@@ -622,6 +631,58 @@ FluContentPage {
         statusLabel.text = n > 0 ? qsTr("已替换 %1 处").arg(n) : qsTr("无匹配可替换")
     }
 
+    // ---------- 行操作与批注编辑（A1） ----------
+    function insertLineAt(lineNumber) {
+        if (lineNumber < 0 || lineNumber > documentModel.lineCount()) return
+        const idx = documentModel.insertLine(lineNumber, "")
+        page.currentLine = idx
+        page.focusLine(idx)
+        refreshDocStatus()
+    }
+    function deleteLineAt(lineNumber) {
+        if (documentModel.lineCount() <= 1) {
+            statusLabel.text = qsTr("至少保留一行")
+            return
+        }
+        documentModel.removeLine(lineNumber)
+        page.currentLine = Math.min(lineNumber, documentModel.lineCount() - 1)
+        page.focusLine(page.currentLine)
+        refreshDocStatus()
+    }
+    // 聚焦批注行内编辑（与原文一致）；无批注行进入 draft 会话
+    function focusComment(lineNumber) {
+        page.commentDraftLine = lineNumber
+        page.currentLine = lineNumber
+        page.selectedLines = []
+        const del = lineView.itemAtIndex(lineNumber)
+        if (del) del.startCommentEdit()
+    }
+    function deleteCommentAt(lineNumber) {
+        commentService.removeComment(lineNumber)
+        statusLabel.text = qsTr("已删除第 %1 行批注").arg(lineNumber + 1)
+        statusIconSource = 0
+        statusIconColor = FluTheme.fontSecondaryColor
+    }
+    // 批注字号独立设置（持久化，仅影响批注区域）
+    function setCommentFontSize(size) {
+        page.commentFontSize = size
+        configService.set("ui", "commentFontSize", size)
+        statusLabel.text = qsTr("批注字号已设为 %1").arg(size)
+        statusIconSource = FluentIcons.Settings
+        statusIconColor = FluTheme.fontSecondaryColor
+    }
+    function openCommentSettings() {
+        commentSettings.visible = true
+    }
+    // 剪切/复制/粘贴作用于当前可编辑行（仅当前行是 TextEdit）
+    function clipboardOp(op) {
+        const del = lineView.itemAtIndex(page.currentLine)
+        if (!del) return
+        if (op === "cut") del.cutLine()
+        else if (op === "copy") del.copyLine()
+        else if (op === "paste") del.pasteLine()
+    }
+
     // ---------- 浮窗位置（真实窗口，屏幕坐标持久化） ----------
     function saveFloatWindowPos() {
         configService.set("ui", "translatePanelX", Math.round(floatWindow.x))
@@ -894,7 +955,9 @@ FluContentPage {
                     required property var model
                     required property int index
                     width: lineView.width
-                    height: 36 + (row.model.hasComment ? 20 : 0)
+                    // 原文 36 + 批注区（自动换行，随内容增高）
+                    height: 36 + (row.model.hasComment || page.commentDraftLine === index
+                                  ? Math.max(20, commentMeasurer.contentHeight) + 6 : 0)
                     radius: 4
                     // 当前行 → 主题色浅背景；多选行 → 主题色更浅；批注行 → 主题色最浅；hover → itemHoverColor；否则透明
                     color: {
@@ -928,13 +991,28 @@ FluContentPage {
                         lineEditor.cursorPosition = lineEditor.length
                     }
 
+                    // 进入批注编辑：从模型刷新文本并聚焦（防 ListView 复用残留 + draft 空文本）
+                    function startCommentEdit() {
+                        commentEditor.text = row.model.commentText
+                        Qt.callLater(function () {
+                            commentEditor.forceActiveFocus()
+                            commentEditor.cursorPosition = commentEditor.length
+                        })
+                    }
+
                     // 撤销/重做后刷新编辑行文本（TextEdit 用户输入会解除绑定）
                     function refreshEditor() {
                         lineEditor.text = row.model.text
                     }
 
+                    // 剪贴板操作（当前行可编辑时）
+                    function cutLine() { if (lineEditor.visible) lineEditor.cut() }
+                    function copyLine() { if (lineEditor.visible) lineEditor.copy() }
+                    function pasteLine() { if (lineEditor.visible) lineEditor.paste() }
+
                     MouseArea {
                         anchors.fill: parent
+                        acceptedButtons: Qt.LeftButton
                         onClicked: (mouse) => {
                             if (mouse.modifiers & Qt.ControlModifier) {
                                 // Ctrl+点击：切换多选状态（不改当前行）
@@ -1048,30 +1126,98 @@ FluContentPage {
                             visible: page.currentLine !== index
                         }
 
-                        // 批注图标
-                        FluIcon {
-                            visible: row.model.hasComment
-                            iconSource: FluentIcons.Message
-                            iconSize: 15
-                            color: FluTheme.accentColor
+                        // 批注图标（点击进入批注行内编辑）
+                        MouseArea {
+                            visible: row.model.hasComment || page.commentDraftLine === index
+                            Layout.preferredWidth: 20
+                            Layout.preferredHeight: 20
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: page.focusComment(index)
+                            FluIcon {
+                                anchors.centerIn: parent
+                                iconSource: FluentIcons.Message
+                                iconSize: 15
+                                color: FluTheme.accentColor
+                            }
                         }
                     }
 
-                    // 译文（批注文本）显示在原文下方
-                    FluText {
-                        visible: row.model.hasComment
+                    // ---------- 批注（译文）行内直编：与原文一样可编辑，超宽自动换行 ----------
+                    Item {
+                        id: commentBox
+                        visible: row.model.hasComment || page.commentDraftLine === index
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.top: parent.top
-                        anchors.topMargin: 36
-                        height: 20
+                        anchors.topMargin: 38
                         anchors.leftMargin: 12 + 44 + 10   // 对齐原文文本（行号宽 + 间距）
                         anchors.rightMargin: 12
-                        text: row.model.commentText
-                        font.pixelSize: 12
-                        color: FluTheme.accentColor
-                        elide: Text.ElideRight
-                        verticalAlignment: Text.AlignVCenter
+                        height: Math.max(20, commentMeasurer.contentHeight)
+                        property bool commentEditing: page.currentLine === index
+                            && (row.model.hasComment || page.commentDraftLine === index)
+
+                        // 换行高度测量（透明度 0，始终参与布局；编辑/只读共用）
+                        Text {
+                            id: commentMeasurer
+                            anchors.top: parent.top
+                            anchors.left: parent.left
+                            width: commentBox.width
+                            text: row.model.commentText
+                            font.pixelSize: page.commentFontSize
+                            wrapMode: Text.Wrap
+                            opacity: 0
+                        }
+                        // 非当前行：只读显示（自动换行）
+                        Text {
+                            id: commentReadonly
+                            visible: !commentBox.commentEditing
+                            anchors.top: parent.top
+                            anchors.left: parent.left
+                            width: commentBox.width
+                            height: commentMeasurer.contentHeight
+                            text: row.model.commentText
+                            font.pixelSize: page.commentFontSize
+                            color: FluTheme.accentColor
+                            wrapMode: Text.Wrap
+                        }
+                        // 当前行：可编辑（与原文一致；清空=删除，draft 会话保持编辑框不塌缩）
+                        TextEdit {
+                            id: commentEditor
+                            visible: commentBox.commentEditing
+                            anchors.top: parent.top
+                            anchors.left: parent.left
+                            width: commentBox.width
+                            height: commentMeasurer.contentHeight
+                            text: row.model.commentText
+                            font.pixelSize: page.commentFontSize
+                            color: FluTheme.accentColor
+                            wrapMode: Text.Wrap
+                            selectByMouse: true
+                            onTextChanged: {
+                                if (commentBox.commentEditing) {
+                                    commentService.setComment(index, text)
+                                }
+                            }
+                        }
+                        // 点击批注区（非编辑态）→ 进入行内编辑
+                        MouseArea {
+                            visible: !commentBox.commentEditing && row.model.hasComment
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: page.focusComment(index)
+                        }
+                    }
+
+                    // 右键（任意位置，含当前行编辑框上方）：弹出行菜单；左键穿透
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.RightButton
+                        onClicked: (mouse) => {
+                            page.currentLine = index
+                            page.selectedLines = []
+                            const pos = row.mapToItem(page, mouse.x, mouse.y)
+                            lineMenu.openForLine(index, pos.x, pos.y)
+                        }
                     }
                 }
             }
@@ -1188,6 +1334,209 @@ FluContentPage {
         negativeText: qsTr("取消")
         positiveText: qsTr("新建")
         onPositiveClicked: doNewDocument()
+    }
+
+    // ---------- 行右键菜单（页面内浮层：NoStack 下 Popup 不可用） ----------
+    Item {
+        id: lineMenu
+        visible: false
+        z: 8000
+        anchors.fill: parent
+        property int targetLine: -1
+        function openForLine(lineNumber, x, y) {
+            targetLine = lineNumber
+            menuCard.x = Math.max(4, Math.min(x, page.width - menuCard.width - 4))
+            menuCard.y = Math.max(4, Math.min(y, page.height - menuCard.height - 4))
+            visible = true
+        }
+        function closeMenu() { visible = false }
+        // 点击菜单外关闭
+        MouseArea {
+            anchors.fill: parent
+            onClicked: lineMenu.closeMenu()
+        }
+        Rectangle {
+            id: menuCard
+            width: 200
+            height: menuCol.implicitHeight + 8
+            radius: 6
+            color: FluTheme.dark ? Qt.rgba(0.16, 0.16, 0.16, 0.98) : Qt.rgba(1, 1, 1, 0.98)
+            border.color: FluTheme.dividerColor
+            border.width: 1
+            ColumnLayout {
+                id: menuCol
+                anchors.fill: parent
+                anchors.margins: 4
+                spacing: 0
+                Repeater {
+                    model: [
+                        { key: "addComment", text: qsTr("添加/编辑批注") },
+                        { key: "delComment", text: qsTr("删除批注") },
+                        { key: "sep" },
+                        { key: "cut", text: qsTr("剪切") },
+                        { key: "copy", text: qsTr("复制") },
+                        { key: "paste", text: qsTr("粘贴") },
+                        { key: "sep" },
+                        { key: "insUp", text: qsTr("插入行（上方）") },
+                        { key: "insDown", text: qsTr("插入行（下方）") },
+                        { key: "delLine", text: qsTr("删除行") },
+                        { key: "sep" },
+                        { key: "settings", text: qsTr("批注设置…") }
+                    ]
+                    // 单个委托组件：分隔线 / 菜单项（Repeater 自动注入 modelData）
+                    delegate: Rectangle {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: modelData.key === "sep" ? 9 : 30
+                        color: "transparent"
+                        // 删除批注项仅在目标行有批注时可用
+                        property bool menuRowEnabled: modelData.key !== "delComment"
+                            || (lineMenu.targetLine >= 0 && documentModel.hasCommentAt(lineMenu.targetLine))
+                        // 分隔线
+                        Rectangle {
+                            visible: modelData.key === "sep"
+                            height: 1
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.leftMargin: 6
+                            anchors.rightMargin: 6
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: FluTheme.dividerColor
+                        }
+                        // 菜单项
+                        Rectangle {
+                            visible: modelData.key !== "sep"
+                            anchors.fill: parent
+                            anchors.margins: 1
+                            radius: 4
+                            color: menuRowHover.hovered ? FluTheme.itemHoverColor : "transparent"
+                            opacity: parent.menuRowEnabled ? 1 : 0.4
+                            HoverHandler { id: menuRowHover }
+                            FluText {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: modelData.text || ""   // 分隔线行无 text
+                                font.pixelSize: 13
+                                color: parent.parent.menuRowEnabled
+                                    ? FluTheme.fontPrimaryColor : FluTheme.fontTertiaryColor
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: {
+                                    const ln = lineMenu.targetLine
+                                    lineMenu.closeMenu()
+                                    switch (modelData.key) {
+                                    case "addComment": page.focusComment(ln); break
+                                    case "delComment": page.deleteCommentAt(ln); break
+                                    case "cut": page.clipboardOp("cut"); break
+                                    case "copy": page.clipboardOp("copy"); break
+                                    case "paste": page.clipboardOp("paste"); break
+                                    case "insUp": page.insertLineAt(ln); break
+                                    case "insDown": page.insertLineAt(ln + 1); break
+                                    case "delLine": page.deleteLineAt(ln); break
+                                    case "settings": page.openCommentSettings(); break
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ---------- 批注设置（字号独立设置；页面内浮层） ----------
+    Item {
+        id: commentSettings
+        visible: false
+        z: 9000
+        anchors.fill: parent
+        function closeSettings() { visible = false }
+        // 遮罩（点击关闭）
+        Rectangle {
+            anchors.fill: parent
+            color: Qt.rgba(0, 0, 0, 0.35)
+            MouseArea { anchors.fill: parent; onClicked: commentSettings.closeSettings() }
+        }
+        Rectangle {
+            width: 380
+            height: settingsCol.implicitHeight + 32
+            anchors.centerIn: parent
+            radius: 8
+            color: FluTheme.dark ? Qt.rgba(0.16, 0.16, 0.16, 0.98) : Qt.rgba(1, 1, 1, 0.98)
+            border.color: FluTheme.dividerColor
+            border.width: 1
+            ColumnLayout {
+                id: settingsCol
+                anchors.fill: parent
+                anchors.margins: 16
+                spacing: 14
+                FluText {
+                    text: qsTr("批注设置")
+                    font.pixelSize: 15
+                    font.bold: true
+                    color: FluTheme.fontPrimaryColor
+                }
+                // 字号（独立于原文，仅影响批注区域）
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    FluText {
+                        text: qsTr("字号")
+                        font.pixelSize: 13
+                        color: FluTheme.fontPrimaryColor
+                        Layout.preferredWidth: 40
+                    }
+                    Repeater {
+                        model: [
+                            { label: qsTr("小"), size: 10 },
+                            { label: qsTr("中"), size: 12 },
+                            { label: qsTr("大"), size: 14 },
+                            { label: qsTr("特大"), size: 16 }
+                        ]
+                        delegate: Rectangle {
+                            required property var modelData
+                            Layout.preferredWidth: 56
+                            Layout.preferredHeight: 30
+                            radius: 6
+                            border.width: 1
+                            border.color: page.commentFontSize === modelData.size
+                                ? FluTheme.primaryColor : FluTheme.dividerColor
+                            color: fontChipHover.hovered
+                                ? (page.commentFontSize === modelData.size
+                                   ? FluTheme.primaryColor : FluTheme.itemHoverColor)
+                                : (page.commentFontSize === modelData.size
+                                   ? FluTheme.primaryColor : "transparent")
+                            HoverHandler { id: fontChipHover }
+                            FluText {
+                                anchors.centerIn: parent
+                                text: modelData.label
+                                font.pixelSize: 13
+                                color: page.commentFontSize === modelData.size
+                                    ? "white" : FluTheme.fontPrimaryColor
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: page.setCommentFontSize(modelData.size)
+                            }
+                        }
+                    }
+                }
+                FluText {
+                    text: qsTr("批注（译文）字号独立于原文，仅影响批注区域。")
+                    font.pixelSize: 12
+                    color: FluTheme.fontSecondaryColor
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Item { Layout.fillWidth: true }
+                    FluButton { text: qsTr("关闭"); onClicked: commentSettings.closeSettings() }
+                }
+            }
+        }
     }
 
     // ---------- 浮动翻译窗口（真独立 Window：可拖到屏幕任意位置，不再受页面范围限制） ----------
