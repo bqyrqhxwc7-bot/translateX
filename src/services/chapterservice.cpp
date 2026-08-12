@@ -2,15 +2,30 @@
 
 #include "documentmodel.h"
 
+#include <QTimer>
+
 ChapterService::ChapterService(QObject *parent)
     : QObject(parent)
     , m_pattern(QStringLiteral("(^#{1,6}\\s.*)|(第[一二三四五六七八九十百千万0-9]+[章节篇回])"))
+    , m_debounceTimer(new QTimer(this))
 {
+    m_debounceTimer->setSingleShot(true);
+    m_debounceTimer->setInterval(250);
+    connect(m_debounceTimer, &QTimer::timeout, this, &ChapterService::rebuild);
 }
 
 void ChapterService::setDocument(DocumentModel *model)
 {
+    if (m_model) {
+        disconnect(m_model, &DocumentModel::lineCountChanged, this, nullptr);
+    }
     m_model = model;
+    if (m_model) {
+        // 行增删/清空/重建后防抖自动重建章节索引（QPointer：模型销毁自动断开）
+        connect(m_model, &DocumentModel::lineCountChanged, this, [this] {
+            m_debounceTimer->start();
+        });
+    }
 }
 
 void ChapterService::setChapterPattern(const QString &regex)

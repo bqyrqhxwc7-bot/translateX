@@ -69,6 +69,7 @@ FluContentPage {
     property string findQuery: ""
     property bool findCaseSensitive: false
     property bool findWholeWord: false
+    property var findMatches: []   // 当前查询的命中行号列表（供行高亮）
 
     // 当前行变化 → 同步「章节」指示
     onCurrentLineChanged: {
@@ -78,6 +79,10 @@ FluContentPage {
 
     function isLineSelected(lineNumber) {
         return page.selectedLines.indexOf(lineNumber) >= 0
+    }
+
+    function isFindMatch(lineNumber) {
+        return page.findMatches.indexOf(lineNumber) >= 0
     }
 
     Component.onCompleted: {
@@ -546,6 +551,7 @@ FluContentPage {
     function doFindNext(query) {
         const q = String(query || "").trim()
         if (!q) {
+            page.findMatches = []
             statusLabel.text = qsTr("请输入查找内容")
             return
         }
@@ -554,6 +560,7 @@ FluContentPage {
         const from = newQuery ? 0 : (page.currentLine + 1)
         const line = findService.findNext(q, from, page.findCaseSensitive, page.findWholeWord, true)
         page.findQuery = q
+        page.findMatches = findService.find(q, page.findCaseSensitive, page.findWholeWord)
         page.findResultCount = findService.count(q, page.findCaseSensitive, page.findWholeWord)
         if (line >= 0) {
             page.focusLine(line)
@@ -565,6 +572,7 @@ FluContentPage {
     function doFindPrev(query) {
         const q = String(query || "").trim()
         if (!q) {
+            page.findMatches = []
             statusLabel.text = qsTr("请输入查找内容")
             return
         }
@@ -573,6 +581,7 @@ FluContentPage {
         const from = newQuery ? (documentModel.lineCount() - 1) : (page.currentLine - 1)
         const line = findService.findPrevious(q, from, page.findCaseSensitive, page.findWholeWord, true)
         page.findQuery = q
+        page.findMatches = findService.find(q, page.findCaseSensitive, page.findWholeWord)
         page.findResultCount = findService.count(q, page.findCaseSensitive, page.findWholeWord)
         if (line >= 0) {
             page.focusLine(line)
@@ -900,6 +909,10 @@ FluContentPage {
                         if (row.model.hasComment) {
                             return Qt.rgba(FluTheme.primaryColor.r, FluTheme.primaryColor.g,
                                            FluTheme.primaryColor.b, FluTheme.dark ? 0.12 : 0.05)
+                        }
+                        if (page.isFindMatch(index)) {
+                            // 查找命中：琥珀色浅底，与主题色（当前行/选中/批注）区分
+                            return Qt.rgba(0.95, 0.78, 0.25, FluTheme.dark ? 0.30 : 0.16)
                         }
                         return row.hovered ? FluTheme.itemHoverColor : "transparent"
                     }

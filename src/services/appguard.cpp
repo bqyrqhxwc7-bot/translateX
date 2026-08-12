@@ -55,6 +55,11 @@ void AppGuard::install()
 
 void AppGuard::messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &message)
 {
+    // 过滤 FluentUI 对 Qt 6.5.3 frameless 的固定提示（纯信息性；本应用已解决该兼容问题）
+    if (type == QtWarningMsg && message.contains(QStringLiteral("frameless bug"))) {
+        return;
+    }
+
     QMutexLocker locker(&g_logMutex);
 
     if (g_logPath.isEmpty()) {

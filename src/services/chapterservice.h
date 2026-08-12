@@ -8,6 +8,7 @@
 #include <QRegularExpression>
 
 class DocumentModel;
+class QTimer;
 
 // 章节服务：按标题行识别文档章节，提供章节列表与"行归属章节"查询。
 // 为翻译提供章节级上下文、跳转、分块边界。
@@ -44,4 +45,6 @@ private:
     QPointer<DocumentModel> m_model;
     QRegularExpression m_pattern;
     QVector<Chapter> m_chapters;
+    // 结构变更防抖：行增删后 250ms 自动重建章节索引（避免每次编辑触发全量扫描）
+    QTimer *m_debounceTimer = nullptr;
 };

@@ -13,6 +13,7 @@ private slots:
     void chapterAtLine();
     void customPattern();
     void chapterTitlesList();
+    void autoRebuildOnLineInsert();
 };
 
 void TestChapterService::defaultPatternChinese()
@@ -90,6 +91,24 @@ void TestChapterService::chapterTitlesList()
     cs.setDocument(&model);
     cs.rebuild();
     QCOMPARE(cs.chapterTitles(), QStringList({ QStringLiteral("第一章"), QStringLiteral("第二章") }));
+}
+
+void TestChapterService::autoRebuildOnLineInsert()
+{
+    DocumentModel model;
+    model.setLines({ QStringLiteral("第1章"), QStringLiteral("a") });
+    ChapterService cs;
+    cs.setDocument(&model);
+    cs.rebuild();
+    QCOMPARE(cs.chapterCount(), 1);
+
+    // 插入新章节标题行 → 行数变化触发防抖自动重建（无需手动 rebuild）
+    model.insertLine(2, QStringLiteral("第2章"));
+    QTRY_COMPARE_WITH_TIMEOUT(cs.chapterCount(), 2, 1000);
+
+    // 删除章节标题行 → 同样自动更新
+    model.removeLine(0);
+    QTRY_COMPARE_WITH_TIMEOUT(cs.chapterCount(), 1, 1000);
 }
 
 QTEST_GUILESS_MAIN(TestChapterService)
