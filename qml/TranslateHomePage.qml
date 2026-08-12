@@ -69,8 +69,10 @@ FluContentPage {
     property string findQuery: ""
     property bool findCaseSensitive: false
     property bool findWholeWord: false
+    property bool findFuzzy: false      // 模糊查找（子序列匹配，设置页开关）
     property var findMatches: []   // 当前查询的命中行号列表（供行高亮）
-    // 批注编辑：字号独立可设；draftLine = 当前行的批注编辑会话（清空内容时不塌缩）
+    // 显示设置：字号独立可设（原文/批注），持久化到 config；draftLine = 批注编辑会话
+    property int originalFontSize: 14
     property int commentFontSize: 12
     property int commentDraftLine: -1
 
@@ -112,9 +114,14 @@ FluContentPage {
         }
         page.panelMode = panelMode0
         page.panelShown = Boolean(configService.get("ui", "translatePanelVisible"))
-        // 批注字号（独立于原文字号，持久化）
-        const fs = Number(configService.get("ui", "commentFontSize"))
-        page.commentFontSize = isFinite(fs) && fs > 0 ? Math.round(fs) : 12
+        // 显示设置：原文/批注字号、查找选项（设置页与右键「显示设置」共用同一配置）
+        const ofs = Number(configService.get("ui", "originalFontSize"))
+        page.originalFontSize = isFinite(ofs) && ofs > 0 ? Math.round(ofs) : 14
+        const cfs = Number(configService.get("ui", "commentFontSize"))
+        page.commentFontSize = isFinite(cfs) && cfs > 0 ? Math.round(cfs) : 12
+        page.findCaseSensitive = Boolean(configService.get("ui", "findCaseSensitive"))
+        page.findWholeWord = Boolean(configService.get("ui", "findWholeWord"))
+        page.findFuzzy = Boolean(configService.get("ui", "findFuzzy"))
         // 浮窗位置在 floatWindow.Component.onCompleted 中恢复（真实窗口屏幕坐标）
         // 翻译选项已由 TranslationService 从 ConfigService 持久化恢复，无需在此强制覆盖
     }
@@ -567,10 +574,10 @@ FluContentPage {
         // 换了新查询 → 从文档开头找第一个匹配；否则从当前行之后继续（避免原地不跳）
         const newQuery = q !== page.findQuery
         const from = newQuery ? 0 : (page.currentLine + 1)
-        const line = findService.findNext(q, from, page.findCaseSensitive, page.findWholeWord, true)
+        const line = findService.findNext(q, from, page.findCaseSensitive, page.findWholeWord, true, page.findFuzzy)
         page.findQuery = q
-        page.findMatches = findService.find(q, page.findCaseSensitive, page.findWholeWord)
-        page.findResultCount = findService.count(q, page.findCaseSensitive, page.findWholeWord)
+        page.findMatches = findService.find(q, page.findCaseSensitive, page.findWholeWord, page.findFuzzy)
+        page.findResultCount = findService.count(q, page.findCaseSensitive, page.findWholeWord, page.findFuzzy)
         if (line >= 0) {
             page.focusLine(line)
             statusLabel.text = qsTr("找到 %1 处，已定位第 %2 行").arg(page.findResultCount).arg(line + 1)
@@ -588,10 +595,10 @@ FluContentPage {
         // 换了新查询 → 从文档末尾找最后一个匹配；否则从当前行之前继续
         const newQuery = q !== page.findQuery
         const from = newQuery ? (documentModel.lineCount() - 1) : (page.currentLine - 1)
-        const line = findService.findPrevious(q, from, page.findCaseSensitive, page.findWholeWord, true)
+        const line = findService.findPrevious(q, from, page.findCaseSensitive, page.findWholeWord, true, page.findFuzzy)
         page.findQuery = q
-        page.findMatches = findService.find(q, page.findCaseSensitive, page.findWholeWord)
-        page.findResultCount = findService.count(q, page.findCaseSensitive, page.findWholeWord)
+        page.findMatches = findService.find(q, page.findCaseSensitive, page.findWholeWord, page.findFuzzy)
+        page.findResultCount = findService.count(q, page.findCaseSensitive, page.findWholeWord, page.findFuzzy)
         if (line >= 0) {
             page.focusLine(line)
             statusLabel.text = qsTr("找到 %1 处，已定位第 %2 行").arg(page.findResultCount).arg(line + 1)
@@ -606,7 +613,7 @@ FluContentPage {
             return
         }
         const ok = findService.replaceLine(page.currentLine, q, String(replacement || ""),
-                                           page.findCaseSensitive, page.findWholeWord)
+                                           page.findCaseSensitive, page.findWholeWord, page.findFuzzy)
         if (ok) {
             const del = lineView.itemAtIndex(page.currentLine)
             if (del) del.refreshEditor()
@@ -623,7 +630,7 @@ FluContentPage {
             return
         }
         const n = findService.replaceAll(q, String(replacement || ""),
-                                         page.findCaseSensitive, page.findWholeWord)
+                                         page.findCaseSensitive, page.findWholeWord, page.findFuzzy)
         if (n > 0) {
             refreshDocStatus()
             afterUndoRedo()
@@ -663,13 +670,14 @@ FluContentPage {
         statusIconSource = 0
         statusIconColor = FluTheme.fontSecondaryColor
     }
-    // 批注字号独立设置（持久化，仅影响批注区域）
+    // 显示设置：原文/批注字号（滑动条，持久化到 config，与设置页同步）
+    function setOriginalFontSize(size) {
+        page.originalFontSize = size
+        configService.set("ui", "originalFontSize", size)
+    }
     function setCommentFontSize(size) {
         page.commentFontSize = size
         configService.set("ui", "commentFontSize", size)
-        statusLabel.text = qsTr("批注字号已设为 %1").arg(size)
-        statusIconSource = FluentIcons.Settings
-        statusIconColor = FluTheme.fontSecondaryColor
     }
     function openCommentSettings() {
         commentSettings.visible = true
@@ -905,17 +913,6 @@ FluContentPage {
                         }
                         FluButton { text: qsTr("替换"); onClicked: page.doReplace(findInput.text, replaceInput.text) }
                         FluButton { text: qsTr("全部替换"); onClicked: page.doReplaceAll(findInput.text, replaceInput.text) }
-                        FluDivider { orientation: Qt.Vertical; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
-                        FluToggleSwitch {
-                            text: qsTr("大小写")
-                            checked: page.findCaseSensitive
-                            clickListener: () => { page.findCaseSensitive = !page.findCaseSensitive }
-                        }
-                        FluToggleSwitch {
-                            text: qsTr("整词")
-                            checked: page.findWholeWord
-                            clickListener: () => { page.findWholeWord = !page.findWholeWord }
-                        }
                         Item { Layout.fillWidth: true }
                     }
                 }
@@ -1067,7 +1064,7 @@ FluContentPage {
                         TextEdit {
                             id: lineEditor
                             text: row.model.text
-                            font.pixelSize: 14
+                            font.pixelSize: page.originalFontSize
                             color: FluTheme.fontPrimaryColor
                             Layout.fillWidth: true
                             verticalAlignment: Text.AlignVCenter
@@ -1118,7 +1115,7 @@ FluContentPage {
                         // 非编辑状态显示只读文本（性能：仅当前行用 TextEdit）
                         Text {
                             text: row.model.text
-                            font.pixelSize: 14
+                            font.pixelSize: page.originalFontSize
                             color: FluTheme.fontPrimaryColor
                             Layout.fillWidth: true
                             verticalAlignment: Text.AlignVCenter
@@ -1128,7 +1125,7 @@ FluContentPage {
 
                         // 批注图标（点击进入批注行内编辑）
                         MouseArea {
-                            visible: row.model.hasComment || page.commentDraftLine === index
+                            visible: row.model.hasComment === true || page.commentDraftLine === index
                             Layout.preferredWidth: 20
                             Layout.preferredHeight: 20
                             cursorShape: Qt.PointingHandCursor
@@ -1145,7 +1142,7 @@ FluContentPage {
                     // ---------- 批注（译文）行内直编：与原文一样可编辑，超宽自动换行 ----------
                     Item {
                         id: commentBox
-                        visible: row.model.hasComment || page.commentDraftLine === index
+                        visible: row.model.hasComment === true || page.commentDraftLine === index
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.top: parent.top
@@ -1201,7 +1198,7 @@ FluContentPage {
                         }
                         // 点击批注区（非编辑态）→ 进入行内编辑
                         MouseArea {
-                            visible: !commentBox.commentEditing && row.model.hasComment
+                            visible: row.model.hasComment === true && !commentBox.commentEditing
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
                             onClicked: page.focusComment(index)
@@ -1345,8 +1342,26 @@ FluContentPage {
         property int targetLine: -1
         function openForLine(lineNumber, x, y) {
             targetLine = lineNumber
-            menuCard.x = Math.max(4, Math.min(x, page.width - menuCard.width - 4))
-            menuCard.y = Math.max(4, Math.min(y, page.height - menuCard.height - 4))
+            const cw = menuCard.width
+            const ch = menuCard.height
+            // 屏幕边缘自适应：按窗口可见区域钳制；靠右/下自动翻转到光标另一侧，保证完整显示
+            const win = mainWindow
+            const content = win && win.contentItem ? win.contentItem : null
+            if (content) {
+                const off = page.mapToItem(content, 0, 0)
+                let wx = off.x + x
+                let wy = off.y + y
+                if (wx + cw + 10 > content.width) wx = wx - cw - 10
+                if (wy + ch + 10 > content.height) wy = wy - ch - 10
+                wx = Math.max(10, Math.min(wx, content.width - cw - 10))
+                wy = Math.max(10, Math.min(wy, content.height - ch - 10))
+                const back = page.mapFromItem(content, wx, wy)
+                menuCard.x = back.x
+                menuCard.y = back.y
+            } else {
+                menuCard.x = Math.max(4, Math.min(x, page.width - cw - 4))
+                menuCard.y = Math.max(4, Math.min(y, page.height - ch - 4))
+            }
             visible = true
         }
         function closeMenu() { visible = false }
@@ -1381,7 +1396,7 @@ FluContentPage {
                         { key: "insDown", text: qsTr("插入行（下方）") },
                         { key: "delLine", text: qsTr("删除行") },
                         { key: "sep" },
-                        { key: "settings", text: qsTr("批注设置…") }
+                        { key: "settings", text: qsTr("显示设置…") }
                     ]
                     // 单个委托组件：分隔线 / 菜单项（Repeater 自动注入 modelData）
                     delegate: Rectangle {
@@ -1446,7 +1461,7 @@ FluContentPage {
         }
     }
 
-    // ---------- 批注设置（字号独立设置；页面内浮层） ----------
+    // ---------- 显示设置（字号滑动条；页面内浮层，与设置页共用 config） ----------
     Item {
         id: commentSettings
         visible: false
@@ -1460,7 +1475,7 @@ FluContentPage {
             MouseArea { anchors.fill: parent; onClicked: commentSettings.closeSettings() }
         }
         Rectangle {
-            width: 380
+            width: 420
             height: settingsCol.implicitHeight + 32
             anchors.centerIn: parent
             radius: 8
@@ -1471,60 +1486,53 @@ FluContentPage {
                 id: settingsCol
                 anchors.fill: parent
                 anchors.margins: 16
-                spacing: 14
+                spacing: 16
                 FluText {
-                    text: qsTr("批注设置")
+                    text: qsTr("显示设置")
                     font.pixelSize: 15
                     font.bold: true
                     color: FluTheme.fontPrimaryColor
                 }
-                // 字号（独立于原文，仅影响批注区域）
+                // 原文字号（滑动条）
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: 12
                     FluText {
-                        text: qsTr("字号")
+                        text: qsTr("原文字号 %1").arg(page.originalFontSize)
                         font.pixelSize: 13
                         color: FluTheme.fontPrimaryColor
-                        Layout.preferredWidth: 40
+                        Layout.preferredWidth: 100
                     }
-                    Repeater {
-                        model: [
-                            { label: qsTr("小"), size: 10 },
-                            { label: qsTr("中"), size: 12 },
-                            { label: qsTr("大"), size: 14 },
-                            { label: qsTr("特大"), size: 16 }
-                        ]
-                        delegate: Rectangle {
-                            required property var modelData
-                            Layout.preferredWidth: 56
-                            Layout.preferredHeight: 30
-                            radius: 6
-                            border.width: 1
-                            border.color: page.commentFontSize === modelData.size
-                                ? FluTheme.primaryColor : FluTheme.dividerColor
-                            color: fontChipHover.hovered
-                                ? (page.commentFontSize === modelData.size
-                                   ? FluTheme.primaryColor : FluTheme.itemHoverColor)
-                                : (page.commentFontSize === modelData.size
-                                   ? FluTheme.primaryColor : "transparent")
-                            HoverHandler { id: fontChipHover }
-                            FluText {
-                                anchors.centerIn: parent
-                                text: modelData.label
-                                font.pixelSize: 13
-                                color: page.commentFontSize === modelData.size
-                                    ? "white" : FluTheme.fontPrimaryColor
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: page.setCommentFontSize(modelData.size)
-                            }
-                        }
+                    FluSlider {
+                        Layout.fillWidth: true
+                        from: 10
+                        to: 24
+                        stepSize: 1
+                        value: page.originalFontSize
+                        onMoved: page.setOriginalFontSize(Math.round(value))
+                    }
+                }
+                // 批注字号（滑动条，独立于原文）
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    FluText {
+                        text: qsTr("批注字号 %1").arg(page.commentFontSize)
+                        font.pixelSize: 13
+                        color: FluTheme.fontPrimaryColor
+                        Layout.preferredWidth: 100
+                    }
+                    FluSlider {
+                        Layout.fillWidth: true
+                        from: 8
+                        to: 24
+                        stepSize: 1
+                        value: page.commentFontSize
+                        onMoved: page.setCommentFontSize(Math.round(value))
                     }
                 }
                 FluText {
-                    text: qsTr("批注（译文）字号独立于原文，仅影响批注区域。")
+                    text: qsTr("字号即时生效并持久化；批注字号独立于原文，仅影响批注区域。设置页「显示」可同步调整。")
                     font.pixelSize: 12
                     color: FluTheme.fontSecondaryColor
                     wrapMode: Text.Wrap

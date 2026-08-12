@@ -21,24 +21,28 @@ public:
     Q_INVOKABLE void setDocument(DocumentModel *model);
 
     // 查找（返回含至少一次匹配的行号列表；空查询返回空）
-    Q_INVOKABLE QList<int> find(const QString &query, bool caseSensitive = false, bool wholeWord = false);
-    Q_INVOKABLE int count(const QString &query, bool caseSensitive = false, bool wholeWord = false);
+    // fuzzy=true：子序列模糊匹配（查询字符按顺序出现即命中，不要求连续）
+    Q_INVOKABLE QList<int> find(const QString &query, bool caseSensitive = false,
+                                bool wholeWord = false, bool fuzzy = false);
+    Q_INVOKABLE int count(const QString &query, bool caseSensitive = false,
+                          bool wholeWord = false, bool fuzzy = false);
     Q_INVOKABLE int findNext(const QString &query, int fromLine, bool caseSensitive = false,
-                             bool wholeWord = false, bool wrap = true) const;
+                             bool wholeWord = false, bool wrap = true, bool fuzzy = false) const;
     Q_INVOKABLE int findPrevious(const QString &query, int fromLine, bool caseSensitive = false,
-                                 bool wholeWord = false, bool wrap = true) const;
+                                 bool wholeWord = false, bool wrap = true, bool fuzzy = false) const;
 
     // 替换
     Q_INVOKABLE bool replaceLine(int lineNumber, const QString &query, const QString &replacement,
-                                 bool caseSensitive = false, bool wholeWord = false);
+                                 bool caseSensitive = false, bool wholeWord = false, bool fuzzy = false);
     Q_INVOKABLE int replaceAll(const QString &query, const QString &replacement,
-                               bool caseSensitive = false, bool wholeWord = false);
+                               bool caseSensitive = false, bool wholeWord = false, bool fuzzy = false);
 
 signals:
     void searchCompleted(int resultCount);   // find/count 完成（供 UI 更新状态）
 
 private:
-    QRegularExpression makePattern(const QString &query, bool caseSensitive, bool wholeWord) const;
+    QRegularExpression makePattern(const QString &query, bool caseSensitive,
+                                   bool wholeWord, bool fuzzy) const;
 
     // QPointer：页面（QML）销毁后自动置空，避免悬挂指针（NoStack 导航每次重建页面）
     QPointer<DocumentModel> m_model;

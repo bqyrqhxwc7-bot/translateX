@@ -42,6 +42,46 @@
       "type": "number",
       "default": 0,
       "group": "翻译面板"
+    },
+    {
+      "key": "originalFontSize",
+      "displayName": "原文字号",
+      "description": "编辑器原文显示与编辑的字号（像素）",
+      "type": "number",
+      "default": 14,
+      "group": "显示"
+    },
+    {
+      "key": "commentFontSize",
+      "displayName": "批注字号",
+      "description": "批注（译文）显示与编辑的字号（像素），独立于原文",
+      "type": "number",
+      "default": 12,
+      "group": "显示"
+    },
+    {
+      "key": "findCaseSensitive",
+      "displayName": "查找区分大小写",
+      "description": "查找/替换是否区分大小写",
+      "type": "bool",
+      "default": false,
+      "group": "查找"
+    },
+    {
+      "key": "findWholeWord",
+      "displayName": "查找整词匹配",
+      "description": "查找/替换是否整词匹配",
+      "type": "bool",
+      "default": false,
+      "group": "查找"
+    },
+    {
+      "key": "findFuzzy",
+      "displayName": "模糊查找",
+      "description": "查询字符按顺序出现即匹配（子序列模糊匹配），不要求连续",
+      "type": "bool",
+      "default": false,
+      "group": "查找"
     }
   ]
 }

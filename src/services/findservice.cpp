@@ -13,11 +13,22 @@ void FindService::setDocument(DocumentModel *model)
 }
 
 QRegularExpression FindService::makePattern(
-    const QString &query, bool caseSensitive, bool wholeWord) const
+    const QString &query, bool caseSensitive, bool wholeWord, bool fuzzy) const
 {
-    QString pattern = QRegularExpression::escape(query);
-    if (wholeWord) {
-        pattern = QStringLiteral("\\b") + pattern + QStringLiteral("\\b");
+    QString pattern;
+    if (fuzzy) {
+        // 模糊：查询字符按顺序出现即可（子序列匹配），字符间用 .* 连接
+        QStringList parts;
+        parts.reserve(query.size());
+        for (const QChar &c : query) {
+            parts.append(QRegularExpression::escape(QString(c)));
+        }
+        pattern = parts.join(QStringLiteral(".*"));
+    } else {
+        pattern = QRegularExpression::escape(query);
+        if (wholeWord) {
+            pattern = QStringLiteral("\\b") + pattern + QStringLiteral("\\b");
+        }
     }
     QRegularExpression re(pattern);
     re.setPatternOptions(caseSensitive ? QRegularExpression::NoPatternOption
@@ -25,11 +36,11 @@ QRegularExpression FindService::makePattern(
     return re;
 }
 
-QList<int> FindService::find(const QString &query, bool caseSensitive, bool wholeWord)
+QList<int> FindService::find(const QString &query, bool caseSensitive, bool wholeWord, bool fuzzy)
 {
     QList<int> lines;
     if (!query.isEmpty() && m_model) {
-        const QRegularExpression re = makePattern(query, caseSensitive, wholeWord);
+        const QRegularExpression re = makePattern(query, caseSensitive, wholeWord, fuzzy);
         for (int i = 0; i < m_model->lineCount(); ++i) {
             if (re.match(m_model->lineText(i)).hasMatch()) {
                 lines.append(i);
@@ -40,11 +51,11 @@ QList<int> FindService::find(const QString &query, bool caseSensitive, bool whol
     return lines;
 }
 
-int FindService::count(const QString &query, bool caseSensitive, bool wholeWord)
+int FindService::count(const QString &query, bool caseSensitive, bool wholeWord, bool fuzzy)
 {
     int total = 0;
     if (!query.isEmpty() && m_model) {
-        const QRegularExpression re = makePattern(query, caseSensitive, wholeWord);
+        const QRegularExpression re = makePattern(query, caseSensitive, wholeWord, fuzzy);
         for (int i = 0; i < m_model->lineCount(); ++i) {
             auto it = re.globalMatch(m_model->lineText(i));
             while (it.hasNext()) {
@@ -58,12 +69,12 @@ int FindService::count(const QString &query, bool caseSensitive, bool wholeWord)
 }
 
 int FindService::findNext(const QString &query, int fromLine, bool caseSensitive,
-                          bool wholeWord, bool wrap) const
+                          bool wholeWord, bool wrap, bool fuzzy) const
 {
     if (query.isEmpty() || !m_model) {
         return -1;
     }
-    const QRegularExpression re = makePattern(query, caseSensitive, wholeWord);
+    const QRegularExpression re = makePattern(query, caseSensitive, wholeWord, fuzzy);
     const int n = m_model->lineCount();
     for (int i = qMax(0, fromLine); i < n; ++i) {
         if (re.match(m_model->lineText(i)).hasMatch()) {
@@ -81,12 +92,12 @@ int FindService::findNext(const QString &query, int fromLine, bool caseSensitive
 }
 
 int FindService::findPrevious(const QString &query, int fromLine, bool caseSensitive,
-                              bool wholeWord, bool wrap) const
+                              bool wholeWord, bool wrap, bool fuzzy) const
 {
     if (query.isEmpty() || !m_model) {
         return -1;
     }
-    const QRegularExpression re = makePattern(query, caseSensitive, wholeWord);
+    const QRegularExpression re = makePattern(query, caseSensitive, wholeWord, fuzzy);
     for (int i = qMin(fromLine, m_model->lineCount() - 1); i >= 0; --i) {
         if (re.match(m_model->lineText(i)).hasMatch()) {
             return i;
@@ -103,12 +114,12 @@ int FindService::findPrevious(const QString &query, int fromLine, bool caseSensi
 }
 
 bool FindService::replaceLine(int lineNumber, const QString &query, const QString &replacement,
-                              bool caseSensitive, bool wholeWord)
+                              bool caseSensitive, bool wholeWord, bool fuzzy)
 {
     if (!m_model || query.isEmpty() || lineNumber < 0 || lineNumber >= m_model->lineCount()) {
         return false;
     }
-    const QRegularExpression re = makePattern(query, caseSensitive, wholeWord);
+    const QRegularExpression re = makePattern(query, caseSensitive, wholeWord, fuzzy);
     const QString text = m_model->lineText(lineNumber);
     QString newText = text;
     newText.replace(re, replacement);
@@ -120,12 +131,12 @@ bool FindService::replaceLine(int lineNumber, const QString &query, const QStrin
 }
 
 int FindService::replaceAll(const QString &query, const QString &replacement,
-                            bool caseSensitive, bool wholeWord)
+                            bool caseSensitive, bool wholeWord, bool fuzzy)
 {
     if (query.isEmpty() || !m_model) {
         return 0;
     }
-    const QRegularExpression re = makePattern(query, caseSensitive, wholeWord);
+    const QRegularExpression re = makePattern(query, caseSensitive, wholeWord, fuzzy);
     int total = 0;
     for (int i = 0; i < m_model->lineCount(); ++i) {
         const QString text = m_model->lineText(i);

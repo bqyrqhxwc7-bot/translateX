@@ -16,6 +16,12 @@ FluScrollablePage {
     property var glossaryMap: ({})          // 术语表（原文 → 标准译文）
     property var backendModel: []           // [{ id, name }]
     property string backendSection: ""      // 当前后端对应的配置 section（schema 渲染用）
+    // 显示/查找设置（与编辑器共用 config，页面重建时读取）
+    property int originalFontSize: 14
+    property int commentFontSize: 12
+    property bool findCaseSensitive: false
+    property bool findWholeWord: false
+    property bool findFuzzy: false
 
     // 通知条：NoStack 模式下 Window.window 附加属性解析失败，改用页面内 InfoBar 实例
     FluInfoBar {
@@ -29,6 +35,14 @@ FluScrollablePage {
         rebuildTermList()
         rebuildBackendModel()
         updateBackendSection()
+        // 显示/查找设置（与编辑器共用 ui section）
+        const ofs = Number(configService.get("ui", "originalFontSize"))
+        originalFontSize = isFinite(ofs) && ofs > 0 ? Math.round(ofs) : 14
+        const cfs = Number(configService.get("ui", "commentFontSize"))
+        commentFontSize = isFinite(cfs) && cfs > 0 ? Math.round(cfs) : 12
+        findCaseSensitive = Boolean(configService.get("ui", "findCaseSensitive"))
+        findWholeWord = Boolean(configService.get("ui", "findWholeWord"))
+        findFuzzy = Boolean(configService.get("ui", "findFuzzy"))
     }
 
     // ---------- 术语表操作 ----------
@@ -265,8 +279,11 @@ FluScrollablePage {
                     }
                     ConfigSectionCard {
                         sectionId: "ui"
-                        // 模式由 Ribbon 浮窗开关统一切换；位置与当前标签为内部状态
-                        excludeKeys: ["translatePanelMode", "currentRibbonTab", "translatePanelX", "translatePanelY"]
+                        // 模式由 Ribbon 浮窗开关统一切换；位置与当前标签为内部状态；
+                        // 字号与查找选项由下方「显示/查找」卡片以滑动条/开关呈现
+                        excludeKeys: ["translatePanelMode", "currentRibbonTab", "translatePanelX", "translatePanelY",
+                                      "originalFontSize", "commentFontSize",
+                                      "findCaseSensitive", "findWholeWord", "findFuzzy"]
                         showSectionTitle: false
                         Layout.fillWidth: true
                     }
@@ -415,6 +432,156 @@ FluScrollablePage {
                     enabled: termModel.count > 0
                     onClicked: clearTerms()
                 }
+            }
+        }
+    }
+
+    // ---------- 卡片：显示（原文/批注字号滑动条） ----------
+    Rectangle {
+        Layout.fillWidth: true
+        radius: 8
+        color: FluTheme.dark ? Qt.rgba(1, 1, 1, 0.03) : Qt.rgba(1, 1, 1, 1)
+        border.color: FluTheme.dividerColor
+        implicitHeight: cardDisplayCol.implicitHeight + 32
+
+        ColumnLayout {
+            id: cardDisplayCol
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 14
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                FluIcon { iconSource: FluentIcons.FontIncrease; iconSize: 16; color: FluTheme.primaryColor }
+                FluText { text: qsTr("显示"); font.pixelSize: 16; font.bold: true }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+                FluText {
+                    text: qsTr("原文字号 %1").arg(page.originalFontSize)
+                    font.pixelSize: 13
+                    Layout.preferredWidth: 120
+                }
+                FluSlider {
+                    Layout.fillWidth: true
+                    from: 10
+                    to: 24
+                    stepSize: 1
+                    value: page.originalFontSize
+                    onMoved: {
+                        page.originalFontSize = Math.round(value)
+                        configService.set("ui", "originalFontSize", page.originalFontSize)
+                    }
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+                FluText {
+                    text: qsTr("批注字号 %1").arg(page.commentFontSize)
+                    font.pixelSize: 13
+                    Layout.preferredWidth: 120
+                }
+                FluSlider {
+                    Layout.fillWidth: true
+                    from: 8
+                    to: 24
+                    stepSize: 1
+                    value: page.commentFontSize
+                    onMoved: {
+                        page.commentFontSize = Math.round(value)
+                        configService.set("ui", "commentFontSize", page.commentFontSize)
+                    }
+                }
+            }
+            FluText {
+                text: qsTr("字号即时生效并持久化；编辑器内右键「显示设置」可快速调整，与本页完全同步。")
+                font.pixelSize: 12
+                color: FluTheme.fontSecondaryColor
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+            }
+        }
+    }
+
+    // ---------- 卡片：查找（选项从 Ribbon 移入设置，保持功能区简洁） ----------
+    Rectangle {
+        Layout.fillWidth: true
+        radius: 8
+        color: FluTheme.dark ? Qt.rgba(1, 1, 1, 0.03) : Qt.rgba(1, 1, 1, 1)
+        border.color: FluTheme.dividerColor
+        implicitHeight: cardFindCol.implicitHeight + 32
+
+        ColumnLayout {
+            id: cardFindCol
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 12
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                FluIcon { iconSource: FluentIcons.Search; iconSize: 16; color: FluTheme.primaryColor }
+                FluText { text: qsTr("查找"); font.pixelSize: 16; font.bold: true }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+                FluText {
+                    text: qsTr("区分大小写")
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                FluToggleSwitch {
+                    checked: page.findCaseSensitive
+                    onToggled: {
+                        page.findCaseSensitive = checked
+                        configService.set("ui", "findCaseSensitive", checked)
+                    }
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+                FluText {
+                    text: qsTr("整词匹配")
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                FluToggleSwitch {
+                    checked: page.findWholeWord
+                    onToggled: {
+                        page.findWholeWord = checked
+                        configService.set("ui", "findWholeWord", checked)
+                    }
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+                FluText {
+                    text: qsTr("模糊查找")
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                FluToggleSwitch {
+                    checked: page.findFuzzy
+                    onToggled: {
+                        page.findFuzzy = checked
+                        configService.set("ui", "findFuzzy", checked)
+                    }
+                }
+            }
+            FluText {
+                text: qsTr("模糊查找：查询字符按顺序出现即匹配（如查「tran」可命中 translation），不要求连续。")
+                font.pixelSize: 12
+                color: FluTheme.fontSecondaryColor
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
             }
         }
     }

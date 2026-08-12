@@ -10,6 +10,7 @@ class TestFindService : public QObject
 private slots:
     void findBasic();
     void findOptions();
+    void findFuzzy();
     void findNextPrevious();
     void replaceLine();
     void replaceAll();
@@ -44,6 +45,26 @@ void TestFindService::findOptions()
     // 整词
     QCOMPARE(fs.find(QStringLiteral("bar"), false, true), QList<int>({ 1 }));
     QCOMPARE(fs.find(QStringLiteral("ba"), false, true), QList<int>());
+}
+
+void TestFindService::findFuzzy()
+{
+    DocumentModel model;
+    model.setLines({ QStringLiteral("translation"), QStringLiteral("transform"),
+                     QStringLiteral("t r a n"), QStringLiteral("nothing") });
+    FindService fs;
+    fs.setDocument(&model);
+
+    // 子序列模糊：t-r-n 按顺序出现即命中（但 "trn" 不是任何行的字面子串）
+    QCOMPARE(fs.find(QStringLiteral("trn"), false, false, true), QList<int>({ 0, 1, 2 }));
+    QCOMPARE(fs.find(QStringLiteral("trn"), false, false, false), QList<int>());
+    // 模糊 + 大小写敏感
+    QCOMPARE(fs.find(QStringLiteral("Tran"), true, false, true), QList<int>());
+    QCOMPARE(fs.find(QStringLiteral("TRANSLATION"), false, false, true), QList<int>({ 0 }));
+    // count
+    QCOMPARE(fs.count(QStringLiteral("tion"), false, false, true), 1);
+    // 空查询安全
+    QCOMPARE(fs.find(QString(), false, false, true), QList<int>());
 }
 
 void TestFindService::findNextPrevious()

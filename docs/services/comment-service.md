@@ -96,11 +96,12 @@ Q_INVOKABLE void setCommentProvider(CommentService *provider);
 - **右键修复**：delegate 顶层新增 `acceptedButtons: Qt.RightButton` 的 `MouseArea`（覆盖整行，含当前行 TextEdit 上方；左键穿透），右键任意位置弹出行菜单
   - ⚠️ 大坑：子对象 `id` 不是父对象属性。delegate 内必须写 `lineMenu.openForLine(...)`（同组件作用域直接引用 id），写 `page.lineMenu` 是 undefined → 报 "Cannot call method 'openForLine' of undefined"，这是最初"右键无效"的根因
 
-### 6.2 批注字号独立设置
+### 6.2 显示设置（字号滑动条，2026-08-12 更新）
 
-- 配置键：`ui/commentFontSize`（ConfigService，默认 12）
-- 右键菜单末项「批注设置…」→ 页面内 `commentSettings` 浮层（小/中/大/特大 = 10/12/14/16）
-- 仅影响批注区域（`commentEditor`/`commentReadonly`/`commentMeasurer` 的 `font.pixelSize: page.commentFontSize`），与原文 14px 无关
+- 配置键（ConfigService `ui` section）：`originalFontSize`（默认 14）、`commentFontSize`（默认 12）
+- 右键菜单末项「显示设置…」→ 页面内 `commentSettings` 浮层：**原文字号 + 批注字号两个 FluSlider 滑动条**（10-24 / 8-24，步进 1，拖动即生效并持久化）
+- **设置页同步**：设置页「显示」卡片有同样的两个滑动条（NoStack 页面重建时从 config 读取，双向同步）
+- 字号仅影响对应区域：原文 = `lineEditor`/只读 `Text` 的 `font.pixelSize`；批注 = `commentEditor`/`commentReadonly`/`commentMeasurer`
 
 ## 7. 测试计划（`tst_comment`）
 
