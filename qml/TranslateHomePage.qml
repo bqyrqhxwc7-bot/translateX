@@ -49,7 +49,7 @@ FluContentPage {
     property real panelWidth: 280
     // 多选翻译：Ctrl+点击 加入/移出选中集
     property var selectedLines: []
-    // 翻译面板模式（floating=悬浮窗 / docked=停靠）与默认显示
+    // 翻译面板模式（ppt=Ribbon 功能区 / floating=独立浮窗）与默认显示
     property string panelMode: "floating"
     property bool panelVisible: false
     // 翻译面板当前是否显示（运行状态；同步持久化到 ui.translatePanelVisible）
@@ -1189,7 +1189,7 @@ FluContentPage {
         flags: Qt.Tool | Qt.FramelessWindowHint
         title: qsTr("翻译工具")
         width: 300
-        height: Math.max(200, floatCol.implicitHeight + 2)
+        height: Math.max(220, floatCol.implicitHeight + 4)
         color: "transparent"
         onVisibleChanged: {
             if (!floatWindow.visible) {

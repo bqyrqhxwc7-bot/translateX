@@ -4,47 +4,57 @@ translateX 是一个基于 Qt 6 的桌面翻译写作工具。它提供了一个
 
 ## 主要功能
 
+- **Ribbon 工具栏**（PPT 式）：文件 / 开始 / 翻译 / 章节 / 批注 / 查找 六个标签功能区
 - **三种翻译后端**
-  - 本地 Ollama（支持自动扫描模型、关闭 Thinking、上下文翻译）
-  - 云端翻译服务（内置在线逐行翻译，本地失败可自动回退）
-  - 网络大模型 API（OpenAI 风格地址 + API Key，兼容 DeepSeek v3.2）
-- **灵活的翻译范围**：当前行 / 所选行 / 全文 / 当前章节 / 未批注章节
-- **上下文翻译**：参考目标行前后 N 行统一术语与语气
-- **自定义提示词**：普通翻译与上下文翻译各一套提示词模板
-- **DeepSeek v3.2 预设**：一键套用推荐的大段翻译参数
-- **严格输出模式**：只保留译文，过滤模型附加说明
-- **合并分块翻译**：将多行合并为大块请求，减少 API 调用
-- **文档格式**：支持 TXT 读写，支持 DOCX / TPX(TRX) 导入导出
-- **批注管理**：插入、折叠、删除、批量操作、快速跳转
-- **自动保存**：可配置间隔、手动立即保存
-- **查找替换**、**专注模式**、**章节导航**、**文档信息面板**
-- **默认配置保存与恢复**：一键将当前翻译设置保存为默认
+  - 本地 Ollama（自动扫描模型、关闭 Thinking、上下文翻译）
+  - 云端翻译服务（在线逐行翻译，本地失败自动回退）
+  - 网络大模型 API（OpenAI 风格地址 + API Key，内置 DeepSeek v4-flash 预设）
+- **翻译质量**：上下文感知（参考前后 N 行统一术语语气）、回显拦截（拒绝输出原文）、质量自检
+- **降低成本**：缓存复用、失败自动降级、智能分块合并（一次请求多行）、严格输出
+- **翻译浮窗**：可拖到屏幕任意位置的独立无边框窗口（Fluent 卡片样式），位置自动记忆
+- **编辑能力**：撤销/重做、多选行翻译、Enter 拆行、行首 Backspace 合并
+- **批注管理**：翻译结果写为批注、上一条/下一条跳转、清空、JSON 导出/导入
+- **章节导航**：自动识别标题行（中文"第X章"、Markdown `#`）、上一章/下一章、重新检测
+- **查找替换**：全文查找/替换、大小写/整词开关、匹配计数
+- **设置页**：schema 驱动渲染（`ConfigSectionCard`），翻译/界面两组配置
+- **大文件性能**：ListView 虚拟化 + 懒加载模型，50 万行加载 < 100ms
+- **安全存储**：API Key 经 `SecureStorage` 加密落盘，无明文
 
 ## 项目结构
 
 ```text
 .
 ├── CMakeLists.txt              # CMake 构建 / 测试 / CPack 打包
-├── src/
-│   ├── main.cpp                # Widgets 版入口（旧版，保留兼容）
-│   ├── main_qml.cpp            # QML 版入口（当前主线，FluentUI）
-│   ├── mainwindow.*            # Widgets 主窗口（迁移源）
-│   ├── annotatedtexteditor.*   # Widgets 编辑器（迁移源）
-│   └── services/               # ★ 可插拔服务层
-│       ├── documentmodel.*     # 懒加载文档行模型（大文件性能核心）
-│       ├── securestorage.*     # 敏感设置加密存储
-│       └── appguard.*          # 稳定性：日志 / 崩溃诊断
 ├── qml/                        # QML 界面（FluentUI）
-│   ├── Main.qml                # 主窗口 + 导航
-│   ├── TranslateHomePage.qml   # 翻译编辑页（虚拟化编辑器）
-│   └── TranslateSettingsPage.qml
-├── tests/                      # 单元测试 + 性能基准
-├── docs/ARCHITECTURE.md        # 架构与扩展文档
-├── third_party/FluentUI/       # FluentUI 1.7.7（BSD-3-Clause）
+│   ├── Main.qml                # 主窗口 + 导航（FluWindow + FluNavigationView）
+│   ├── TranslateHomePage.qml   # 翻译编辑页：Ribbon + 虚拟化编辑器 + 翻译浮窗
+│   ├── TranslatePanelContent.qml # 翻译面板复用组件（浮窗主体）
+│   ├── TranslateSettingsPage.qml # 设置页
+│   └── ConfigSectionCard.qml   # 设置项 schema 渲染卡片
+├── src/
+│   ├── main_qml.cpp            # QML 版入口（当前主线）
+│   ├── main.cpp                # Widgets 版入口（旧版，保留兼容）
+│   └── services/               # ★ 可插拔服务层（Q_INVOKABLE，QML 直接调用）
+│       ├── documentmodel.*     # 懒加载文档行模型（大文件性能核心）
+│       ├── translationservice.* # 翻译编排：上下文/分块/降级/回显拦截/缓存
+│       ├── translationbackend.* # 三种后端：Ollama / 云翻译 / 网络大模型
+│       ├── commentservice.*    # 批注单一数据源（provider 委托）
+│       ├── chapterservice.*    # 章节识别与跳转
+│       ├── findservice.*       # 查找替换
+│       ├── documentmanager.*   # 文档打开/保存/最近文件
+│       ├── configservice.*     # 配置（schema 驱动，ui.json/translation.json）
+│       ├── securestorage.*     # 敏感设置加密存储
+│       ├── termglossary.*      # 术语表
+│       ├── qualitygate.*       # 质量自检（回显拦截）
+│       ├── translationcache.*  # 翻译缓存
+│       └── appguard.*          # 稳定性：日志 / 崩溃诊断
+├── tests/                      # 单元测试 + 性能基准（10 个目标）
+├── docs/                       # 架构与服务设计文档
+├── third_party/FluentUI/       # FluentUI 1.7.7（BSD-3-Clause，git 子模块）
 └── .vscode/                    # VS Code 构建/调试/运行配置
 ```
 
-> 完整架构说明见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
+> 完整架构说明见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)，服务设计见 `docs/services/`。
 
 ## 构建
 
@@ -57,7 +67,8 @@ translateX 是一个基于 Qt 6 的桌面翻译写作工具。它提供了一个
 
 ## 构建要求
 
-- Qt 6（本机示例路径：`D:\Software\Qt\6.5.3\msvc2019_64` 或 `C:\Qt\6.5.3\msvc2019_64`，需含 Quick/Qml/QuickWidgets 模块）
+- **克隆后先拉取 FluentUI 子模块**：`git submodule update --init`
+- Qt 6（本机示例路径：`D:\Software\Qt\6.5.3\msvc2019_64`，需含 Quick/Qml/QuickWidgets 模块）
 - CMake 3.21+
 - Microsoft Visual Studio（Windows，项目生成器为 `Visual Studio 18 2026`，x64）
 
@@ -66,21 +77,18 @@ translateX 是一个基于 Qt 6 的桌面翻译写作工具。它提供了一个
 CMake 会自动在常见位置查找 Qt；如未找到，请通过 `-DCMAKE_PREFIX_PATH` 显式指定 Qt 路径：
 
 ```powershell
-cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.5.3/msvc2019_64" -DCMAKE_BUILD_TYPE=Release
-cmake --build build-vs2026-x64 --config Release
+cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.5.3/msvc2019_64"
+cmake --build build-vs2026-x64 --config Debug
 ```
 
-构建成功后，可执行文件位于 `build-vs2026-x64\Release\translateXqml.exe`（QML 版）与 `translateX.exe`（Widgets 版），Qt 运行时会通过 `windeployqt` 自动部署。
+构建成功后，可执行文件位于 `build-vs2026-x64\Debug\translateXqml.exe`（QML 版）与 `translateX.exe`（Widgets 版），Qt 运行时会通过 `windeployqt` 自动部署。
 
 > 提示：如果构建时出现 “找不到 Qt6”，请检查是否在 `D:\Software\Qt\<版本>\<套件>\` 下存在 `lib\cmake\Qt6\Qt6Config.cmake`，并确保 `CMAKE_PREFIX_PATH` 指向该套件目录。
 
 ## 测试
 
 ```powershell
-# 构建测试目标
-cmake --build build-vs2026-x64 --config Debug --target tst_documentmodel tst_securestorage tst_performance
-
-# 运行全部测试（需将 Qt bin 目录加入 PATH）
+# 运行全部 10 个测试目标（需将 Qt bin 目录加入 PATH）
 $env:PATH = "D:/Software/Qt/6.5.3/msvc2019_64/bin;" + $env:PATH
 ctest --test-dir build-vs2026-x64 -C Debug --output-on-failure
 
@@ -88,7 +96,7 @@ ctest --test-dir build-vs2026-x64 -C Debug --output-on-failure
 ctest --test-dir build-vs2026-x64 -C Debug -L perf
 ```
 
-测试覆盖：文档模型健康度、安全存储（加密/防篡改/明文检测）、大文件性能基准（50 万行加载 < 100ms）。
+测试覆盖：文档模型、安全存储（加密/防篡改/明文检测）、翻译（后端/回显拦截/缓存）、质量自检、配置服务、批注、文档管理、章节、查找、大文件性能基准（50 万行加载 < 100ms）。
 
 ## NSIS 安装程序打包
 
@@ -109,37 +117,24 @@ cmake --build build-vs2026-x64 --config Release --target package
 
 ## 翻译配置
 
-在“设置 → 翻译”与“设置 → 高级”中配置：
+在「设置」页（schema 驱动渲染）配置：
 
-- **翻译后端**：本地 Ollama / 云端翻译服务
-- **Ollama 端点与模型**：默认 `http://127.0.0.1:11434`，可自动扫描可用模型
-- **上下文大小**：目标行前后各参考多少行（0 表示只翻译目标行）
-- **网络大模型 API 地址**：如 `https://api.deepseek.com/chat/completions`
-- **网络大模型 API 密钥**：以 `Bearer` 方式写入请求头
-- **提示词模板**：`%1` 表示目标原文，`%2` 表示上下文
-- **合并分块**：最大合并目标行数与最大合并字符数
-- **预设**：默认 / DeepSeek v3.2
+- **翻译后端**：本地 Ollama / 云端翻译服务 / 网络大模型 API
+- **源/目标语言**：自动 / 中 / 英 / 日 / 韩 / 法 / 德 / 西 / 俄
+- **上下文行数**：目标行前后各参考多少行（0 表示只翻译目标行）
+- **严格输出 / 缓存复用 / 失败降级 / 智能分块 / 质量自检**：开关
+- **网络大模型**：OpenAI 风格 API 地址 + Key（DeepSeek 预设：`https://api.deepseek.com`，模型 `deepseek-v4-flash`，thinking 已禁用）
+- **自定义提示词**：普通翻译 / 上下文翻译各一套模板（`%1` 原文，`%2` 上下文）
 
 ## 快捷键
 
 | 功能 | 快捷键 |
 | --- | --- |
-| 新建 / 打开 / 保存 / 另存为 | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S` |
-| 立即自动保存 | `Ctrl+Alt+S` |
-| 查找 / 下一个 / 上一个 / 替换 | `Ctrl+F` / `F3` / `Shift+F3` / `Ctrl+H` |
-| 全部替换 | `Ctrl+Shift+H` |
-| 翻译当前行或所选行 | `Ctrl+Alt+T` |
-| 翻译全文 | `Ctrl+Alt+Shift+T` |
-| 插入注释行 | `Ctrl+Alt+M` |
-| 按范围批量添加批注 | `Ctrl+Alt+Shift+M` |
-| 折叠/展开当前注释 | `Ctrl+Alt+/` |
-| 删除当前注释 | `Ctrl+Alt+Delete` |
-| 上一条 / 下一条注释 | `Alt+Shift+Up` / `Alt+Shift+Down` |
-| 显示/隐藏 导航 / 信息 / 查找 / 注释 / 翻译 | `Ctrl+1` ~ `Ctrl+5` |
-| 专注模式 | `Ctrl+Shift+F` |
-| 打开设置 | `Ctrl+,` |
+| 撤销 / 重做 | `Ctrl+Z` / `Ctrl+Y` |
+| 翻译当前行 | `Ctrl+Alt+T` |
+| 翻译全部待译行 | `Ctrl+Alt+Shift+T` |
 
-快捷键可在“设置 → 快捷键”中自定义。
+其余功能通过 Ribbon 工具栏按钮与翻译浮窗完成。
 
 ## 敏感信息与隐私
 

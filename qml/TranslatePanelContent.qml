@@ -25,7 +25,9 @@ Item {
     // 但 implicitWidth 若绑定 panelCol.implicitWidth 会被内部文本撑到 ~378，反过来撑大
     // 父级（卡片被撑宽、按钮凸出）。故 implicitWidth 固定为 300-2*16=268 的合理值。
     implicitWidth: 268
-    implicitHeight: panelCol.implicitHeight
+    // 必须加上下 anchors.margins(16*2)：ColumnLayout 的 implicitHeight 不含自身 anchors.margins，
+    // 否则父级高度少算 32px → 浮窗高度不足，底部文字被窗口边缘裁掉
+    implicitHeight: panelCol.implicitHeight + 32
 
     ColumnLayout {
         id: panelCol
@@ -107,11 +109,14 @@ Item {
             }
         }
 
-        // 快捷键说明（单行不换行：wrapMode 的 implicitHeight 按单行算而渲染两行会溢出浮窗底部）
+        // 快捷键说明（两行换行 + 显式 preferredHeight：保证隐式高度正确且文字完整不截断）
         FluText {
             text: qsTr("快捷键：Ctrl+Alt+T 当前行 · Ctrl+Alt+Shift+T 整篇范围")
+            wrapMode: Text.WordWrap
             Layout.fillWidth: true
-            elide: Text.ElideRight
+            Layout.minimumWidth: 0
+            Layout.preferredHeight: 32
+            Layout.maximumWidth: root.width - 32
             font.pixelSize: 11
             color: FluTheme.fontTertiaryColor
         }

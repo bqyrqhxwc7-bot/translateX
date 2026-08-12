@@ -1,6 +1,6 @@
 # Ribbon 工具栏 + Service 双呈现架构设计
 
-> 状态：阶段1-3 已实现（2026-08-11）；阶段4 收尾待做
+> 状态：阶段1-4 已实现（2026-08-12）；docked 残留已清理、README 已同步 QML 主线、测试 10/10
 > 关联：`qml/TranslateHomePage.qml`、`docs/ui/translate-panel.md`、`src/services/*`
 > 原则（AGENTS.md）：文档先行 → 用户确认 → 小步实现
 
