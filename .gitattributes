@@ -1,0 +1,10 @@
+# 文本文件统一以 LF 存入仓库；Windows 检出时按本机 CRLF（core.autocrlf=true）
+* text=auto
+
+# 二进制/资源文件不做行尾转换
+*.png binary
+*.jpg binary
+*.svg binary
+*.ico binary
+*.ttf binary
+*.qm binary
