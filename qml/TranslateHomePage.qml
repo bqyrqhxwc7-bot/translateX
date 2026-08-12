@@ -1551,7 +1551,7 @@ FluContentPage {
     // 页面内浮层会被导航视图/窗口边界裁剪，拖出页面即失效（用户确认）；改用真 Window。
     // Qt.Tool：无任务栏、经 transientParent 跟随主窗口；FramelessWindowHint：去掉系统原生
     // 标题栏（否则与 Fluent 风格违和）；自绘卡片（圆角+边框）+ 标题栏（startSystemMove 原生
-    // 拖动 + ✕）。位置持久化为屏幕坐标，恢复时钳制到桌面内防止无任务栏找不到。
+    // 拖动）。关闭/切换经 Ribbon「翻译」标签的浮窗开关。位置持久化为屏幕坐标，恢复时钳制到桌面内防止无任务栏找不到。
     Window {
         id: floatWindow
         visible: page.panelMode === "floating" && page.panelShown
@@ -1591,7 +1591,7 @@ FluContentPage {
                 anchors.fill: parent
                 spacing: 0
 
-                // 标题栏（原生系统拖动 + ✕ 关闭）
+                // 标题栏（原生系统拖动；关闭/切换经 Ribbon「翻译」标签的浮窗开关）
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 30
@@ -1599,7 +1599,7 @@ FluContentPage {
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: 12
-                        anchors.rightMargin: 40
+                        anchors.rightMargin: 12
                         FluText {
                             text: qsTr("翻译工具")
                             font.pixelSize: 13
@@ -1607,23 +1607,6 @@ FluContentPage {
                             color: FluTheme.fontPrimaryColor
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignVCenter
-                        }
-                    }
-                    // ✕（z 高于拖动区，同父级比较才生效）
-                    FluButton {
-                        id: closeFloatBtn
-                        text: qsTr("✕")
-                        anchors.right: parent.right
-                        anchors.rightMargin: 4
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 24
-                        height: 24
-                        z: 2
-                        onClicked: {
-                            page.panelShown = false
-                            configService.set("ui", "translatePanelVisible", false)
-                            saveFloatWindowPos()
-                            floatWindow.visibility = Window.Hidden
                         }
                     }
                     // 原生系统拖动（startSystemMove）：可拖到屏幕任意位置/跨屏，系统接管

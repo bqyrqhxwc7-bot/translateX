@@ -1,6 +1,6 @@
 # 翻译面板（Ribbon 功能区 + 浮窗双呈现）设计文档
 
-> 状态：已实现（2026-08-11 修订：移除 docked、浮窗交互修复、位置不钳制）
+> 状态：已实现（2026-08-12 修订：浮窗为真独立 Window，标题栏仅拖动、**无 ✕ 按钮**，关闭经 Ribbon「翻译」浮窗开关）
 > 关联：`qml/TranslateHomePage.qml`、`qml/TranslatePanelContent.qml`、`qml/TranslateSettingsPage.qml`、`src/services/config/ui.json`
 
 ## 1. 定位（最终版）
@@ -60,7 +60,7 @@ FluContentPage#page
 
 - 「翻译」标签 `FluToggleSwitch` 浮窗：`checked = floating && panelShown`；用 `clickListener` 直接切换状态（若用 toggled 会被 checked 赋值干扰，出现"点了没反应"）。
 - 切换时写 `translatePanelMode` + `translatePanelVisible`。
-- ✕ 关闭：`panelShown=false` + 持久化 `translatePanelVisible=false`。
+- 关闭/显示统一经 Ribbon「翻译」标签的浮窗开关（浮窗标题栏无 ✕ 按钮，保持简洁）。
 - 启动：`panelMode` 读配置（`docked` 旧值迁移为 `ppt`），`panelShown` 读 `translatePanelVisible`。
 
 ## 7. 设置页
