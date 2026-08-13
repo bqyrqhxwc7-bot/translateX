@@ -27,8 +27,8 @@
         }
     ],
     "meta": {
-        "importedAt": "2026-08-13T19:03:20",
-        "sourceFile": "demo.trx",
+        "importedAt": "2026-08-13T19:03:34",
+        "sourceFile": "demo_out.trx",
         "sourceFormat": "trx"
     },
     "trx": "translateX",

@@ -116,7 +116,12 @@ FluContentPage {
             configService.set("ui", "translatePanelMode", "ppt")
         }
         page.panelMode = panelMode0
-        page.panelShown = Boolean(configService.get("ui", "translatePanelVisible"))
+        // 启动时主窗口尚未完全显示，Qt.Tool 浮窗（transientParent）立即 show 可能竞态失败
+        //（症状：设置了启动显示但浮窗不出现，切一下页面才出现）。延迟 350ms 再显示。
+        page.panelShown = false
+        if (panelMode0 === "floating") {
+            floatShowTimer.start()
+        }
         // 显示设置：原文/批注字号、查找选项（设置页与右键「显示设置」共用同一配置）
         const ofs = Number(configService.get("ui", "originalFontSize"))
         page.originalFontSize = isFinite(ofs) && ofs > 0 ? Math.round(ofs) : 14
@@ -695,18 +700,25 @@ FluContentPage {
     }
 
     // ---------- 浮窗位置（真实窗口，屏幕坐标持久化） ----------
+    // ---------- 浮窗位置（真实窗口，屏幕坐标持久化） ----------
     function saveFloatWindowPos() {
-        configService.set("ui", "translatePanelX", Math.round(floatWindow.x))
-        configService.set("ui", "translatePanelY", Math.round(floatWindow.y))
+        const x = floatWindow.x
+        const y = floatWindow.y
+        if (isFinite(x) && isFinite(y) && x > -10000 && y > -10000) {
+            configService.set("ui", "translatePanelX", Math.round(x))
+            configService.set("ui", "translatePanelY", Math.round(y))
+        }
     }
     function restoreFloatWindowPos() {
         // 真实窗口无任务栏（Qt.Tool），必须钳制到桌面内，防止开到屏幕外找不到。
         // screen 优先取浮窗自身（映射后有效），其次主窗口，最后兜底 1536x864。
+        // ⚠️ 窗口未完全映射时 screen 的 virtualX/virtualWidth 可能是 undefined，
+        // 必须 Number() || fallback，否则 NaN 污染钳制计算导致位置不生效（根因）。
         const scr = floatWindow.screen || (mainWindow ? mainWindow.screen : null)
-        const sx = scr ? scr.virtualX : 0
-        const sy = scr ? scr.virtualY : 0
-        const sw = scr ? scr.virtualWidth : 1536
-        const sh = scr ? scr.virtualHeight : 864
+        const sx = Number(scr && scr.virtualX) || 0
+        const sy = Number(scr && scr.virtualY) || 0
+        const sw = Number(scr && scr.virtualWidth) || 1536
+        const sh = Number(scr && scr.virtualHeight) || 864
         let px = Number(configService.get("ui", "translatePanelX"))
         let py = Number(configService.get("ui", "translatePanelY"))
         if (!isFinite(px)) px = sx + sw - 340
@@ -1571,6 +1583,13 @@ FluContentPage {
         }
     }
 
+    // 启动延迟显示浮窗（见 onCompleted：主窗口稳定后再 show，避免 Qt.Tool 竞态）
+    Timer {
+        id: floatShowTimer
+        interval: 350
+        onTriggered: page.panelShown = true
+    }
+
     // ---------- 浮动翻译窗口（真独立 Window：可拖到屏幕任意位置，不再受页面范围限制） ----------
     // 页面内浮层会被导航视图/窗口边界裁剪，拖出页面即失效（用户确认）；改用真 Window。
     // Qt.Tool：无任务栏、经 transientParent 跟随主窗口；FramelessWindowHint：去掉系统原生
@@ -1591,11 +1610,21 @@ FluContentPage {
             // 每次显示（含切页重建/重启后首次）都恢复记住的位置；窗口映射后再设，
             // 否则 Qt 6.5 无任务栏窗口在 show 前设置位置会落到无效坐标（-26214/INT_MIN）
             if (floatWindow.visible) {
+                // 确保实际显示（Qt.Tool + transientParent 可能 show 竞态，启动时尤甚）
+                if (floatWindow.visibility !== Window.Windowed) {
+                    floatWindow.show()
+                }
                 floatWindow.restoringPos = true
-                Qt.callLater(function () {
-                    restoreFloatWindowPos()
-                    floatWindow.restoringPos = false
-                })
+                floatPosRestoreTimer.restart()
+            }
+        }
+        // 恢复位置用 Timer（NoStack 下 Qt.callLater 可能不执行；延迟到窗口映射完成）
+        Timer {
+            id: floatPosRestoreTimer
+            interval: 120
+            onTriggered: {
+                restoreFloatWindowPos()
+                floatWindow.restoringPos = false
             }
         }
         // 拖动/移动实时保存（节流）：不依赖销毁/关闭时机，避免页面销毁瞬间 x/y 被
@@ -1615,9 +1644,9 @@ FluContentPage {
             floatWindow.visibility = Window.Hidden
             close.accepted = false
         }
-        // 兜底：创建完成后再延迟恢复一次（首次可见可能不触发 onVisibleChanged）
+        // 兜底：创建完成后延迟恢复位置（首次可见可能不触发 onVisibleChanged）
         Component.onCompleted: {
-            Qt.callLater(function () { restoreFloatWindowPos() })
+            floatPosRestoreTimer.restart()
         }
 
         // 自绘卡片（透明窗口 + 圆角 + 边框，保持 Fluent 观感）
