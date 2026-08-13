@@ -98,12 +98,37 @@ if(WIN32)
     find_program(QT_WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${QT_BIN_DIR}")
 
     if(QT_WINDEPLOYQT_EXECUTABLE)
+        # windeployqt 找不到 VS 会报 "Cannot find Visual Studio installation
+        # directory, VCINSTALLDIR is not set"（无害但污染构建输出）。用 vswhere
+        # 探测 VS 安装路径，设置 VCINSTALLDIR 消除该提示；探测失败则按原样运行。
+        if(NOT DEFINED VCINSTALLDIR)
+            find_program(WSWHERE_EXE vswhere
+                HINTS "C:/Program Files (x86)/Microsoft Visual Studio/Installer")
+            if(WSWHERE_EXE)
+                execute_process(COMMAND "${WSWHERE_EXE}" -latest -property installationPath
+                                OUTPUT_VARIABLE VS_INSTALL_DIR
+                                OUTPUT_STRIP_TRAILING_WHITESPACE)
+                if(VS_INSTALL_DIR AND EXISTS "${VS_INSTALL_DIR}/VC")
+                    set(VCINSTALLDIR "${VS_INSTALL_DIR}/VC/")
+                endif()
+            endif()
+        endif()
+
         get_filename_component(QT_QML_SRC_DIR "${QT_BIN_DIR}/../qml" ABSOLUTE)
-        add_custom_command(TARGET translateXqml POST_BUILD
-            COMMAND "${QT_WINDEPLOYQT_EXECUTABLE}" --no-translations --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml" "$<TARGET_FILE:translateXqml>"
-            COMMAND "${CMAKE_COMMAND}" -E copy_directory "${QT_QML_SRC_DIR}" "$<TARGET_FILE_DIR:translateXqml>/qml"
-            COMMENT "Deploying Qt runtime (incl. all QML modules) for translateXqml"
-        )
+        if(VCINSTALLDIR)
+            add_custom_command(TARGET translateXqml POST_BUILD
+                COMMAND "${CMAKE_COMMAND}" -E env "VCINSTALLDIR=${VCINSTALLDIR}"
+                        "${QT_WINDEPLOYQT_EXECUTABLE}" --no-translations --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml" "$<TARGET_FILE:translateXqml>"
+                COMMAND "${CMAKE_COMMAND}" -E copy_directory "${QT_QML_SRC_DIR}" "$<TARGET_FILE_DIR:translateXqml>/qml"
+                COMMENT "Deploying Qt runtime (incl. all QML modules) for translateXqml"
+            )
+        else()
+            add_custom_command(TARGET translateXqml POST_BUILD
+                COMMAND "${QT_WINDEPLOYQT_EXECUTABLE}" --no-translations --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml" "$<TARGET_FILE:translateXqml>"
+                COMMAND "${CMAKE_COMMAND}" -E copy_directory "${QT_QML_SRC_DIR}" "$<TARGET_FILE_DIR:translateXqml>/qml"
+                COMMENT "Deploying Qt runtime (incl. all QML modules) for translateXqml"
+            )
+        endif()
     endif()
 
     install(TARGETS translateXqml
