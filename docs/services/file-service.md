@@ -2,6 +2,7 @@
 
 > 状态：A1/A2 已实现；**A3 .trx 读写已实现（2026-08-13）**：DocumentModel 显示层 + TrxParser + DocumentManager 按扩展名分发 + 文件对话框默认 .trx（samples/demo.trx 可测试）
 > 关联：`DocumentModel` / `CommentService` / `DocumentManager` / `TrxParser` / `qml/TranslateHomePage.qml`
+> 实现类：`src/services/documentmanager.{h,cpp}`（打开/保存/最近文件/扩展名分发）+ `src/services/trxparser.{h,cpp}`（.trx 读写）
 > 原则（AGENTS.md）：文档先行 → 用户确认 → 小步实现
 
 ## 1. 定位与能力分层（用户已确认）

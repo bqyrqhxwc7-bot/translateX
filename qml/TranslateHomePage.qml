@@ -106,7 +106,8 @@ FluContentPage {
             loadDemoDocument()
         }
         chapterService.rebuild()
-        rebuildRecentMenu()
+        // 最近文件菜单改在弹出前重建（见 recentMenu.onAboutToShow），此处仅初始化状态
+        page.hasRecent = documentManager.recentFiles().length > 0
         refreshDocStatus()
         // 翻译面板模式/默认显示（ConfigService 持久化；ppt=Ribbon 标签，floating=浮窗）
         let panelMode0 = String(configService.get("ui", "translatePanelMode") || "ppt")
@@ -1713,6 +1714,9 @@ FluContentPage {
     // ---------- 最近文件菜单 ----------
     FluMenu {
         id: recentMenu
+        // 弹出前重建（而非 onCompleted）：FluMenuItem 在不可见 Menu 内创建会触发
+        // "Created graphical object was not placed in the graphics scene" 警告
+        onAboutToShow: rebuildRecentMenu()
     }
     Component {
         id: recentItemComp
