@@ -699,8 +699,9 @@ FluContentPage {
         configService.set("ui", "translatePanelY", Math.round(floatWindow.y))
     }
     function restoreFloatWindowPos() {
-        // 真实窗口无任务栏（Qt.Tool），必须钳制到桌面内，防止开到屏幕外找不到
-        const scr = floatWindow.screen
+        // 真实窗口无任务栏（Qt.Tool），必须钳制到桌面内，防止开到屏幕外找不到。
+        // screen 优先取浮窗自身（映射后有效），其次主窗口，最后兜底 1536x864。
+        const scr = floatWindow.screen || (mainWindow ? mainWindow.screen : null)
         const sx = scr ? scr.virtualX : 0
         const sy = scr ? scr.virtualY : 0
         const sw = scr ? scr.virtualWidth : 1536
@@ -709,8 +710,13 @@ FluContentPage {
         let py = Number(configService.get("ui", "translatePanelY"))
         if (!isFinite(px)) px = sx + sw - 340
         if (!isFinite(py)) py = sy + 80
-        floatWindow.x = Math.max(sx, Math.min(px, sx + Math.max(0, sw - 300)))
-        floatWindow.y = Math.max(sy, Math.min(py, sy + Math.max(0, sh - 240)))
+        px = Math.max(sx, Math.min(px, sx + Math.max(0, sw - 300)))
+        py = Math.max(sy, Math.min(py, sy + Math.max(0, sh - 240)))
+        // setX/setY 显式触发窗口位置更新；isFinite 防御（坏值一律回退默认右上角）
+        if (isFinite(px) && isFinite(py)) {
+            floatWindow.setX(Math.round(px))
+            floatWindow.setY(Math.round(py))
+        }
     }
 
     ColumnLayout {
@@ -1079,13 +1085,11 @@ FluContentPage {
                             onTextChanged: {
                                 if (page.currentLine === index) {
                                     documentModel.updateLineText(index, text)
-                                    // 富文本/图片行被实际编辑 → 彻底降级纯文本
-                                    //（清显示层 rich/imageIds，保证 .trx 保存往返一致）
-                                    if (documentModel.displayAt(index) !== "plain") {
-                                        documentModel.setLineDisplay(index, "plain")
-                                        documentModel.setLineRich(index, "")
-                                        documentModel.setLineImages(index, [])
-                                    }
+                                    // 编辑任意行即清除显示层（幂等）：富文本/图片行编辑后
+                                    // 降级纯文本，保证退出后显示编辑层、.trx 保存往返一致
+                                    documentModel.setLineRich(index, "")
+                                    documentModel.setLineImages(index, [])
+                                    documentModel.setLineDisplay(index, "plain")
                                 }
                             }
 
@@ -1580,10 +1584,27 @@ FluContentPage {
         width: 300
         height: Math.max(220, floatCol.implicitHeight + 4)
         color: "transparent"
+        // 恢复位置期间抑制实时保存（避免把未映射时的无效 x/y 存进 config）
+        property bool restoringPos: false
         onVisibleChanged: {
-            if (!floatWindow.visible) {
-                saveFloatWindowPos()
+            // 每次显示（含切页重建/重启后首次）都恢复记住的位置；窗口映射后再设，
+            // 否则 Qt 6.5 无任务栏窗口在 show 前设置位置会落到无效坐标（-26214/INT_MIN）
+            if (floatWindow.visible) {
+                floatWindow.restoringPos = true
+                Qt.callLater(function () {
+                    restoreFloatWindowPos()
+                    floatWindow.restoringPos = false
+                })
             }
+        }
+        // 拖动/移动实时保存（节流）：不依赖销毁/关闭时机，避免页面销毁瞬间 x/y 被
+        // 重置导致保存坏值覆盖好值（切换页面/重启后位置失效的根因）
+        onXChanged: { if (!floatWindow.restoringPos) floatPosSaveTimer.restart() }
+        onYChanged: { if (!floatWindow.restoringPos) floatPosSaveTimer.restart() }
+        Timer {
+            id: floatPosSaveTimer
+            interval: 350
+            onTriggered: { if (floatWindow.visible) saveFloatWindowPos() }
         }
         onClosing: (close) => {
             // 隐藏而非销毁：保留对象供「浮窗」开关再次显示
@@ -1593,8 +1614,10 @@ FluContentPage {
             floatWindow.visibility = Window.Hidden
             close.accepted = false
         }
-        Component.onCompleted: restoreFloatWindowPos()
-        Component.onDestruction: saveFloatWindowPos()
+        // 兜底：创建完成后再延迟恢复一次（首次可见可能不触发 onVisibleChanged）
+        Component.onCompleted: {
+            Qt.callLater(function () { restoreFloatWindowPos() })
+        }
 
         // 自绘卡片（透明窗口 + 圆角 + 边框，保持 Fluent 观感）
         Rectangle {
