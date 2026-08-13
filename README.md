@@ -15,8 +15,9 @@ translateX 是一个基于 Qt 6 的桌面翻译写作工具。它提供了一个
 - **编辑能力**：撤销/重做、多选行翻译、Enter 拆行、行首 Backspace 合并
 - **批注管理**：翻译结果写为批注、上一条/下一条跳转、清空、JSON 导出/导入
 - **章节导航**：自动识别标题行（中文"第X章"、Markdown `#`）、上一章/下一章、重新检测
-- **查找替换**：全文查找/替换、大小写/整词开关、匹配计数
-- **设置页**：schema 驱动渲染（`ConfigSectionCard`），翻译/界面两组配置
+- **查找替换**：全文查找/替换、大小写/整词/模糊查找开关、匹配计数
+- **设置页**：schema 驱动渲染（`ConfigSectionCard`），翻译/界面/显示/查找多组配置
+- **.trx 格式**：显示层（富文本/图片）随文档往返保存（`samples/demo.trx`），另存为支持 .txt/.trx
 - **大文件性能**：ListView 虚拟化 + 懒加载模型，50 万行加载 < 100ms
 - **安全存储**：API Key 经 `SecureStorage` 加密落盘，无明文
 
@@ -41,13 +42,14 @@ translateX 是一个基于 Qt 6 的桌面翻译写作工具。它提供了一个
 │       ├── chapterservice.*    # 章节识别与跳转
 │       ├── findservice.*       # 查找替换
 │       ├── documentmanager.*   # 文档打开/保存/最近文件
+│       ├── trxparser.*         # .trx 格式读写（显示层往返）
 │       ├── configservice.*     # 配置（schema 驱动，ui.json/translation.json）
 │       ├── securestorage.*     # 敏感设置加密存储
 │       ├── termglossary.*      # 术语表
 │       ├── qualitygate.*       # 质量自检（回显拦截）
 │       ├── translationcache.*  # 翻译缓存
 │       └── appguard.*          # 稳定性：日志 / 崩溃诊断
-├── tests/                      # 单元测试 + 性能基准（10 个目标）
+├── tests/                      # 单元测试 + 性能基准（11 个目标）
 ├── docs/                       # 架构与服务设计文档
 ├── third_party/FluentUI/       # FluentUI 1.7.7（BSD-3-Clause，git 子模块）
 └── .vscode/                    # VS Code 构建/调试/运行配置
@@ -88,7 +90,7 @@ cmake --build build-vs2026-x64 --config Debug
 ## 测试
 
 ```powershell
-# 运行全部 10 个测试目标（需将 Qt bin 目录加入 PATH）
+# 运行全部 11 个测试目标（需将 Qt bin 目录加入 PATH）
 $env:PATH = "D:/Software/Qt/6.5.3/msvc2019_64/bin;" + $env:PATH
 ctest --test-dir build-vs2026-x64 -C Debug --output-on-failure
 
@@ -96,7 +98,7 @@ ctest --test-dir build-vs2026-x64 -C Debug --output-on-failure
 ctest --test-dir build-vs2026-x64 -C Debug -L perf
 ```
 
-测试覆盖：文档模型、安全存储（加密/防篡改/明文检测）、翻译（后端/回显拦截/缓存）、质量自检、配置服务、批注、文档管理、章节、查找、大文件性能基准（50 万行加载 < 100ms）。
+测试覆盖：文档模型、安全存储（加密/防篡改/明文检测）、翻译（后端/回显拦截/缓存）、质量自检、配置服务、批注、文档管理、章节、查找、.trx 格式往返、大文件性能基准（50 万行加载 < 100ms）。
 
 ## NSIS 安装程序打包
 
