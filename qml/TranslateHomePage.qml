@@ -28,11 +28,8 @@ FluContentPage {
         }
     }
 
-    // 核心文档模型（懒加载，大文件只渲染可见行）
-    property DocumentModel documentModel: DocumentModel {
-        id: docModel
-    }
-
+    // 核心文档模型（应用级单例，main_qml.cpp 提供 context property）：
+    // NoStack 页面重建时内容跨页面保留，未保存编辑不丢失。
     property int currentLine: -1
 
     // 翻译服务（主进程提供，context property 全局可见）
@@ -103,7 +100,11 @@ FluContentPage {
         documentManager.setComments(commentService)
         chapterService.setDocument(documentModel)
         findService.setDocument(documentModel)
-        loadDemoDocument()
+        // 仅首次（模型为空）加载示例文档：模型已提升到应用级，若每次重建都调用
+        // loadDemoDocument() 会把用户编辑/打开的内容覆盖掉（编辑丢失的根因之一）
+        if (documentModel.lineCount() === 0) {
+            loadDemoDocument()
+        }
         chapterService.rebuild()
         rebuildRecentMenu()
         refreshDocStatus()

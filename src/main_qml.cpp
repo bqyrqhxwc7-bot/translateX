@@ -48,6 +48,11 @@ int main(int argc, char *argv[])
     ConfigService *configService = ConfigService::instance();
     engine.rootContext()->setContextProperty("configService", configService);
 
+    // 核心文档模型（应用级单例）：NoStack 模式每次导航重建页面，若模型在页面内
+    // 创建会随页面销毁导致未保存编辑丢失；提升到应用级后内容跨页面保留。
+    DocumentModel documentModel;
+    engine.rootContext()->setContextProperty("documentModel", &documentModel);
+
     // 批注服务（批注单一数据源；DocumentModel 经 provider 委托读取/平移）
     CommentService commentService;
     engine.rootContext()->setContextProperty("commentService", &commentService);
