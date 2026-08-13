@@ -43,3 +43,9 @@ cmake-config.log
 reconfigure.log
 shot*.png
 shot*.jpg
+
+# debug residue
+pw_main.png
+winpos.ps1
+stderr_tmp.txt
+samples/demo_out.trx
