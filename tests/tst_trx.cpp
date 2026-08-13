@@ -13,6 +13,7 @@ class TestTrx : public QObject
 
 private slots:
     void roundTripPreservesLayers();
+    void demoteAfterEditRoundTrip();
     void plainLinesOnly();
     void invalidFileFails();
     void managerOpenSaveTrx();
@@ -61,6 +62,36 @@ void TestTrx::roundTripPreservesLayers()
     QVERIFY(comments2.hasCommentAt(1));
     QCOMPARE(comments2.commentAt(1), QStringLiteral("这是批注"));
     QCOMPARE(meta2.value(QStringLiteral("sourceFormat")).toString(), QStringLiteral("trx"));
+}
+
+void TestTrx::demoteAfterEditRoundTrip()
+{
+    const QString path = m_temp.filePath(QStringLiteral("demote.trx"));
+    DocumentModel model;
+    CommentService comments;
+    model.setLines({ QStringLiteral("旧富文本行") });
+    model.setLineRich(0, QStringLiteral("<b>旧富文本行</b>"));
+    model.setLineDisplay(0, QStringLiteral("rich"));
+
+    // 模拟用户编辑：输入 → 降级 plain + 清显示层 + 编辑层更新（与 lineEditor.onTextChanged 一致）
+    model.updateLineText(0, QStringLiteral("新的纯文本"));
+    model.setLineDisplay(0, QStringLiteral("plain"));
+    model.setLineRich(0, QString());
+    model.setLineImages(0, {});
+
+    QVariantMap meta;
+    QVERIFY(TrxParser::write(path, &model, &comments, meta));
+
+    // 读回 → 必须是纯文本行（rich 显示层已丢弃，不残留）
+    DocumentModel model2;
+    CommentService comments2;
+    QVariantMap meta2;
+    QVERIFY(TrxParser::read(path, &model2, &comments2, meta2));
+    QCOMPARE(model2.lineCount(), 1);
+    QCOMPARE(model2.lineText(0), QStringLiteral("新的纯文本"));
+    QCOMPARE(model2.displayAt(0), QStringLiteral("plain"));
+    QCOMPARE(model2.richAt(0), QString());
+    QVERIFY(model2.imageIdsAt(0).isEmpty());
 }
 
 void TestTrx::plainLinesOnly()

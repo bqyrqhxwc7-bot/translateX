@@ -49,10 +49,10 @@ public:
     Q_INVOKABLE void setLineDisplay(int lineNumber, const QString &mode);
     Q_INVOKABLE void setLineRich(int lineNumber, const QString &html);
     Q_INVOKABLE void setLineImages(int lineNumber, const QStringList &ids);
-    // 只读访问（供 TrxParser 写回）
-    QString displayAt(int lineNumber) const;
-    QString richAt(int lineNumber) const;
-    QStringList imageIdsAt(int lineNumber) const;
+    // 只读访问（Q_INVOKABLE：QML 判断显示层 + TrxParser 写回）
+    Q_INVOKABLE QString displayAt(int lineNumber) const;
+    Q_INVOKABLE QString richAt(int lineNumber) const;
+    Q_INVOKABLE QStringList imageIdsAt(int lineNumber) const;
 
     // 编辑能力：插入/删除/追加行（返回操作后的行号）
     Q_INVOKABLE int insertLine(int atLineNumber, const QString &text = QString());

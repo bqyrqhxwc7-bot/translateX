@@ -76,16 +76,14 @@ FluContentPage {
     property int commentFontSize: 12
     property int commentDraftLine: -1
 
-    // 当前行变化 → 同步「章节」指示；离开批注编辑会话时清除 draft；
-    // 富文本/图片行成为当前行（可编辑）→ 降级为纯文本（显示层丢弃，编辑层权威）
+    // 当前行变化 → 同步「章节」指示；离开批注编辑会话时清除 draft。
+    // 富文本/图片行的降级（编辑即降级）放在 lineEditor.onTextChanged——
+    // 仅在真正输入时触发，浏览点击不破坏显示层。
     onCurrentLineChanged: {
         page.currentChapterIndex = page.currentLine >= 0
             ? chapterService.chapterAtLine(page.currentLine) : -1
         if (page.commentDraftLine >= 0 && page.commentDraftLine !== page.currentLine) {
             page.commentDraftLine = -1
-        }
-        if (page.currentLine >= 0 && documentModel.displayAt(page.currentLine) !== "plain") {
-            documentModel.setLineDisplay(page.currentLine, "plain")
         }
     }
 
@@ -1057,7 +1055,7 @@ FluContentPage {
                         spacing: 10
 
                         FluText {
-                            text: String(row.model.lineNumber)
+                            text: String(index + 1)   // 依赖 ListView 的 index 更新，插入行后行号正确刷新
                             font.pixelSize: 12
                             color: FluTheme.fontTertiaryColor
                             Layout.preferredWidth: 44
@@ -1081,6 +1079,13 @@ FluContentPage {
                             onTextChanged: {
                                 if (page.currentLine === index) {
                                     documentModel.updateLineText(index, text)
+                                    // 富文本/图片行被实际编辑 → 彻底降级纯文本
+                                    //（清显示层 rich/imageIds，保证 .trx 保存往返一致）
+                                    if (documentModel.displayAt(index) !== "plain") {
+                                        documentModel.setLineDisplay(index, "plain")
+                                        documentModel.setLineRich(index, "")
+                                        documentModel.setLineImages(index, [])
+                                    }
                                 }
                             }
 
