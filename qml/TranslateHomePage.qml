@@ -76,12 +76,16 @@ FluContentPage {
     property int commentFontSize: 12
     property int commentDraftLine: -1
 
-    // 当前行变化 → 同步「章节」指示；离开批注编辑会话时清除 draft
+    // 当前行变化 → 同步「章节」指示；离开批注编辑会话时清除 draft；
+    // 富文本/图片行成为当前行（可编辑）→ 降级为纯文本（显示层丢弃，编辑层权威）
     onCurrentLineChanged: {
         page.currentChapterIndex = page.currentLine >= 0
             ? chapterService.chapterAtLine(page.currentLine) : -1
         if (page.commentDraftLine >= 0 && page.commentDraftLine !== page.currentLine) {
             page.commentDraftLine = -1
+        }
+        if (page.currentLine >= 0 && documentModel.displayAt(page.currentLine) !== "plain") {
+            documentModel.setLineDisplay(page.currentLine, "plain")
         }
     }
 
@@ -1112,7 +1116,7 @@ FluContentPage {
                             }
                         }
 
-                        // 非编辑状态显示只读文本（性能：仅当前行用 TextEdit）
+                        // 非编辑状态只读显示：plain → 纯文本；rich → 富文本（HTML 仅显示，编辑即降级）
                         Text {
                             text: row.model.text
                             font.pixelSize: page.originalFontSize
@@ -1120,7 +1124,17 @@ FluContentPage {
                             Layout.fillWidth: true
                             verticalAlignment: Text.AlignVCenter
                             elide: Text.ElideRight
-                            visible: page.currentLine !== index
+                            visible: page.currentLine !== index && row.model.display !== "rich"
+                        }
+                        Text {
+                            text: row.model.rich || row.model.text
+                            textFormat: Text.RichText
+                            font.pixelSize: page.originalFontSize
+                            color: FluTheme.fontPrimaryColor
+                            Layout.fillWidth: true
+                            verticalAlignment: Text.AlignVCenter
+                            wrapMode: Text.Wrap
+                            visible: page.currentLine !== index && row.model.display === "rich"
                         }
 
                         // 批注图标（点击进入批注行内编辑）
@@ -1278,13 +1292,13 @@ FluContentPage {
     FileDialog {
         id: openDialog
         title: qsTr("打开文档")
-        nameFilters: [qsTr("文本文件 (*.txt)"), qsTr("所有文件 (*)")]
+        nameFilters: [qsTr("翻译文档 (*.trx)"), qsTr("文本文件 (*.txt)"), qsTr("所有文件 (*)")]
         onAccepted: openRecent(urlToPath(selectedFile))
     }
     FileDialog {
         id: saveAsDialog
         title: qsTr("另存为")
-        nameFilters: [qsTr("文本文件 (*.txt)"), qsTr("所有文件 (*)")]
+        nameFilters: [qsTr("翻译文档 (*.trx)"), qsTr("文本文件 (*.txt)"), qsTr("所有文件 (*)")]
         fileMode: FileDialog.SaveFile
         onAccepted: {
             documentManager.saveFileAs(urlToPath(selectedFile))

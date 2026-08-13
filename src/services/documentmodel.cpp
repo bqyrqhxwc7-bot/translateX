@@ -23,6 +23,9 @@ QHash<int, QByteArray> DocumentModel::roleNames() const
         { IsCommentRole, "isComment" },
         { HasCommentRole, "hasComment" },
         { CommentTextRole, "commentText" },
+        { DisplayRole, "display" },
+        { RichTextRole, "rich" },
+        { ImageIdsRole, "imageIds" },
     };
 }
 
@@ -54,6 +57,12 @@ QVariant DocumentModel::data(const QModelIndex &index, int role) const
     case CommentTextRole:
         return m_commentProvider ? m_commentProvider->commentAt(index.row())
                                  : entry.comment;
+    case DisplayRole:
+        return entry.display;
+    case RichTextRole:
+        return entry.rich;
+    case ImageIdsRole:
+        return entry.imageIds;
     default:
         return QVariant();
     }
@@ -172,6 +181,72 @@ void DocumentModel::updateLineText(int lineNumber, const QString &text)
     }
     const QModelIndex idx = index(lineNumber);
     emit dataChanged(idx, idx, { TextRole });
+}
+
+void DocumentModel::setLineDisplay(int lineNumber, const QString &mode)
+{
+    if (lineNumber < 0 || lineNumber >= m_lines.size()) {
+        return;
+    }
+    LineEntry &entry = m_lines[lineNumber];
+    if (entry.display == mode) {
+        return;
+    }
+    entry.display = mode;
+    const QModelIndex idx = index(lineNumber);
+    emit dataChanged(idx, idx, { DisplayRole });
+}
+
+void DocumentModel::setLineRich(int lineNumber, const QString &html)
+{
+    if (lineNumber < 0 || lineNumber >= m_lines.size()) {
+        return;
+    }
+    LineEntry &entry = m_lines[lineNumber];
+    if (entry.rich == html) {
+        return;
+    }
+    entry.rich = html;
+    const QModelIndex idx = index(lineNumber);
+    emit dataChanged(idx, idx, { RichTextRole });
+}
+
+void DocumentModel::setLineImages(int lineNumber, const QStringList &ids)
+{
+    if (lineNumber < 0 || lineNumber >= m_lines.size()) {
+        return;
+    }
+    LineEntry &entry = m_lines[lineNumber];
+    if (entry.imageIds == ids) {
+        return;
+    }
+    entry.imageIds = ids;
+    const QModelIndex idx = index(lineNumber);
+    emit dataChanged(idx, idx, { ImageIdsRole });
+}
+
+QString DocumentModel::displayAt(int lineNumber) const
+{
+    if (lineNumber < 0 || lineNumber >= m_lines.size()) {
+        return QStringLiteral("plain");
+    }
+    return m_lines.at(lineNumber).display;
+}
+
+QString DocumentModel::richAt(int lineNumber) const
+{
+    if (lineNumber < 0 || lineNumber >= m_lines.size()) {
+        return QString();
+    }
+    return m_lines.at(lineNumber).rich;
+}
+
+QStringList DocumentModel::imageIdsAt(int lineNumber) const
+{
+    if (lineNumber < 0 || lineNumber >= m_lines.size()) {
+        return {};
+    }
+    return m_lines.at(lineNumber).imageIds;
 }
 
 int DocumentModel::insertLine(int atLineNumber, const QString &text)

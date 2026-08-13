@@ -62,6 +62,8 @@ qt_add_executable(translateXqml
     src/services/chapterservice.h
     src/services/findservice.cpp
     src/services/findservice.h
+    src/services/trxparser.cpp
+    src/services/trxparser.h
 )
 
 qt_add_qml_module(translateXqml

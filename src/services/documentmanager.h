@@ -4,6 +4,7 @@
 #include <QPointer>
 #include <QString>
 #include <QStringList>
+#include <QVariantMap>
 
 class DocumentModel;
 class CommentService;
@@ -24,6 +25,8 @@ public:
     Q_INVOKABLE QString currentPath() const;
     Q_INVOKABLE bool isDirty() const;
     Q_INVOKABLE QString documentName() const;
+    // .trx 元数据（sourceFile/sourceFormat/font/images 等，原样保真；QML 可读）
+    Q_INVOKABLE QVariantMap documentMeta() const;
 
     Q_INVOKABLE bool newDocument(const QStringList &initialLines = {});
     Q_INVOKABLE bool openFile(const QString &path);
@@ -50,6 +53,7 @@ private:
     QPointer<DocumentModel> m_model;
     CommentService *m_comments = nullptr;
     QString m_path;
+    QVariantMap m_meta;   // .trx 元数据（read 保留、write 写回）
     bool m_dirty = false;
     bool m_suppressDirty = false;
 };

@@ -24,6 +24,7 @@ set(SERVICE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/documentmanager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/chapterservice.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/findservice.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/trxparser.cpp
 )
 
 # ---- 服务健康度测试：DocumentModel ----
@@ -117,3 +118,12 @@ qt_add_executable(tst_find
 target_include_directories(tst_find PRIVATE ${TEST_INCLUDE_DIRS})
 target_link_libraries(tst_find PRIVATE Qt6::Test Qt6::Network Qt6::Concurrent)
 add_test(NAME tst_find COMMAND tst_find)
+
+# ---- .trx 格式解析/往返测试（TrxParser + DocumentManager 集成）----
+qt_add_executable(tst_trx
+    tst_trx.cpp
+    ${SERVICE_SOURCES}
+)
+target_include_directories(tst_trx PRIVATE ${TEST_INCLUDE_DIRS})
+target_link_libraries(tst_trx PRIVATE Qt6::Test Qt6::Network Qt6::Concurrent)
+add_test(NAME tst_trx COMMAND tst_trx)

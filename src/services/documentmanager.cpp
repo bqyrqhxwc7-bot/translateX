@@ -8,6 +8,14 @@
 
 #include "documentmodel.h"
 #include "commentservice.h"
+#include "trxparser.h"
+
+namespace {
+bool isTrx(const QString &path)
+{
+    return QFileInfo(path).suffix().compare(QLatin1String("trx"), Qt::CaseInsensitive) == 0;
+}
+} // namespace
 
 DocumentManager::DocumentManager(QObject *parent)
     : QObject(parent)
@@ -75,13 +83,37 @@ bool DocumentManager::newDocument(const QStringList &initialLines)
     }
     m_suppressDirty = false;
     m_path.clear();
+    m_meta.clear();
     setDirty(false);
     emit documentChanged(QString());
     return true;
 }
 
+QVariantMap DocumentManager::documentMeta() const
+{
+    return m_meta;
+}
+
 bool DocumentManager::openFile(const QString &path)
 {
+    // .trx：TrxParser 完整往返（显示层 + 批注内嵌 + meta 保真）
+    if (isTrx(path)) {
+        QString error;
+        m_meta.clear();
+        m_suppressDirty = true;
+        const bool ok = TrxParser::read(path, m_model, m_comments, m_meta, &error);
+        m_suppressDirty = false;
+        if (!ok) {
+            emit operationFailed(error.isEmpty() ? QStringLiteral("打开 .trx 文件失败") : error);
+            return false;
+        }
+        m_path = path;
+        setDirty(false);
+        emit documentChanged(m_path);
+        addRecentFile(path);
+        return true;
+    }
+
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
         emit operationFailed(QStringLiteral("无法打开文件：%1").arg(path));
@@ -179,6 +211,19 @@ bool DocumentManager::writeDocument(const QString &path)
     if (!m_model) {
         emit operationFailed(QStringLiteral("未关联文档模型"));
         return false;
+    }
+
+    // .trx：TrxParser 完整往返
+    if (isTrx(path)) {
+        QString error;
+        if (!TrxParser::write(path, m_model, m_comments, m_meta, &error)) {
+            emit operationFailed(error.isEmpty() ? QStringLiteral("保存 .trx 文件失败") : error);
+            return false;
+        }
+        m_path = path;
+        setDirty(false);
+        emit documentChanged(m_path);
+        return true;
     }
 
     // 文本：行拼接 + 结尾换行

@@ -1,0 +1,32 @@
+{
+  "trx": "translateX",
+  "version": 1,
+  "meta": {
+    "sourceFormat": "trx",
+    "importedAt": "2026-08-13T00:00:00"
+  },
+  "lines": [
+    {
+      "text": "第一章：开始"
+    },
+    {
+      "text": "这是富文本示例行",
+      "display": "rich",
+      "rich": "这是<b>富文本</b>示例行"
+    },
+    {
+      "text": "普通第三行"
+    },
+    {
+      "text": "配图行（A3 阶段无图片源，按文本显示）",
+      "display": "image",
+      "imageIds": [
+        "img1"
+      ]
+    }
+  ],
+  "comments": {
+    "0": "章节标题批注",
+    "2": "第三行译文批注"
+  }
+}

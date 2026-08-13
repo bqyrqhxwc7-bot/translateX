@@ -1,7 +1,7 @@
 # 多格式文件 + 行内批注（.trx 核心）设计文档 v2
 
-> 状态：设计中（2026-08-12，v2 细化，待确认点以 ✅ 标注）
-> 关联：`DocumentModel` / `CommentService` / `DocumentManager` / `qml/TranslateHomePage.qml`
+> 状态：A1/A2 已实现；**A3 .trx 读写已实现（2026-08-13）**：DocumentModel 显示层 + TrxParser + DocumentManager 按扩展名分发 + 文件对话框默认 .trx（samples/demo.trx 可测试）
+> 关联：`DocumentModel` / `CommentService` / `DocumentManager` / `TrxParser` / `qml/TranslateHomePage.qml`
 > 原则（AGENTS.md）：文档先行 → 用户确认 → 小步实现
 
 ## 1. 定位与能力分层（用户已确认）

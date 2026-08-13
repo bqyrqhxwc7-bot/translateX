@@ -16,6 +16,9 @@ public:
         IsCommentRole,
         HasCommentRole,
         CommentTextRole,
+        DisplayRole,      // "plain" | "rich" | "image"（显示层，不参与 undo）
+        RichTextRole,     // rich 模式显示层（HTML 片段）
+        ImageIdsRole,     // image 模式引用的图片 id 列表
     };
 
     explicit DocumentModel(QObject *parent = nullptr);
@@ -41,6 +44,16 @@ public:
     // 单行更新（编辑时只通知该行）
     Q_INVOKABLE void updateLineText(int lineNumber, const QString &text);
 
+    // 显示层（.trx 富文本/图片）：text 永远是编辑层；display 层不参与 undo。
+    // 编辑 rich/image 行（updateLineText）后调用方应同时 setLineDisplay(i, "plain") 降级。
+    Q_INVOKABLE void setLineDisplay(int lineNumber, const QString &mode);
+    Q_INVOKABLE void setLineRich(int lineNumber, const QString &html);
+    Q_INVOKABLE void setLineImages(int lineNumber, const QStringList &ids);
+    // 只读访问（供 TrxParser 写回）
+    QString displayAt(int lineNumber) const;
+    QString richAt(int lineNumber) const;
+    QStringList imageIdsAt(int lineNumber) const;
+
     // 编辑能力：插入/删除/追加行（返回操作后的行号）
     Q_INVOKABLE int insertLine(int atLineNumber, const QString &text = QString());
     Q_INVOKABLE int removeLine(int lineNumber);
@@ -64,6 +77,10 @@ private:
         QString text;
         QString comment;
         bool hasComment = false;
+        // 显示层（.trx）：text 为编辑层，display 层仅供渲染/往返
+        QString display = QStringLiteral("plain");
+        QString rich;
+        QStringList imageIds;
     };
 
     struct EditCommand {
