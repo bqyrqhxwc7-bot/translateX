@@ -56,14 +56,14 @@ git push origin main
 | **A3 .trx** | 显示层（富文本/图片）完整往返、编辑即降级 | `services/file-service.md` |
 | **B docx 导入** | DocxParser：段落→行 + 粗/斜/颜色/字号/字体 + 图片(data URI) | `services/file-service.md` |
 | **C pdf 导入/导出** | PdfParser：每页一行导入（QPdfDocument）+ 文本页导出（QPdfWriter）；**导出文本层不可提取**（Qt 6.5.3 缺陷，视觉正确） | `services/pdf-service.md` |
+| **D 大文件降级** | 超 5 万行 / 200MB 进受限模式：显示层回退纯文本 + 禁批注编辑/翻译，编辑/查找/章节保留；顶部提示条 | `services/large-file.md` |
 
-**测试**：13 目标全绿（`tst_docx` 7 用例含 `sampleFile` 回归 `samples/demo.docx`；`tst_pdf` 8 用例，样本 `samples/demo.pdf` 为手写干净文本层 PDF）。
+**测试**：13 目标全绿（`tst_docx` 7 用例含 `sampleFile` 回归 `samples/demo.docx`；`tst_pdf` 8 用例，样本 `samples/demo.pdf` 为手写干净文本层 PDF；`tst_documentmanager` 含 3 个受限模式用例）。
 
 ## 3. 路线图（下一步从这里开始）
 
 | 优先级 | 任务 | 状态/要求 |
 | --- | --- | --- |
-| **D** | 大文件降级（5 万行 / 200MB 上限策略） | 设计已写于 `file-service.md` §8，待实现 |
 | 候选 | docx 导出、pdf 导出文本层修复（Qt 升级后复查）、.trx 图片 external 降级（>1MB 转外置）、术语表 UI、翻译历史面板 | 非阻塞 |
 
 > 每项任务实施蓝图见 §8；**开工前先读对应 `docs/services/` 文档，遵循 AGENTS.md**。
@@ -147,14 +147,10 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 
 ## 8. 下一步实施蓝图
 
-### 任务 D：大文件降级（5 万行 / 200MB 上限）
-- 设计已写于 `docs/services/file-service.md` §8：超限走只读/降级路径（禁用富文本、禁用批注编辑或强制纯文本）
-- 实现：`DocumentManager::open` 里文件大小/行数探测 → 设置模型"降级模式"标志 → QML 按标志关闭编辑入口
-- 测试：构造 200MB 级文件用例（或 mock 大小探测）
-
-### 候选任务（低优先）
+### 候选任务（C/D 已完成后的非阻塞项）
 - docx 导出（对称补全 B）
-- .trx 图片 `external` 降级（>1MB 图片外置 `*.images/` 目录，已在 file-service.md §7 设计）
+- pdf 导出文本层修复（升级 Qt ≥6.8 后复查 pdf-service.md §3.0）
+- .trx 图片 external 降级（>1MB 图片外置 `*.images/` 目录，已在 file-service.md §7 设计）
 - 术语表 UI（`TermGlossary` 已有 C++ 层）
 - 翻译历史 / 会话记录
 

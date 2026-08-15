@@ -27,6 +27,26 @@ bool isPdf(const QString &path)
 }
 } // namespace
 
+int DocumentManager::s_maxLines = 50000;
+qint64 DocumentManager::s_maxBytes = 200LL * 1024 * 1024;
+
+void DocumentManager::setLargeFileLimits(int maxLines, qint64 maxBytes)
+{
+    s_maxLines = maxLines;
+    s_maxBytes = maxBytes;
+}
+
+void DocumentManager::applyLargeFileLimit(const QString &path)
+{
+    if (!m_model) {
+        return;
+    }
+    const qint64 size = QFileInfo(path).size();
+    const bool limited = (s_maxLines > 0 && m_model->lineCount() > s_maxLines)
+                         || (s_maxBytes > 0 && size > s_maxBytes);
+    m_model->setLimitedMode(limited);
+}
+
 DocumentManager::DocumentManager(QObject *parent)
     : QObject(parent)
 {
@@ -94,6 +114,9 @@ bool DocumentManager::newDocument(const QStringList &initialLines)
     m_suppressDirty = false;
     m_path.clear();
     m_meta.clear();
+    if (m_model) {
+        m_model->setLimitedMode(false);
+    }
     setDirty(false);
     emit documentChanged(QString());
     return true;
@@ -120,6 +143,7 @@ bool DocumentManager::openFile(const QString &path)
         m_path = path;
         setDirty(false);
         emit documentChanged(m_path);
+        applyLargeFileLimit(path);
         addRecentFile(path);
         return true;
     }
@@ -138,6 +162,7 @@ bool DocumentManager::openFile(const QString &path)
         m_path = path;
         setDirty(false);
         emit documentChanged(m_path);
+        applyLargeFileLimit(path);
         addRecentFile(path);
         return true;
     }
@@ -156,6 +181,7 @@ bool DocumentManager::openFile(const QString &path)
         m_path = path;
         setDirty(false);
         emit documentChanged(m_path);
+        applyLargeFileLimit(path);
         addRecentFile(path);
         return true;
     }
@@ -200,6 +226,7 @@ bool DocumentManager::openFile(const QString &path)
     m_path = path;
     setDirty(false);
     emit documentChanged(m_path);
+    applyLargeFileLimit(path);
     addRecentFile(path);
     return true;
 }

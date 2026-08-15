@@ -19,6 +19,9 @@ private slots:
     void saveFileAsUpdatesPath();
     void openMissingFileFails();
     void recentFilesPersist();
+    void largeFileLimitedModeByLines();
+    void largeFileLimitedModeBySize();
+    void largeFileLimitedModeResetsOnNew();
 
 private:
     QTemporaryDir m_temp;
@@ -125,6 +128,72 @@ void TestDocumentManager::recentFilesPersist()
 
     m_mgr.clearRecentFiles();
     QVERIFY(m_mgr.recentFiles().isEmpty());
+}
+
+// 行数超限 → 受限模式（默认阈值 5 万行）
+void TestDocumentManager::largeFileLimitedModeByLines()
+{
+    DocumentManager::setLargeFileLimits(50000, 200LL * 1024 * 1024);
+
+    const QString path = m_temp.filePath(QStringLiteral("big.txt"));
+    QFile f(path);
+    QVERIFY(f.open(QIODevice::WriteOnly));
+    QByteArray content;
+    content.reserve(50001 * 16);
+    for (int i = 0; i < 50001; ++i) {
+        content += QStringLiteral("line %1 content\n").arg(i).toUtf8();
+    }
+    f.write(content);
+    f.close();
+
+    QVERIFY(m_mgr.openFile(path));
+    QCOMPARE(m_model.lineCount(), 50001);
+    QVERIFY(m_model.limitedMode());
+
+    // 受限模式下显示层角色对外回退纯文本（数据保留）
+    m_model.setLineRich(0, QStringLiteral("<b>x</b>"));
+    m_model.setLineDisplay(0, QStringLiteral("rich"));
+    QCOMPARE(m_model.data(m_model.index(0), DocumentModel::DisplayRole).toString(),
+             QStringLiteral("plain"));
+    QCOMPARE(m_model.richAt(0), QStringLiteral("<b>x</b>"));
+}
+
+// 体积超限 → 受限模式（注入小体积阈值）
+void TestDocumentManager::largeFileLimitedModeBySize()
+{
+    DocumentManager::setLargeFileLimits(100000, 512);
+
+    const QString path = m_temp.filePath(QStringLiteral("wide.txt"));
+    QFile f(path);
+    QVERIFY(f.open(QIODevice::WriteOnly));
+    f.write(QString(600, QLatin1Char('x')).toUtf8());
+    f.close();
+
+    QVERIFY(m_mgr.openFile(path));
+    QVERIFY(m_model.limitedMode());
+
+    // 还原默认阈值
+    DocumentManager::setLargeFileLimits(50000, 200LL * 1024 * 1024);
+}
+
+// 新建文档复位受限模式
+void TestDocumentManager::largeFileLimitedModeResetsOnNew()
+{
+    DocumentManager::setLargeFileLimits(50000, 200LL * 1024 * 1024);
+
+    const QString path = m_temp.filePath(QStringLiteral("big2.txt"));
+    QFile f(path);
+    QVERIFY(f.open(QIODevice::WriteOnly));
+    for (int i = 0; i < 50001; ++i) {
+        f.write(QStringLiteral("l%1\n").arg(i).toUtf8());
+    }
+    f.close();
+
+    QVERIFY(m_mgr.openFile(path));
+    QVERIFY(m_model.limitedMode());
+
+    m_mgr.newDocument({ QStringLiteral("a"), QStringLiteral("b") });
+    QVERIFY(!m_model.limitedMode());
 }
 
 QTEST_GUILESS_MAIN(TestDocumentManager)

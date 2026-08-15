@@ -58,11 +58,12 @@ QVariant DocumentModel::data(const QModelIndex &index, int role) const
         return m_commentProvider ? m_commentProvider->commentAt(index.row())
                                  : entry.comment;
     case DisplayRole:
-        return entry.display;
+        // 受限模式：对外一律纯文本（渲染走编辑层），显示层数据保留供 .trx 往返
+        return m_limitedMode ? QLatin1String("plain") : entry.display;
     case RichTextRole:
-        return entry.rich;
+        return m_limitedMode ? QString() : entry.rich;
     case ImageIdsRole:
-        return entry.imageIds;
+        return m_limitedMode ? QStringList() : entry.imageIds;
     default:
         return QVariant();
     }
@@ -76,6 +77,26 @@ QString DocumentModel::lineText(int lineNumber) const
 int DocumentModel::lineCount() const
 {
     return m_lines.size();
+}
+
+bool DocumentModel::limitedMode() const
+{
+    return m_limitedMode;
+}
+
+void DocumentModel::setLimitedMode(bool limited)
+{
+    if (m_limitedMode == limited) {
+        return;
+    }
+    m_limitedMode = limited;
+    // 显示层角色掩蔽变化 → 全表刷新渲染（受限：rich/image 回退纯文本）
+    if (!m_lines.isEmpty()) {
+        const QModelIndex first = index(0);
+        const QModelIndex last = index(m_lines.size() - 1);
+        emit dataChanged(first, last, { DisplayRole, RichTextRole, ImageIdsRole });
+    }
+    emit limitedModeChanged();
 }
 
 void DocumentModel::setLines(const QStringList &lines)

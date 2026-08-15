@@ -23,6 +23,13 @@ public:
 
     explicit DocumentModel(QObject *parent = nullptr);
 
+    // 受限模式（大文件降级，见 docs/services/large-file.md）：数据不丢，
+    // 仅对外渲染为纯文本（DisplayRole/RichTextRole/ImageIdsRole 掩蔽），
+    // 编辑/批注/翻译入口由 QML 按本标志关闭。
+    Q_PROPERTY(bool limitedMode READ limitedMode NOTIFY limitedModeChanged)
+    bool limitedMode() const;
+    Q_INVOKABLE void setLimitedMode(bool limited);
+
     // QAbstractListModel
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role) const override;
@@ -71,6 +78,7 @@ public:
 signals:
     void lineCountChanged();
     void undoStackChanged();   // 撤销/重做可用性变化（供 UI 刷新按钮）
+    void limitedModeChanged();
 
 private:
     struct LineEntry {
@@ -100,4 +108,5 @@ private:
     QVector<EditCommand> m_redoStack;
     bool m_undoEnabled = true;   // undo/redo 回放期间置 false，避免递归记录
     CommentService *m_commentProvider = nullptr;
+    bool m_limitedMode = false;  // 大文件受限模式（QML 掩蔽显示层 + 关闭编辑入口）
 };

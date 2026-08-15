@@ -38,6 +38,9 @@ FluContentPage {
     // 状态栏图标（0=无图标）
     property int statusIconSource: 0
     property color statusIconColor: FluTheme.fontSecondaryColor
+    // 大文件受限模式（>5 万行 / >200MB，DocumentManager 打开时自动置位）：
+    // 禁富文本/图片渲染、批注编辑、翻译；编辑/滚动/查找/章节正常
+    readonly property bool limited: documentModel.limitedMode
     // 翻译进度状态
     property bool translating: false
     property int progressDone: 0
@@ -282,6 +285,10 @@ FluContentPage {
 
     // 清除全部译文/批注（清理历史残留，如旧版本回显的原文批注）
     function clearAllComments() {
+        if (page.limited) {
+            page.limitedBlocked()
+            return
+        }
         commentService.clear()
         statusLabel.text = qsTr("已清除全部译文/批注")
         statusIconSource = 0
@@ -421,8 +428,19 @@ FluContentPage {
         focusLine(currentLine)
     }
 
+    // 大文件受限模式拦截提示（翻译/批注编辑入口共用）
+    function limitedBlocked() {
+        statusLabel.text = qsTr("大文件受限模式：已禁用翻译与批注编辑")
+        statusIconSource = FluentIcons.Warning
+        statusIconColor = DesignTokens.warning
+    }
+
     // 翻译当前行
     function translateCurrent() {
+        if (page.limited) {
+            page.limitedBlocked()
+            return
+        }
         if (currentLine < 0) {
             statusLabel.text = qsTr("请先点击选择一行")
             return
@@ -451,6 +469,10 @@ FluContentPage {
 
     // 翻译所有待译行（支持多语言：所有非空、无批注、且非目标语言的行）
     function translateAllPending() {
+        if (page.limited) {
+            page.limitedBlocked()
+            return
+        }
         const lines = []
         const all = []
         let skipped = 0
@@ -482,6 +504,10 @@ FluContentPage {
 
     // 翻译选中的行（Ctrl+点击多选；跳过空行/目标语言行）
     function translateSelected() {
+        if (page.limited) {
+            page.limitedBlocked()
+            return
+        }
         if (selectedLines.length === 0) {
             statusLabel.text = qsTr("请先选中要翻译的行（Ctrl+点击可多选）")
             return
@@ -667,6 +693,10 @@ FluContentPage {
     }
     // 聚焦批注行内编辑（与原文一致）；无批注行进入 draft 会话
     function focusComment(lineNumber) {
+        if (page.limited) {
+            page.limitedBlocked()
+            return
+        }
         page.commentDraftLine = lineNumber
         page.currentLine = lineNumber
         page.selectedLines = []
@@ -674,6 +704,10 @@ FluContentPage {
         if (del) del.startCommentEdit()
     }
     function deleteCommentAt(lineNumber) {
+        if (page.limited) {
+            page.limitedBlocked()
+            return
+        }
         commentService.removeComment(lineNumber)
         statusLabel.text = qsTr("已删除第 %1 行批注").arg(lineNumber + 1)
         statusIconSource = 0
@@ -813,9 +847,9 @@ FluContentPage {
                         anchors.leftMargin: 8
                         anchors.rightMargin: 8
                         spacing: 8
-                        FluFilledButton { text: qsTr("翻译当前行"); onClicked: translateCurrent() }
-                        FluButton { text: qsTr("翻译全部待译行"); onClicked: translateAllPending() }
-                        FluButton { text: qsTr("翻译选中行"); enabled: page.selectedLines.length > 0; onClicked: translateSelected() }
+                        FluFilledButton { text: qsTr("翻译当前行"); enabled: !page.limited; onClicked: translateCurrent() }
+                        FluButton { text: qsTr("翻译全部待译行"); enabled: !page.limited; onClicked: translateAllPending() }
+                        FluButton { text: qsTr("翻译选中行"); enabled: page.selectedLines.length > 0 && !page.limited; onClicked: translateSelected() }
                         FluDivider { orientation: Qt.Vertical; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
                         // 浮窗切换（PPT 式 ↔ 浮窗；唯一模式入口）
                         // checked 反映「浮窗是否实际显示」；覆盖 clickListener 直接切换（不依赖
@@ -937,6 +971,33 @@ FluContentPage {
                         FluButton { text: qsTr("全部替换"); onClicked: page.doReplaceAll(findInput.text, replaceInput.text) }
                         Item { Layout.fillWidth: true }
                     }
+                }
+            }
+        }
+
+        // ---------- 大文件受限模式提示条（超 5 万行 / 200MB 自动进入，见 docs/services/large-file.md） ----------
+        Rectangle {
+            visible: page.limited
+            Layout.fillWidth: true
+            Layout.preferredHeight: 30
+            radius: DesignTokens.radiusControl
+            color: DesignTokens.findHighlight
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
+                spacing: 8
+                FluIcon {
+                    iconSource: FluentIcons.Warning
+                    iconSize: 15
+                    color: DesignTokens.warning
+                }
+                FluText {
+                    text: qsTr("大文件受限模式：已禁用富文本/图片渲染、批注编辑与翻译（编辑/查找/章节正常）")
+                    font.pixelSize: 12
+                    color: FluTheme.fontPrimaryColor
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
                 }
             }
         }
@@ -1441,9 +1502,14 @@ FluContentPage {
                         Layout.fillWidth: true
                         Layout.preferredHeight: modelData.key === "sep" ? 9 : 30
                         color: "transparent"
-                        // 删除批注项仅在目标行有批注时可用
-                        property bool menuRowEnabled: modelData.key !== "delComment"
-                            || (lineMenu.targetLine >= 0 && documentModel.hasCommentAt(lineMenu.targetLine))
+                        // 批注项（添加/删除）在受限模式禁用；删除项还需目标行有批注
+                        // 编辑类（剪切/复制/粘贴/插行/删行/显示设置）不受限
+                        property bool menuRowEnabled: modelData.key === "addComment"
+                                || modelData.key === "delComment"
+                            ? !documentModel.limitedMode
+                                && (modelData.key !== "delComment"
+                                    || (lineMenu.targetLine >= 0 && documentModel.hasCommentAt(lineMenu.targetLine)))
+                            : true
                         // 分隔线
                         Rectangle {
                             visible: modelData.key === "sep"

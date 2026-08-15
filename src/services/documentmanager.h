@@ -38,6 +38,9 @@ public:
     Q_INVOKABLE void addRecentFile(const QString &path);
     Q_INVOKABLE void clearRecentFiles();
 
+    // 大文件受限模式阈值（默认 5 万行 / 200MB；测试可调，用完须还原）
+    static void setLargeFileLimits(int maxLines, qint64 maxBytes);
+
 signals:
     void documentChanged(const QString &path);
     void dirtyChanged(bool dirty);
@@ -48,6 +51,8 @@ private:
     bool writeDocument(const QString &path);
     void markDirty();
     void setDirty(bool dirty);
+    // 打开成功后按 行数/体积 阈值设置模型受限模式（大文件降级）
+    void applyLargeFileLimit(const QString &path);
 
     // QPointer：页面（QML）销毁后自动置空，避免悬挂指针崩溃（NoStack 导航每次重建页面）
     QPointer<DocumentModel> m_model;
@@ -56,4 +61,6 @@ private:
     QVariantMap m_meta;   // .trx 元数据（read 保留、write 写回）
     bool m_dirty = false;
     bool m_suppressDirty = false;
+    static int s_maxLines;         // 大文件受限阈值：行数（默认 50000）
+    static qint64 s_maxBytes;      // 大文件受限阈值：字节（默认 200MB）
 };
