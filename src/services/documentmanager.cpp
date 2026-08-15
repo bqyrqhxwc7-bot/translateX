@@ -10,6 +10,7 @@
 #include "commentservice.h"
 #include "trxparser.h"
 #include "docxparser.h"
+#include "pdfparser.h"
 
 namespace {
 bool isTrx(const QString &path)
@@ -19,6 +20,10 @@ bool isTrx(const QString &path)
 bool isDocx(const QString &path)
 {
     return QFileInfo(path).suffix().compare(QLatin1String("docx"), Qt::CaseInsensitive) == 0;
+}
+bool isPdf(const QString &path)
+{
+    return QFileInfo(path).suffix().compare(QLatin1String("pdf"), Qt::CaseInsensitive) == 0;
 }
 } // namespace
 
@@ -137,6 +142,24 @@ bool DocumentManager::openFile(const QString &path)
         return true;
     }
 
+    // .pdf：PdfParser 残缺导入（只读，每页一行）
+    if (isPdf(path)) {
+        QString error;
+        m_meta.clear();
+        m_suppressDirty = true;
+        const bool ok = PdfParser::read(path, m_model, m_comments, m_meta, &error);
+        m_suppressDirty = false;
+        if (!ok) {
+            emit operationFailed(error.isEmpty() ? QStringLiteral("导入 .pdf 失败") : error);
+            return false;
+        }
+        m_path = path;
+        setDirty(false);
+        emit documentChanged(m_path);
+        addRecentFile(path);
+        return true;
+    }
+
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
         emit operationFailed(QStringLiteral("无法打开文件：%1").arg(path));
@@ -241,6 +264,19 @@ bool DocumentManager::writeDocument(const QString &path)
         QString error;
         if (!TrxParser::write(path, m_model, m_comments, m_meta, &error)) {
             emit operationFailed(error.isEmpty() ? QStringLiteral("保存 .trx 文件失败") : error);
+            return false;
+        }
+        m_path = path;
+        setDirty(false);
+        emit documentChanged(m_path);
+        return true;
+    }
+
+    // .pdf：PdfParser 导出（编辑层文本 → 文本页，自动分页）
+    if (isPdf(path)) {
+        QString error;
+        if (!PdfParser::write(path, m_model, m_comments, m_meta, &error)) {
+            emit operationFailed(error.isEmpty() ? QStringLiteral("导出 .pdf 失败") : error);
             return false;
         }
         m_path = path;

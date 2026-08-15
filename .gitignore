@@ -50,3 +50,6 @@ winpos.ps1
 stderr_tmp.txt
 samples/demo_out.trx
 run_stderr.txt
+
+# 视觉 MCP 本地 key（不入库）
+.opencode/mcp/vision/keys.local.json

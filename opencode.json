@@ -25,10 +25,11 @@
       "model": "opencode-go/deepseek-v4-flash"
     },
     "review": {
-      "description": "Qt/QML 代码审查：只读审查，绝不改代码；给出结构化问题清单与修复建议",
+      "description": "Qt/QML 代码审查：只读审查，绝不改代码；给出结构化问题清单与修复建议（方法论见 .opencode/prompts/review.md）",
       "mode": "all",
       "model": "opencode-go/deepseek-v4-pro",
       "temperature": 0.1,
+      "prompt": "{file:./.opencode/prompts/review.md}",
       "permission": {
         "edit": "deny",
         "bash": "deny"
@@ -41,6 +42,14 @@
       "permission": {
         "bash": "deny"
       }
+    }
+  },
+  "mcp": {
+    "vision": {
+      "type": "local",
+      "command": ["node", ".opencode/mcp/vision/server.mjs"],
+      "cwd": ".",
+      "enabled": true
     }
   }
 }

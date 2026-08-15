@@ -55,16 +55,16 @@ git push origin main
 | 设置页 | schema 驱动（`ui.json`），字号滑条、查找开关、浮窗开关 | `services/config-service.md` |
 | **A3 .trx** | 显示层（富文本/图片）完整往返、编辑即降级 | `services/file-service.md` |
 | **B docx 导入** | DocxParser：段落→行 + 粗/斜/颜色/字号/字体 + 图片(data URI) | `services/file-service.md` |
+| **C pdf 导入/导出** | PdfParser：每页一行导入（QPdfDocument）+ 文本页导出（QPdfWriter）；**导出文本层不可提取**（Qt 6.5.3 缺陷，视觉正确） | `services/pdf-service.md` |
 
-**测试**：12 目标全绿（`tst_docx` 7 用例含 `sampleFile` 回归 `samples/demo.docx`）。
+**测试**：13 目标全绿（`tst_docx` 7 用例含 `sampleFile` 回归 `samples/demo.docx`；`tst_pdf` 8 用例，样本 `samples/demo.pdf` 为手写干净文本层 PDF）。
 
 ## 3. 路线图（下一步从这里开始）
 
 | 优先级 | 任务 | 状态/要求 |
 | --- | --- | --- |
-| **C** | **pdf 导入/导出** | **待 Ask 用户选库**（AGENTS.md：依赖引入先确认；候选 Poppler/QPdf(Qt6Pdf 已随 Qt 部署)/mupdf） |
 | **D** | 大文件降级（5 万行 / 200MB 上限策略） | 设计已写于 `file-service.md` §8，待实现 |
-| 候选 | docx 导出、.trx 图片 external 降级（>1MB 转外置）、术语表 UI、翻译历史面板 | 非阻塞 |
+| 候选 | docx 导出、pdf 导出文本层修复（Qt 升级后复查）、.trx 图片 external 降级（>1MB 转外置）、术语表 UI、翻译历史面板 | 非阻塞 |
 
 > 每项任务实施蓝图见 §8；**开工前先读对应 `docs/services/` 文档，遵循 AGENTS.md**。
 
@@ -132,6 +132,8 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 - 测试 exe 需 Qt bin 在 PATH（0xc0000135）
 - 构建前停掉运行中的 `translex.exe`（LNK1168 文件占用）
 - 构建日志/`reconfigure*.log` 等已 gitignore
+- **QPdfWriter 文本层缺陷**（Qt 6.5.3）：导出 PDF 提取乱码（ASCII 重复、CJK 变 ?），视觉正常；测试夹具/往返断言禁止依赖它（详见 `pdf-service.md` §3.0/§6）
+- **火绒安全会挂起新 exe**（行为分析以调试方式创建进程，症状：进程停在 DbgBreakPoint、cdb 附加被拒、`tst_docx`/`tst_pdf` 等含 ZIP/PDF 写入代码的新测试 exe 无法启动）→ 把项目目录加进火绒信任区（白名单）；若某次测试突然“卡死”，先怀疑它
 
 ## 7. 子模块补丁（⚠️ 保持本地状态，勿提交/勿还原）
 
@@ -144,15 +146,6 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 | quazip | 无补丁 |
 
 ## 8. 下一步实施蓝图
-
-### 任务 C：pdf 导入/导出（最高优先）
-1. **先 Ask 用户**选库（AGENTS.md 强制）。候选：
-   - **QPdf/QPdfDocument**（Qt 自带，`Qt6Pdf` 已随部署，零依赖）——但当前 Qt 6.5.3 的 QPdf 只读文本层，**无 OCR/图像转文本**
-   - **Poppler**（LGPL，成熟，需编译或预编译）
-   - mupdf（AGPL，注意许可）
-2. 设计：`PdfParser` 仿 `DocxParser` 结构（读 → `DocumentModel` 行/显示层），复用 A3 显示层；导出按行重建文本
-3. 实现：`src/services/pdfparser.{h,cpp}` + `DocumentManager` 分发 + QML 过滤 + `tests/tst_pdf.cpp` + `samples/demo.pdf`
-4. 验证：新增用例 + 全量 ctest
 
 ### 任务 D：大文件降级（5 万行 / 200MB 上限）
 - 设计已写于 `docs/services/file-service.md` §8：超限走只读/降级路径（禁用富文本、禁用批注编辑或强制纯文本）

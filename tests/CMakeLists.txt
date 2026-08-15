@@ -1,7 +1,7 @@
 # 服务单元测试与性能基准
 # 通过 `ctest` 运行：cmake --build ... --target test 或 ctest
 
-find_package(Qt6 REQUIRED COMPONENTS Test)
+find_package(Qt6 REQUIRED COMPONENTS Test Pdf)
 
 set(TEST_INCLUDE_DIRS
     "${CMAKE_CURRENT_SOURCE_DIR}/../src"
@@ -26,6 +26,7 @@ set(SERVICE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/findservice.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/trxparser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/docxparser.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/pdfparser.cpp
 )
 
 # 共享服务抽为静态库：11 个测试目标只需编译一次服务源码（避免约 130 次重复编译）。
@@ -34,7 +35,36 @@ qt_add_library(translex_services STATIC
     ${SERVICE_SOURCES}
 )
 target_include_directories(translex_services PUBLIC ${TEST_INCLUDE_DIRS})
-target_link_libraries(translex_services PUBLIC Qt6::Core Qt6::Network Qt6::Concurrent Qt6::Gui QuaZip::QuaZip)
+target_link_libraries(translex_services PUBLIC Qt6::Core Qt6::Network Qt6::Concurrent Qt6::Gui Qt6::Pdf QuaZip::QuaZip)
+
+# ---- 测试自包含：把 Qt 调试 DLL + 平台/图片插件拷到测试输出目录 ----
+# 否则测试 exe 在无 Qt bin PATH 的环境运行会弹「找不到 Qt6Xxxd.dll」系统错误框
+#（火绒挂起排查时也遇到过）。拷贝目录 = 测试 exe 所在目录。
+if(WIN32)
+    get_target_property(QT_QMAKE_EXECUTABLE Qt6::qmake IMPORTED_LOCATION)
+    get_filename_component(QT_TEST_BIN_DIR "${QT_QMAKE_EXECUTABLE}" DIRECTORY)
+    get_filename_component(QT_TEST_PLUGIN_DIR "${QT_TEST_BIN_DIR}/../plugins" ABSOLUTE)
+    set(QT_TEST_RUNTIME_DLLS
+        ${QT_TEST_BIN_DIR}/Qt6Cored.dll
+        ${QT_TEST_BIN_DIR}/Qt6Guid.dll
+        ${QT_TEST_BIN_DIR}/Qt6Networkd.dll
+        ${QT_TEST_BIN_DIR}/Qt6Concurrentd.dll
+        ${QT_TEST_BIN_DIR}/Qt6Pdfd.dll
+        ${QT_TEST_BIN_DIR}/Qt6Testd.dll
+        ${QT_TEST_BIN_DIR}/Qt6Core5Compatd.dll
+    )
+    add_custom_command(TARGET translex_services POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${QT_TEST_RUNTIME_DLLS}
+                "$<TARGET_FILE_DIR:translex_services>"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${QT_TEST_PLUGIN_DIR}/platforms" "$<TARGET_FILE_DIR:translex_services>/platforms"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${QT_TEST_PLUGIN_DIR}/imageformats" "$<TARGET_FILE_DIR:translex_services>/imageformats"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${QT_TEST_PLUGIN_DIR}/tls" "$<TARGET_FILE_DIR:translex_services>/tls"
+        COMMENT "Copying Qt debug runtime for self-contained tests"
+    )
+endif()
 
 # ---- 服务健康度测试：DocumentModel ----
 qt_add_executable(tst_documentmodel tst_documentmodel.cpp)
@@ -97,3 +127,9 @@ add_test(NAME tst_trx COMMAND tst_trx)
 qt_add_executable(tst_docx tst_docx.cpp)
 target_link_libraries(tst_docx PRIVATE translex_services Qt6::Test)
 add_test(NAME tst_docx COMMAND tst_docx)
+
+# ---- .pdf 导入/导出测试（PdfParser：QPdfDocument/QPdfWriter）----
+qt_add_executable(tst_pdf tst_pdf.cpp)
+target_link_libraries(tst_pdf PRIVATE translex_services Qt6::Test)
+target_compile_definitions(tst_pdf PRIVATE SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME tst_pdf COMMAND tst_pdf)

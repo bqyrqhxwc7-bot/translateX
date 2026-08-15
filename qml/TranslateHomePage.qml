@@ -1315,13 +1315,13 @@ FluContentPage {
     FileDialog {
         id: openDialog
         title: qsTr("打开文档")
-        nameFilters: [qsTr("翻译文档 (*.trx)"), qsTr("文本文件 (*.txt)"), qsTr("Office 文档 (*.docx)"), qsTr("所有文件 (*)")]
+        nameFilters: [qsTr("翻译文档 (*.trx)"), qsTr("文本文件 (*.txt)"), qsTr("Office 文档 (*.docx)"), qsTr("PDF 文档 (*.pdf)"), qsTr("所有文件 (*)")]
         onAccepted: openRecent(urlToPath(selectedFile))
     }
     FileDialog {
         id: saveAsDialog
         title: qsTr("另存为")
-        nameFilters: [qsTr("翻译文档 (*.trx)"), qsTr("文本文件 (*.txt)"), qsTr("所有文件 (*)")]
+        nameFilters: [qsTr("翻译文档 (*.trx)"), qsTr("文本文件 (*.txt)"), qsTr("PDF 文档 (*.pdf)"), qsTr("所有文件 (*)")]
         fileMode: FileDialog.SaveFile
         onAccepted: {
             documentManager.saveFileAs(urlToPath(selectedFile))

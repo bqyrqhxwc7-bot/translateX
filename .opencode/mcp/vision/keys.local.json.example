@@ -1,0 +1,5 @@
+{
+  "// 说明": "本文件不入库（已在 .gitignore）。视觉提供者默认用 opencode-go（自动读 auth.json，模型 minimax-m3）。",
+  "// 说明2": "若想改走智谱 GLM：把本文件复制为 keys.local.json，填入你的 key：",
+  "zhipuApiKey": "sk-你的智谱key"
+}

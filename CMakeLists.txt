@@ -18,7 +18,7 @@ if(NOT DEFINED CMAKE_PREFIX_PATH)
     endif()
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Concurrent Network Qml Quick QuickWidgets Svg ShaderTools PrintSupport)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Concurrent Network Qml Quick QuickWidgets Svg ShaderTools PrintSupport Pdf)
 
 # FluentUI (BSD-3-Clause) : Microsoft Fluent Design component library for Qt QML ----
 # 全量迁移到 QML：FluentUI 静态库作为子目录集成（third_party/FluentUI）。
@@ -83,6 +83,8 @@ qt_add_executable(translex
     src/services/trxparser.h
     src/services/docxparser.cpp
     src/services/docxparser.h
+    src/services/pdfparser.cpp
+    src/services/pdfparser.h
 )
 
 qt_add_qml_module(translex
@@ -99,7 +101,7 @@ qt_add_qml_module(translex
 )
 
 target_link_libraries(translex PRIVATE
-    Qt6::Quick Qt6::Qml Qt6::Widgets Qt6::Svg Qt6::ShaderTools Qt6::PrintSupport Qt6::Network Qt6::Concurrent
+    Qt6::Quick Qt6::Qml Qt6::Widgets Qt6::Svg Qt6::ShaderTools Qt6::PrintSupport Qt6::Network Qt6::Concurrent Qt6::Pdf
     fluentuiplugin
     QuaZip::QuaZip
 )
