@@ -1,6 +1,7 @@
 #include <QtTest/QtTest>
 
 #include <QBuffer>
+#include <QFile>
 #include <QImage>
 #include <QTemporaryDir>
 
@@ -208,6 +209,40 @@ private slots:
         QString error;
         QVERIFY(!DocxParser::read(path, &model, nullptr, meta, &error));
         QVERIFY(!error.isEmpty());
+    }
+
+    // 仓库自带示例 samples/demo.docx（生成脚本 samples/gen_docx.py）：
+    // 覆盖章节/富文本/图片/混排/空段，作为长期回归
+    void sampleFile()
+    {
+        const QString path = QStringLiteral("../../samples/demo.docx");
+        if (!QFile::exists(path)) {
+            QSKIP("samples/demo.docx 不存在（可运行 samples/gen_docx.py 生成）");
+        }
+        DocumentModel model;
+        QVariantMap meta;
+        QString error;
+        QVERIFY2(DocxParser::read(path, &model, nullptr, meta, &error), qPrintable(error));
+        QVERIFY(model.lineCount() > 30);
+
+        bool hasRich = false;
+        bool hasImage = false;
+        bool hasChapter = false;
+        for (int i = 0; i < model.lineCount(); ++i) {
+            if (model.displayAt(i) == QStringLiteral("rich")) {
+                hasRich = true;
+            }
+            if (model.displayAt(i) == QStringLiteral("image")) {
+                hasImage = true;
+            }
+            if (model.lineText(i).contains(QStringLiteral("第一章"))) {
+                hasChapter = true;
+            }
+        }
+        QVERIFY(hasRich);   // 富文本行（含颜色/字号）
+        QVERIFY(hasImage);  // 纯图段落 → image 行
+        QVERIFY(hasChapter); // 章节标题保留文本
+        QCOMPARE(meta.value(QStringLiteral("sourceFormat")).toString(), QStringLiteral("docx"));
     }
 };
 
