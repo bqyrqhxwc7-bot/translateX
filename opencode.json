@@ -26,7 +26,7 @@
     },
     "review": {
       "description": "Qt/QML 代码审查：只读审查，绝不改代码；给出结构化问题清单与修复建议",
-      "mode": "subagent",
+      "mode": "all",
       "model": "opencode-go/deepseek-v4-pro",
       "temperature": 0.1,
       "permission": {

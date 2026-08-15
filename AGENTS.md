@@ -8,6 +8,7 @@
 
 ## 1. 核心原则（按优先级）
 
+0. **全程用中文交流**（用户为中文母语，国内网络环境）；文档、注释、回复一律中文，代码标识符用英文。
 1. **文档先行**：设计/重构/新功能先写 `docs/` 设计文档，确认后再写代码；代码与文档必须同步更新。
 2. **重大决策先问用户**：架构方向、接口变更、破坏性重构、依赖引入、许可协议选择——先 Ask 再动手。
 3. **多用 Todo 跟踪**：多步骤任务建 Todo 清单，每完成一项立即更新。
@@ -60,8 +61,15 @@ ctest --test-dir build-vs2026-x64 -C Debug -L perf
 
 - 本仓库带 Qt 官方 skills（`.agents/skills/`：QML/C++ 审查、Qt Quick Test、CMake、UI 设计等）与 Qt 文档 MCP（`.mcp.json`）。
 - opencode 多模型分工已配置在 `opencode.json`（build=deepseek-v4-flash，plan/review=deepseek-v4-pro），改动前先读该文件。
+- **国内网络环境**：`git push` 可能失败（网络不稳），失败直接重试；winget/gh 安装类命令易卡死（曾超时），不要主动执行系统级安装；Qt 文档 MCP（`qt-docs-mcp.qt.io`，海外）可能超时——超时则改查本地 Qt 头文件/`D:/Software/Qt/6.5.3/` 文档，勿反复重试。
+- **终端编码**：控制台中文乱码是 GBK/UTF-8 不匹配（PowerShell 先 `chcp 65001` 或设置 `[Console]::OutputEncoding`）；用 `Read`/`Edit` 工具读写源码，勿经控制台管道改写（会破坏中文注释编码）。
 
-## 6. 工作流程
+## 6. opencode 操作提示
+
+- **agent 切换**：`Tab` / `Shift+Tab` 循环主 agent（build → plan → review）；`Ctrl+X 然后 A` 打开 agent 列表；subagent（`@explore`/`@general`/`@doc-writer`）在输入框 `@` 触发。Tab 与输入补全的冲突已在全局 `tui.json` 解决（补全改 `Ctrl+Space`）。
+- **模型切换**：`Ctrl+X 然后 M` 打开模型列表（Go 套餐内 DeepSeek V4 Flash/Pro、GLM 等）。
+
+## 7. 工作流程
 
 ```
 1. 读 HANDOVER.md → AGENTS.md → 相关 docs/
@@ -72,7 +80,7 @@ ctest --test-dir build-vs2026-x64 -C Debug -L perf
 6. 每步汇报，保持透明
 ```
 
-## 7. 完成标准
+## 8. 完成标准
 
 - 构建通过（`cmake --build build-vs2026-x64 --config Debug`）
 - 相关测试通过（`ctest --test-dir build-vs2026-x64 -C Debug`）
