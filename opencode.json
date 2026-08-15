@@ -32,7 +32,10 @@
       "prompt": "{file:./.opencode/prompts/review.md}",
       "permission": {
         "edit": "deny",
-        "bash": "deny"
+        "bash": {
+          "*": "deny",
+          ".opencode/scripts/*": "allow"
+        }
       }
     },
     "doc-writer": {
