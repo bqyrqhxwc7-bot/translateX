@@ -20,7 +20,7 @@
 - **前后端分离**：QML 界面（`qml/`），业务在 `src/services/` C++ 服务层（`Q_INVOKABLE`，经 `main_qml.cpp` 的 `setContextProperty` 暴露给 QML）。
 - **可插拔**：新能力优先实现为 service（见 `docs/services/SERVICE-ARCHITECTURE.md`），不往 mainwindow/主页堆代码。
 - **接口稳定**：`IService` / `ITranslationBackend` 等公共接口定稿后不轻易改；扩展用新增方法（带默认实现）。
-- **翻译服务定位（不可偏离）**：更好的质量（上下文感知/术语一致/质量自检）+ 为用户减成本（缓存/模型分级/智能分块/失败降级）；改动对照 `docs/services/translation-service.md` 的度量指标。
+- **翻译服务定位（不可偏离）**：更好的质量（上下文感知/术语一致/质量自检）+ 为用户减成本（缓存/模型分级/智能分块/失败降级）；改动必须对照 `docs/services/translation-service.md` 的度量指标做验收（质量提升/成本下降要可测量，不能只凭感觉）。
 - **NoStack 页面模式**（`FluNavigationView pageMode: NoStack`）：每次导航重建页面 → 状态必须放应用级 context property 单例，禁止放页面属性；**Popup 控件不可用**（错位/失效）；`Qt.callLater` 不可靠，用 `Timer`。详见 HANDOVER.md §4。
 - **大文件性能**：虚拟化渲染（ListView + 懒加载模型），禁止全量刷新。
 - **敏感信息**：一律走 `SecureStorage`（`%APPDATA%/Translex/secure.ini`），禁止明文落盘。
@@ -68,6 +68,7 @@ ctest --test-dir build-vs2026-x64 -C Debug -L perf
 
 - **agent 切换**：`Tab` / `Shift+Tab` 循环主 agent（build → plan → review）；`Ctrl+X 然后 A` 打开 agent 列表；subagent（`@explore`/`@general`/`@doc-writer`）在输入框 `@` 触发。Tab 与输入补全的冲突已在全局 `tui.json` 解决（补全改 `Ctrl+Space`）。
 - **模型切换**：`Ctrl+X 然后 M` 打开模型列表（Go 套餐内 DeepSeek V4 Flash/Pro、GLM 等）。
+- **个人终端偏好**（tui.json 键位等）放全局 `~/.config/opencode/tui.json`，不入仓库；换机器后需重配（重配内容：`prompt.autocomplete.complete` 改 `ctrl+space`，保 Tab 切换 agent）。
 
 ## 7. 工作流程
 
@@ -86,3 +87,8 @@ ctest --test-dir build-vs2026-x64 -C Debug -L perf
 - 相关测试通过（`ctest --test-dir build-vs2026-x64 -C Debug`）
 - 文档与代码同步（改了实现必须改对应 `.md`）
 - Todo 全部完成并更新；向用户汇报变更 + 影响 + 下一步
+
+## 9. 本文档维护原则
+
+- **只留高信号**：AGENTS.md 只保留「错过必踩」的陷阱与指针，**不复制** HANDOVER.md 的完整踩坑清单（双源会漂移）；两处内容冲突时以 HANDOVER.md（权威汇总）为准，并回填本文件指针。
+- **改 HANDOVER.md 必须检查本文引用**：HANDOVER 是唯一权威汇总，任何功能/路线/铁律变更先落 HANDOVER.md，再同步本文对应条目。
