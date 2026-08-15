@@ -1315,7 +1315,7 @@ FluContentPage {
     FileDialog {
         id: openDialog
         title: qsTr("打开文档")
-        nameFilters: [qsTr("翻译文档 (*.trx)"), qsTr("文本文件 (*.txt)"), qsTr("所有文件 (*)")]
+        nameFilters: [qsTr("翻译文档 (*.trx)"), qsTr("文本文件 (*.txt)"), qsTr("Office 文档 (*.docx)"), qsTr("所有文件 (*)")]
         onAccepted: openRecent(urlToPath(selectedFile))
     }
     FileDialog {

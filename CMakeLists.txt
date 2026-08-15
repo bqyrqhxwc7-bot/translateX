@@ -20,11 +20,28 @@ endif()
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Concurrent Network Qml Quick QuickWidgets Svg ShaderTools PrintSupport)
 
-# ---- FluentUI (BSD-3-Clause) : Microsoft Fluent Design component library for Qt QML ----
+# FluentUI (BSD-3-Clause) : Microsoft Fluent Design component library for Qt QML ----
 # 全量迁移到 QML：FluentUI 静态库作为子目录集成（third_party/FluentUI）。
 set(FLUENTUI_BUILD_EXAMPLES OFF CACHE BOOL "Build FluentUI demo applications." FORCE)
 set(FLUENTUI_BUILD_STATIC_LIB ON CACHE BOOL "Build FluentUI as a static library." FORCE)
 add_subdirectory(third_party/FluentUI)
+
+# ---- zlib (zlib license) : QuaZip 依赖，静态编译（docx 导入） ----
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
+set(ZLIB_BUILD_TESTING OFF CACHE BOOL "Build zlib tests" FORCE)
+set(ZLIB_INSTALL OFF CACHE BOOL "Install zlib" FORCE)
+set(SKIP_INSTALL_ALL ON CACHE BOOL "Skip zlib install rules" FORCE)
+add_subdirectory(third_party/zlib)
+
+# ---- QuaZip (BSD-3-Clause) : docx 导入 zip 解压，静态编译 ----
+# QuaZip 的 find_package(ZLIB) 需要 ZLIB_LIBRARY/ZLIB_INCLUDE_DIR 非空；实际链接
+# 用 ZLIB::ZLIB target（zlib 子目录已创建 alias，FindZLIB 不会覆盖已存在 target）。
+set(ZLIB_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/zlib" CACHE PATH "zlib include dir" FORCE)
+set(ZLIB_LIBRARY "${CMAKE_CURRENT_BINARY_DIR}/third_party/zlib/zlibstatic.lib" CACHE FILEPATH "zlib library (QuaZip links ZLIB::ZLIB target)" FORCE)
+set(QUAZIP_INSTALL OFF CACHE BOOL "Install QuaZip" FORCE)
+set(QUAZIP_ENABLE_TESTS OFF CACHE BOOL "Build QuaZip tests" FORCE)
+set(QUAZIP_BZIP2 OFF CACHE BOOL "Enable BZIP2 compression" FORCE)
+add_subdirectory(third_party/quazip)
 
 # QML 版版本号（Widgets 版已迁移至 widgets 分支）
 set(TRANSLATEX_QML_VERSION "1.1.0-qml")
@@ -64,6 +81,8 @@ qt_add_executable(translateXqml
     src/services/findservice.h
     src/services/trxparser.cpp
     src/services/trxparser.h
+    src/services/docxparser.cpp
+    src/services/docxparser.h
 )
 
 qt_add_qml_module(translateXqml
@@ -81,6 +100,7 @@ qt_add_qml_module(translateXqml
 target_link_libraries(translateXqml PRIVATE
     Qt6::Quick Qt6::Qml Qt6::Widgets Qt6::Svg Qt6::ShaderTools Qt6::PrintSupport Qt6::Network Qt6::Concurrent
     fluentuiplugin
+    QuaZip::QuaZip
 )
 target_compile_definitions(translateXqml PRIVATE
     FLUENTUI_BUILD_STATIC_LIB

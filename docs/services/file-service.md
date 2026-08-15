@@ -195,5 +195,71 @@ public:
 - ✅ D：批注**每行一条纯文本**（与现有翻译批注一致，迁移零成本）
 - ✅ E：字号/字体=**全文默认 + 当前行**；「行内混排格式」已记入开发计划（后续再说）
 - ✅ F：大文件受限阈值 **5 万行 / 200MB**
+- ✅ G（2026-08-13）：docx 导入解压库选型 **QuaZip**（BSD-3）+ **zlib**（zlib license），submodule 引入 `third_party/`，静态编译
 - 分支：main=QML 版，`widgets` 分支=旧 Widgets 版（2026-08-12 拆分）
-- 待选型（阶段 B 再 Ask）：docx / pdf 第三方库与许可证
+
+---
+
+## 11. 阶段 B：.docx 导入设计（QuaZip 选型已定 2026-08-13）
+
+### 11.1 依赖与许可
+
+| 库 | 用途 | 许可 | 引入方式 |
+| --- | --- | --- | --- |
+| QuaZip（stachenov/quazip） | zip 解压（QIODevice 流式） | BSD-3-Clause | git submodule → `third_party/quazip`，静态编译 |
+| zlib（madler/zlib） | QuaZip 依赖 | zlib license | git submodule → `third_party/zlib` |
+
+> 若 submodule 网络不可用，降级为 vendored 源码包（记录在案）。
+
+### 11.2 解析流程
+
+1. `QuaZip zip(path)` 打开（`word/document.xml` 为正文）
+2. 读 `word/_rels/document.xml.rels`（图片 rId → `word/media/*` 路径映射）
+3. 读 `word/media/*` 图片字节
+4. `QXmlStreamReader` 解析 `document.xml` → 行列表（复用 A3 显示层：display/rich/imageIds）
+
+### 11.3 映射规则（残缺导入边界）
+
+| docx 元素 | 映射 |
+| --- | --- |
+| `w:p`（段落） | 一行 |
+| `w:r`/`w:t` | 文本（同一段落内合并 runs） |
+| `w:tab` | `\t` |
+| `w:br` | 行内 `<br/>` |
+| `w:rPr` 子元素 | `b`→`<b>`、`i`→`<i>`、`color`→`color`、`sz`(半磅/2)→`font-size`、`rFonts`→`font-family` |
+| `w:drawing`/`w:pict` | 图片行（display=image） |
+| `w:tbl` 表格 | 简化：按单元格段落流式成行（不保留表格结构） |
+| 页眉/页脚/脚注/批注/修订 | 忽略 |
+| 样式定义（styles.xml） | 忽略（仅读直接 run 属性） |
+| 编号（numPr） | 忽略（或前缀 `- `） |
+
+### 11.4 行生成
+
+- 每段落一行：`text`=纯文本（编辑层）；含格式则 `rich`=HTML 片段（显示层）；含图则 `display=image` + `imageIds`
+- 图片全部内嵌 base64（确认点 C），存 `meta.images`，单张 ≤1MB 内嵌（超限 external，与 A3 一致）
+- 富文本/图片行**编辑即降级纯文本**（确认点 A，复用现有机制）
+- 打开后 `meta.sourceFormat = "docx"`
+
+### 11.5 接口（与 TrxParser 同构）
+
+```cpp
+class DocxParser {
+public:
+    static bool read(const QString &path, DocumentModel &model,
+                     CommentService *comments, TrxMeta &meta, QString &error);
+};
+```
+
+- `DocumentManager::open` 按扩展名分发（.docx → DocxParser）
+- 文件对话框 `openFilters` 追加 `Office 文档 (*.docx)`
+
+### 11.6 测试计划
+
+- 用 QuaZip 构造最小 docx：纯文本段落、多 run 合并、粗体/斜体/颜色/字号、行内图片、空段落、表格
+- 断言：行数、文本、rich HTML、图片数、base64 往返
+
+### 11.7 限制（明示）
+
+- 仅导入不导出（导出为阶段 C）
+- 版式近似（无页边距/分页概念）
+- 超大 docx（>5 万行/200MB）走阶段 D 受限模式

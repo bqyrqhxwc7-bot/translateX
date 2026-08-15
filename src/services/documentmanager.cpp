@@ -9,11 +9,16 @@
 #include "documentmodel.h"
 #include "commentservice.h"
 #include "trxparser.h"
+#include "docxparser.h"
 
 namespace {
 bool isTrx(const QString &path)
 {
     return QFileInfo(path).suffix().compare(QLatin1String("trx"), Qt::CaseInsensitive) == 0;
+}
+bool isDocx(const QString &path)
+{
+    return QFileInfo(path).suffix().compare(QLatin1String("docx"), Qt::CaseInsensitive) == 0;
 }
 } // namespace
 
@@ -105,6 +110,24 @@ bool DocumentManager::openFile(const QString &path)
         m_suppressDirty = false;
         if (!ok) {
             emit operationFailed(error.isEmpty() ? QStringLiteral("打开 .trx 文件失败") : error);
+            return false;
+        }
+        m_path = path;
+        setDirty(false);
+        emit documentChanged(m_path);
+        addRecentFile(path);
+        return true;
+    }
+
+    // .docx：DocxParser 残缺导入（仅读，段落→行 + 图片 + 基础格式）
+    if (isDocx(path)) {
+        QString error;
+        m_meta.clear();
+        m_suppressDirty = true;
+        const bool ok = DocxParser::read(path, m_model, m_comments, m_meta, &error);
+        m_suppressDirty = false;
+        if (!ok) {
+            emit operationFailed(error.isEmpty() ? QStringLiteral("导入 .docx 失败") : error);
             return false;
         }
         m_path = path;

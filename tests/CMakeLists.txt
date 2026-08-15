@@ -25,6 +25,7 @@ set(SERVICE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/chapterservice.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/findservice.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/trxparser.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/docxparser.cpp
 )
 
 # 共享服务抽为静态库：11 个测试目标只需编译一次服务源码（避免约 130 次重复编译）。
@@ -33,7 +34,7 @@ qt_add_library(translateX_services STATIC
     ${SERVICE_SOURCES}
 )
 target_include_directories(translateX_services PUBLIC ${TEST_INCLUDE_DIRS})
-target_link_libraries(translateX_services PUBLIC Qt6::Core Qt6::Network Qt6::Concurrent Qt6::Gui)
+target_link_libraries(translateX_services PUBLIC Qt6::Core Qt6::Network Qt6::Concurrent Qt6::Gui QuaZip::QuaZip)
 
 # ---- 服务健康度测试：DocumentModel ----
 qt_add_executable(tst_documentmodel tst_documentmodel.cpp)
@@ -91,3 +92,8 @@ add_test(NAME tst_find COMMAND tst_find)
 qt_add_executable(tst_trx tst_trx.cpp)
 target_link_libraries(tst_trx PRIVATE translateX_services Qt6::Test)
 add_test(NAME tst_trx COMMAND tst_trx)
+
+# ---- .docx 导入测试（DocxParser：残缺导入）----
+qt_add_executable(tst_docx tst_docx.cpp)
+target_link_libraries(tst_docx PRIVATE translateX_services Qt6::Test)
+add_test(NAME tst_docx COMMAND tst_docx)

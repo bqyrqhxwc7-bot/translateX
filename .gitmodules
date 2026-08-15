@@ -1,3 +1,9 @@
 [submodule "third_party/FluentUI"]
 	path = third_party/FluentUI
 	url = https://github.com/zhuzichu520/FluentUI.git
+[submodule "third_party/quazip"]
+	path = third_party/quazip
+	url = https://github.com/stachenov/quazip.git
+[submodule "third_party/zlib"]
+	path = third_party/zlib
+	url = https://github.com/madler/zlib.git
