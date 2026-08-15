@@ -1,0 +1,174 @@
+# translateX 交接与指挥蓝图
+
+> 生成：2026-08-15 · 用途：**opencode / 后续开发者接手时的总纲**
+> 接手顺序：先读本文件 → 再读 [`AGENTS.md`](../AGENTS.md)（协作规范）→ [`ARCHITECTURE.md`](ARCHITECTURE.md)（架构）
+> 本文件由 Copilot 整理，是当前工程状态、路线图与踩坑的**唯一权威汇总**；实现细节一律以 `docs/services/`、`docs/ui/` 下文档为准。
+
+---
+
+## 0. 项目一句话
+
+Qt 6 桌面**翻译写作工具**：带批注/翻译对照的编辑器，支持 Ollama / 云端 / 网络大模型三后端，翻译结果写为批注，支持行/选区/整篇/未批注章节批量翻译；`.txt` / `.trx` / `.docx` 三格式。
+
+## 1. 技术栈与构建（每次接手必看）
+
+| 项 | 值 |
+| --- | --- |
+| Qt | **6.5.3**，`D:/Software/Qt/6.5.3/msvc2019_64`（非 C:/Qt） |
+| C++ | C++17；CMake 4.2.1；生成器 **VS 2026 x64**（`build-vs2026-x64/`） |
+| UI | QML + **FluentUI 1.7.7**（子模块 `third_party/FluentUI`） |
+| 第三方 | **QuaZip 1.7.2** + **zlib 1.3.2**（子模块，docx 导入，均**静态**编译） |
+| 测试 | 12 个目标，共享服务抽为 `translateX_services` 静态库 |
+
+**关键命令**（Windows PowerShell，工作目录=仓库根）：
+
+```powershell
+# 构建（应用）
+cmake --build build-vs2026-x64 --config Debug
+
+# 重新配置（改 CMakeLists/子模块后；BUILD_TESTING 可能被缓存成 OFF，务必显式 ON）
+cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.5.3/msvc2019_64" -DBUILD_TESTING=ON
+
+# 测试（必须先加 Qt bin 到 PATH，否则 0xc0000135）
+$env:PATH = "D:/Software/Qt/6.5.3/msvc2019_64/bin;" + $env:PATH
+ctest --test-dir build-vs2026-x64 -C Debug --output-on-failure
+
+# 单测
+ctest --test-dir build-vs2026-x64 -C Debug -R tst_docx --output-on-failure
+
+# 推送（网络不稳，失败重试）
+git push origin main
+```
+
+**注意**：测试 exe 在 `build-vs2026-x64/tests/Debug/`（非 `Debug/`），运行前 PATH 必须含 Qt bin。
+
+## 2. 功能状态（全部 ✅ 已实现并推送）
+
+| 功能 | 说明 | 文档 |
+| --- | --- | --- |
+| 编辑器 | 虚拟化 ListView + 懒加载模型（50 万行 <100ms）、Enter 拆行、Backspace 合并、撤销/重做 | `services/documentmodel.md` |
+| 批注 | 单一数据源（CommentService）、行内直编、字号独立、跳转/清空/JSON 导入导出 | `services/comment-service.md` |
+| 翻译 | 三后端 + 上下文感知 + 回显拦截 + 质量自检 + 缓存(L1内存/L2磁盘) + 智能分块 + 失败降级 | `services/translation-service.md` |
+| 章节 | 「第X章」/ Markdown `#` 识别、上/下一章 | `services/chapter-service.md` |
+| 查找 | 大小写/整词/**模糊**（子序列）、替换 | `services/find-service.md` |
+| 浮窗 | 真独立 Window（Qt.Tool+Frameless）、位置记忆、启动显示 | `ui/translate-panel.md` |
+| 设置页 | schema 驱动（`ui.json`），字号滑条、查找开关、浮窗开关 | `services/config-service.md` |
+| **A3 .trx** | 显示层（富文本/图片）完整往返、编辑即降级 | `services/file-service.md` |
+| **B docx 导入** | DocxParser：段落→行 + 粗/斜/颜色/字号/字体 + 图片(data URI) | `services/file-service.md` |
+
+**测试**：12 目标全绿（`tst_docx` 7 用例含 `sampleFile` 回归 `samples/demo.docx`）。
+
+## 3. 路线图（下一步从这里开始）
+
+| 优先级 | 任务 | 状态/要求 |
+| --- | --- | --- |
+| **C** | **pdf 导入/导出** | **待 Ask 用户选库**（AGENTS.md：依赖引入先确认；候选 Poppler/QPdf(Qt6Pdf 已随 Qt 部署)/mupdf） |
+| **D** | 大文件降级（5 万行 / 200MB 上限策略） | 设计已写于 `file-service.md` §8，待实现 |
+| 候选 | docx 导出、.trx 图片 external 降级（>1MB 转外置）、术语表 UI、翻译历史面板 | 非阻塞 |
+
+> 每项任务实施蓝图见 §8；**开工前先读对应 `docs/services/` 文档，遵循 AGENTS.md**。
+
+## 4. 架构铁律（违反必出回归 bug）
+
+1. **NoStack 页面模式**：FluNavigationView `pageMode: NoStack` → 每次导航**重建页面**。
+   - 状态必须放**应用级**（`main_qml.cpp` 的 `setContextProperty` 单例），不能放页面属性
+   - **Popup 控件不可用**（FluMenu/FluComboBox 会错位/失效）→ 用页面内覆盖层 `Item { z:8000/9000 }`
+   - **`Qt.callLater` 不可靠** → 一律用 `Timer`
+2. **QML id 作用域**：子对象 `id` 不是父的属性。delegate 里直接引用顶层 `id`（如 `lineMenu`），**不能**写 `page.lineMenu`。
+3. **DocumentModel 是应用级单例**：页面 `onCompleted` **仅当 `lineCount()==0`** 才 `loadDemoDocument()`，否则覆盖用户内容。
+4. **显示层（rich/image）编辑即降级**：`onTextChanged` 无条件 `setLineRich("")` + `setLineImages([])` + `setLineDisplay("plain")`。
+5. **新配置 key 必须**加 `src/services/config/ui.json`（schema 驱动设置页；ConfigService 只认 schema 内 key）。
+6. **行号显示用 `String(index + 1)`**，勿绑 `row.model.lineNumber`（插入后不刷新）。
+7. 服务方法要能被 QML 调必须 `Q_INVOKABLE`（非虚或虚均可）；`documentModel` 等以 context property 暴露。
+8. **浮窗（Qt.Tool + transientParent）**：启动时主窗口未稳定 → show 竞态失败，必须延迟（`floatShowTimer` 350ms）；`screen.virtualX` 未映射返回 undefined → `Number(scr && scr.virtualX) || 0` 防 NaN。
+
+## 5. 文件地图
+
+```
+CMakeLists.txt             # 顶层：FluentUI + zlib + quazip + 主程序 + tests
+src/main_qml.cpp           # 入口：应用级服务单例 setContextProperty
+src/services/              # ★ 服务层（Q_INVOKABLE，QML 直接调）
+  documentmodel / translationservice / translationbackend / commentservice /
+  chapterservice / findservice / documentmanager / trxparser / docxparser /
+  configservice / securestorage / termglossary / qualitygate / translationcache /
+  serviceregistry / appguard
+qml/TranslateHomePage.qml  # 核心 UI（1725 行：Ribbon/编辑器/右键菜单/浮窗/设置浮层）
+qml/Main.qml / TranslateSettingsPage.qml / TranslatePanelContent.qml / ConfigSectionCard.qml
+tests/                     # 12 目标；CMakeLists 抽 translateX_services 静态库
+samples/demo.trx           # .trx 示例（含富文本/图片显示层）
+samples/demo.docx          # docx 示例（gen_docx.py 生成，纯 stdlib 可再生成）
+docs/                      # 设计文档（services/ + ui/ + ARCHITECTURE.md + 本文件）
+third_party/FluentUI       # 子模块（本地补丁，见 §7）
+third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地补丁）
+```
+
+## 6. 踩坑清单（按子系统）
+
+### QML / NoStack
+- Popup 错位、FluMenu 按钮点不到、浮窗被页面边界裁剪 → 全部改独立 Window 或页面内覆盖层
+- `FluMenuItem: Created graphical object was not placed in the graphics scene` → 不要在不可见 Menu 内创建 item；菜单在 `onAboutToShow` 重建（`recentMenu` 已修复）
+- 页面重建丢编辑（DocumentModel 曾页面内创建）→ 已提升应用级单例
+
+### 浮窗
+- 位置失效根因 = `screen.virtualX/Width` 未映射返回 undefined → NaN 污染钳制 → `Number()||fallback`
+- 启动不显示 = Qt.Tool show 竞态 → 延迟 350ms + `onVisibleChanged` 时 `show()` 确认
+- 位置保存：`onX/YChanged` 节流 350ms + `isFinite && >-10000` 守卫 + `restoringPos` 抑制恢复期保存
+
+### 富文本 / .trx / docx
+- 编辑富文本行 → 必须降级纯文本（否则退出编辑不显示新内容）
+- `.trx` 显示层（`display/rich/imageIds`）不参与 undo
+- **docx `w:color/sz/rFonts` 属性带 `w:` 前缀**：`QXmlStreamAttributes::value("val")` 按 qualifiedName 匹配返回空 → 必须 `value(kWordNs, "val")`
+- docx 图片：`w:drawing > a:blip r:embed`；rels 里 `Target` 相对 `word/` 需补前缀
+
+### zlib / QuaZip（docx 依赖，静态）
+- **zlib 默认构建 DLL（libzd.dll）** → 测试 0xc0000135。必须 `ZLIB_BUILD_SHARED=OFF` + `ZLIB_BUILD_STATIC=ON`
+- zlib 静态模式下不自建 `ZLIB::ZLIB` alias → **本地补丁**：static 块内 `if(NOT ZLIB_BUILD_SHARED) add_library(ZLIB::ZLIB ALIAS zlibstatic)`
+- zlib 静态库名是 `libzsd.lib`(Debug)/`libzs.lib`(Release)，**不是** `zlibstatic.lib`
+- **`ZLIB_CONF_WRITTEN` 缓存变量**阻止 `zconf.h.cmakein` 重生成 → 删 zlib build 目录后须 `cmake -U ZLIB_CONF_WRITTEN`
+- zlib `test/` + `contrib/` 的测试会**污染宿主 ctest** → 本地补丁注释 `add_subdirectory(test)` 与 `contrib`
+- **`BUILD_TESTING` 可能被缓存成 OFF** → 重新配置务必显式 `-DBUILD_TESTING=ON`
+
+### 其他
+- 测试 exe 需 Qt bin 在 PATH（0xc0000135）
+- 构建前停掉运行中的 `translateXqml.exe`（LNK1168 文件占用）
+- 构建日志/`reconfigure*.log` 等已 gitignore
+
+## 7. 子模块补丁（⚠️ 保持本地状态，勿提交/勿还原）
+
+`git status` 里 `third_party/*` 显示 `m`/`M` 是**有意补丁**，**绝不能** `git submodule update` 或提交子模块改动（会推坏/还原补丁）。
+
+| 子模块 | 补丁 |
+| --- | --- |
+| FluentUI | `src/CMakeLists.txt`（PLUGIN_TARGET 条件化）、`src/FluFrameless.cpp`（防御）、`src/Qt6/imports/FluentUI/Controls/FluWindow.qml`（typeof 防御）；`.gitignore` 加 `src/FluentUI/`（构建产物） |
+| zlib | `CMakeLists.txt`（静态 ZLIB::ZLIB alias；注释 `test/`、`contrib/`） |
+| quazip | 无补丁 |
+
+## 8. 下一步实施蓝图
+
+### 任务 C：pdf 导入/导出（最高优先）
+1. **先 Ask 用户**选库（AGENTS.md 强制）。候选：
+   - **QPdf/QPdfDocument**（Qt 自带，`Qt6Pdf` 已随部署，零依赖）——但当前 Qt 6.5.3 的 QPdf 只读文本层，**无 OCR/图像转文本**
+   - **Poppler**（LGPL，成熟，需编译或预编译）
+   - mupdf（AGPL，注意许可）
+2. 设计：`PdfParser` 仿 `DocxParser` 结构（读 → `DocumentModel` 行/显示层），复用 A3 显示层；导出按行重建文本
+3. 实现：`src/services/pdfparser.{h,cpp}` + `DocumentManager` 分发 + QML 过滤 + `tests/tst_pdf.cpp` + `samples/demo.pdf`
+4. 验证：新增用例 + 全量 ctest
+
+### 任务 D：大文件降级（5 万行 / 200MB 上限）
+- 设计已写于 `docs/services/file-service.md` §8：超限走只读/降级路径（禁用富文本、禁用批注编辑或强制纯文本）
+- 实现：`DocumentManager::open` 里文件大小/行数探测 → 设置模型"降级模式"标志 → QML 按标志关闭编辑入口
+- 测试：构造 200MB 级文件用例（或 mock 大小探测）
+
+### 候选任务（低优先）
+- docx 导出（对称补全 B）
+- .trx 图片 `external` 降级（>1MB 图片外置 `*.images/` 目录，已在 file-service.md §7 设计）
+- 术语表 UI（`TermGlossary` 已有 C++ 层）
+- 翻译历史 / 会话记录
+
+## 9. 工作流程（AGENTS.md 摘要）
+
+1. 读 `AGENTS.md` + 本文件 + 相关 `docs/` 设计
+2. **重大决策（架构/接口/依赖/许可）→ 先 Ask 用户**，不要自作主张
+3. 建 Todo 清单，小步实现，**每步可编译可测试**
+4. 改动实现必须同步更新对应 `.md` 文档
+5. 完成标准：构建通过 + `ctest` 全绿 + 文档同步 + 汇报（变更/影响/下一步）

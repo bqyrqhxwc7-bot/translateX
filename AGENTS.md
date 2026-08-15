@@ -1,6 +1,7 @@
 # AGENTS.md — Copilot 协作规范
 
 本文件是 GitHub Copilot 在本仓库工作时的行为准则。**每次会话开始先读本文件。**
+> **接手必读**：`docs/HANDOVER.md`（当前功能状态 / 路线图 / 架构铁律 / 踩坑总纲——opencode 或任何新会话先读它，再读 `docs/ARCHITECTURE.md`）。
 
 ## 1. 核心原则（按优先级）
 
