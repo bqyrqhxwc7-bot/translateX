@@ -6,7 +6,7 @@
 class DocumentModel;
 class CommentService;
 
-// .trx 解析器：translateX 自研格式（JSON 容器），实现富文本/图片显示层与批注完整往返。
+// .trx 解析器：Translex 自研格式（JSON 容器），实现富文本/图片显示层与批注完整往返。
 // 格式见 docs/services/file-service.md §3：
 //   { trx, version, meta{sourceFile,sourceFormat,importedAt,font,images[]},
 //     lines[{text, display, rich, imageIds[]}], comments{行号:文本} }

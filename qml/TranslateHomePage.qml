@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Dialogs
 import QtQuick.Window
 import FluentUI
-import TranslateX.Services 1.0
+import Translex.Services 1.0
 
 FluContentPage {
     id: page
@@ -150,13 +150,13 @@ FluContentPage {
                 commentService.setComment(lineNumber, text)
                 statusLabel.text = qsTr("第 %1 行翻译完成").arg(lineNumber + 1)
                 statusIconSource = FluentIcons.Message
-                statusIconColor = Qt.rgba(0.10, 0.55, 0.34, 1)   // Fluent 成功绿
+                statusIconColor = DesignTokens.success
             } else {
                 // 翻译失败：清除该行旧译文批注（避免残留过时/回显原文）
                 commentService.removeComment(lineNumber)
                 statusLabel.text = qsTr("第 %1 行翻译失败").arg(lineNumber + 1)
                 statusIconSource = FluentIcons.Warning
-                statusIconColor = Qt.rgba(0.77, 0.17, 0.11, 1)   // Fluent 错误红
+                statusIconColor = DesignTokens.error
             }
         }
         function onBatchFinished(total, ok, failed) {
@@ -339,7 +339,7 @@ FluContentPage {
         } else {
             statusLabel.text = qsTr("打开失败：%1").arg(path)
             statusIconSource = FluentIcons.Warning
-            statusIconColor = Qt.rgba(0.77, 0.17, 0.11, 1)
+            statusIconColor = DesignTokens.error
         }
         refreshDocStatus()
         chapterService.rebuild()
@@ -945,7 +945,7 @@ FluContentPage {
         FluFrame {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            radius: 6
+            radius: DesignTokens.radiusCard
 
             ListView {
                 id: lineView
@@ -977,7 +977,7 @@ FluContentPage {
                     // 原文 36 + 批注区（自动换行，随内容增高）
                     height: 36 + (row.model.hasComment || page.commentDraftLine === index
                                   ? Math.max(20, commentMeasurer.contentHeight) + 6 : 0)
-                    radius: 4
+                    radius: DesignTokens.radiusControl
                     // 当前行 → 主题色浅背景；多选行 → 主题色更浅；批注行 → 主题色最浅；hover → itemHoverColor；否则透明
                     color: {
                         if (index === page.currentLine) {
@@ -994,7 +994,7 @@ FluContentPage {
                         }
                         if (page.isFindMatch(index)) {
                             // 查找命中：琥珀色浅底，与主题色（当前行/选中/批注）区分
-                            return Qt.rgba(0.95, 0.78, 0.25, FluTheme.dark ? 0.30 : 0.16)
+                            return DesignTokens.findHighlight
                         }
                         return row.hovered ? FluTheme.itemHoverColor : "transparent"
                     }
@@ -1261,8 +1261,8 @@ FluContentPage {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 34
-            radius: 6
-            color: FluTheme.dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(0, 0, 0, 0.03)
+            radius: DesignTokens.radiusCard
+            color: DesignTokens.bgCardAlt
             border.color: FluTheme.dividerColor
 
             RowLayout {
@@ -1291,7 +1291,7 @@ FluContentPage {
                     visible: false
                     width: 8
                     height: 8
-                    radius: 4
+                    radius: DesignTokens.radiusControl
                     color: FluTheme.primaryColor
                     Layout.alignment: Qt.AlignVCenter
                 }
@@ -1340,7 +1340,7 @@ FluContentPage {
             } else {
                 statusLabel.text = qsTr("批注导出失败")
                 statusIconSource = FluentIcons.Warning
-                statusIconColor = Qt.rgba(0.77, 0.17, 0.11, 1)
+                statusIconColor = DesignTokens.error
             }
         }
     }
@@ -1355,7 +1355,7 @@ FluContentPage {
             } else {
                 statusLabel.text = qsTr("批注导入失败")
                 statusIconSource = FluentIcons.Warning
-                statusIconColor = Qt.rgba(0.77, 0.17, 0.11, 1)
+                statusIconColor = DesignTokens.error
             }
         }
     }
@@ -1411,8 +1411,8 @@ FluContentPage {
             id: menuCard
             width: 200
             height: menuCol.implicitHeight + 8
-            radius: 6
-            color: FluTheme.dark ? Qt.rgba(0.16, 0.16, 0.16, 0.98) : Qt.rgba(1, 1, 1, 0.98)
+            radius: DesignTokens.radiusCard
+            color: DesignTokens.bgCard
             border.color: FluTheme.dividerColor
             border.width: 1
             ColumnLayout {
@@ -1460,7 +1460,7 @@ FluContentPage {
                             visible: modelData.key !== "sep"
                             anchors.fill: parent
                             anchors.margins: 1
-                            radius: 4
+                            radius: DesignTokens.radiusControl
                             color: menuRowHover.hovered ? FluTheme.itemHoverColor : "transparent"
                             opacity: parent.menuRowEnabled ? 1 : 0.4
                             HoverHandler { id: menuRowHover }
@@ -1515,8 +1515,8 @@ FluContentPage {
             width: 420
             height: settingsCol.implicitHeight + 32
             anchors.centerIn: parent
-            radius: 8
-            color: FluTheme.dark ? Qt.rgba(0.16, 0.16, 0.16, 0.98) : Qt.rgba(1, 1, 1, 0.98)
+            radius: DesignTokens.radiusCard
+            color: DesignTokens.bgCard
             border.color: FluTheme.dividerColor
             border.width: 1
             ColumnLayout {
@@ -1653,7 +1653,7 @@ FluContentPage {
         // 自绘卡片（透明窗口 + 圆角 + 边框，保持 Fluent 观感）
         Rectangle {
             anchors.fill: parent
-            radius: 8
+            radius: DesignTokens.radiusCard
             border.width: 1
             border.color: FluTheme.dividerColor
             color: FluTheme.dark ? Qt.rgba(0.13, 0.13, 0.13, 0.98) : Qt.rgba(1, 1, 1, 0.98)

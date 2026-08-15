@@ -13,7 +13,7 @@
 ## 2. 使用（QML）
 
 ```qml
-import TranslateX.Services 1.0
+import Translex.Services 1.0
 
 DocumentModel {
     id: docModel

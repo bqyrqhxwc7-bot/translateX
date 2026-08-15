@@ -7,7 +7,7 @@
             "type": "command",
             "command": "cmake.launchTargetPath",
             "args": {
-                "targetName": "translateX"
+                "targetName": "Translex"
             }
         }
     ],

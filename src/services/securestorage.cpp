@@ -46,7 +46,7 @@ QByteArray SecureStorage::deriveKey()
 
 QSettings SecureStorage::settingsHandle()
 {
-    // 固定路径存储：%APPDATA%/translateX/secure.ini
+    // 固定路径存储：%APPDATA%/Translex/secure.ini
     // 不依赖调用方 QSettings 的 org/app 配置，保证读写一致、跨平台稳定
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
     QDir().mkpath(dir);

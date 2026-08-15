@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(translateX VERSION 1.0.0 LANGUAGES CXX)
+project(Translex VERSION 1.0.0 LANGUAGES CXX)
 
-set(TRANSLATEX_VERSION "${PROJECT_VERSION}")
+set(TRANSLEX_VERSION "${PROJECT_VERSION}")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -44,10 +44,10 @@ set(QUAZIP_BZIP2 OFF CACHE BOOL "Enable BZIP2 compression" FORCE)
 add_subdirectory(third_party/quazip)
 
 # QML 版版本号（Widgets 版已迁移至 widgets 分支）
-set(TRANSLATEX_QML_VERSION "1.1.0-qml")
+set(TRANSLEX_QML_VERSION "1.1.0-qml")
 
 # ---- QML 骨架（FluentUI 全量迁移目标）----
-qt_add_executable(translateXqml
+qt_add_executable(translex
     src/main_qml.cpp
     src/services/appguard.cpp
     src/services/appguard.h
@@ -85,28 +85,29 @@ qt_add_executable(translateXqml
     src/services/docxparser.h
 )
 
-qt_add_qml_module(translateXqml
-    URI translateX
+qt_add_qml_module(translex
+    URI Translex
     VERSION 1.0
     RESOURCE_PREFIX /qt/qml
     QML_FILES
         qml/Main.qml
+        qml/DesignTokens.qml
         qml/TranslateHomePage.qml
         qml/TranslateSettingsPage.qml
         qml/ConfigSectionCard.qml
         qml/TranslatePanelContent.qml
 )
 
-target_link_libraries(translateXqml PRIVATE
+target_link_libraries(translex PRIVATE
     Qt6::Quick Qt6::Qml Qt6::Widgets Qt6::Svg Qt6::ShaderTools Qt6::PrintSupport Qt6::Network Qt6::Concurrent
     fluentuiplugin
     QuaZip::QuaZip
 )
-target_compile_definitions(translateXqml PRIVATE
+target_compile_definitions(translex PRIVATE
     FLUENTUI_BUILD_STATIC_LIB
-    TRANSLATEX_VERSION="${TRANSLATEX_QML_VERSION}"
+    TRANSLEX_VERSION="${TRANSLEX_QML_VERSION}"
 )
-target_include_directories(translateXqml PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/FluentUI/src")
+target_include_directories(translex PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/FluentUI/src")
 
 # FluentUI 生成大量 QML cache 源文件，MSVC 并发编译共享 PDB 会触发 C1041；
 # 改用 /Z7 将调试信息嵌入 .obj，避免共享 PDB 竞争。
@@ -138,22 +139,22 @@ if(WIN32)
 
         get_filename_component(QT_QML_SRC_DIR "${QT_BIN_DIR}/../qml" ABSOLUTE)
         if(VCINSTALLDIR)
-            add_custom_command(TARGET translateXqml POST_BUILD
+            add_custom_command(TARGET translex POST_BUILD
                 COMMAND "${CMAKE_COMMAND}" -E env "VCINSTALLDIR=${VCINSTALLDIR}"
-                        "${QT_WINDEPLOYQT_EXECUTABLE}" --no-translations --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml" "$<TARGET_FILE:translateXqml>"
-                COMMAND "${CMAKE_COMMAND}" -E copy_directory "${QT_QML_SRC_DIR}" "$<TARGET_FILE_DIR:translateXqml>/qml"
-                COMMENT "Deploying Qt runtime (incl. all QML modules) for translateXqml"
+                        "${QT_WINDEPLOYQT_EXECUTABLE}" --no-translations --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml" "$<TARGET_FILE:translex>"
+                COMMAND "${CMAKE_COMMAND}" -E copy_directory "${QT_QML_SRC_DIR}" "$<TARGET_FILE_DIR:translex>/qml"
+                COMMENT "Deploying Qt runtime (incl. all QML modules) for translex"
             )
         else()
-            add_custom_command(TARGET translateXqml POST_BUILD
-                COMMAND "${QT_WINDEPLOYQT_EXECUTABLE}" --no-translations --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml" "$<TARGET_FILE:translateXqml>"
-                COMMAND "${CMAKE_COMMAND}" -E copy_directory "${QT_QML_SRC_DIR}" "$<TARGET_FILE_DIR:translateXqml>/qml"
-                COMMENT "Deploying Qt runtime (incl. all QML modules) for translateXqml"
+            add_custom_command(TARGET translex POST_BUILD
+                COMMAND "${QT_WINDEPLOYQT_EXECUTABLE}" --no-translations --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml" "$<TARGET_FILE:translex>"
+                COMMAND "${CMAKE_COMMAND}" -E copy_directory "${QT_QML_SRC_DIR}" "$<TARGET_FILE_DIR:translex>/qml"
+                COMMENT "Deploying Qt runtime (incl. all QML modules) for translex"
             )
         endif()
     endif()
 
-    install(TARGETS translateXqml
+    install(TARGETS translex
         RUNTIME DESTINATION .
     )
 
@@ -161,7 +162,7 @@ if(WIN32)
         install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/"
             DESTINATION .
             FILES_MATCHING
-            PATTERN "translateXqml.exe"
+            PATTERN "translex.exe"
             PATTERN "*.dll")
     endif()
 endif()
@@ -194,11 +195,11 @@ if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
 
-set(CPACK_PACKAGE_NAME "translateX")
+set(CPACK_PACKAGE_NAME "Translex")
 set(CPACK_PACKAGE_VERSION "1.0.0")
 set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}")
-set(CPACK_PACKAGE_INSTALL_DIRECTORY "translateX")
-set(CPACK_NSIS_DISPLAY_NAME "translateX")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "Translex")
+set(CPACK_NSIS_DISPLAY_NAME "Translex")
 set(CPACK_NSIS_ENABLE_UNINSTALL ON)
 set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
 include(CPack)

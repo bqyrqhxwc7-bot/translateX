@@ -147,7 +147,7 @@ signals:
 
 ### 3.3 持久化
 
-- 非敏感：`QSettings`（INI，`%APPDATA%/translateX/config.ini`），键 = `section/key`
+- 非敏感：`QSettings`（INI，`%APPDATA%/Translex/config.ini`），键 = `section/key`
 - `secret`：`SecureStorage`（复用现有机器指纹加密），键 = `section/key`
 - 删除：`set(section, key, undefined)` 恢复默认（可选）
 

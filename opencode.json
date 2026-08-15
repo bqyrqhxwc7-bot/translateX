@@ -1,0 +1,46 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode-go/deepseek-v4-flash",
+  "agent": {
+    "build": {
+      "model": "opencode-go/deepseek-v4-flash",
+      "temperature": 0.3,
+      "permission": {
+        "edit": "allow",
+        "bash": "allow"
+      }
+    },
+    "plan": {
+      "model": "opencode-go/deepseek-v4-pro",
+      "temperature": 0.1,
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      }
+    },
+    "explore": {
+      "model": "opencode-go/deepseek-v4-flash"
+    },
+    "general": {
+      "model": "opencode-go/deepseek-v4-flash"
+    },
+    "review": {
+      "description": "Qt/QML 代码审查：只读审查，绝不改代码；给出结构化问题清单与修复建议",
+      "mode": "subagent",
+      "model": "opencode-go/deepseek-v4-pro",
+      "temperature": 0.1,
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      }
+    },
+    "doc-writer": {
+      "description": "撰写/同步 docs/ 设计文档与 AGENTS.md/HANDOVER.md，保持文档与代码一致",
+      "mode": "subagent",
+      "model": "opencode-go/deepseek-v4-flash",
+      "permission": {
+        "bash": "deny"
+      }
+    }
+  }
+}

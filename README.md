@@ -1,6 +1,6 @@
-# translateX
+# Translex
 
-translateX 是一个基于 Qt 6 的桌面翻译写作工具。它提供了一个带批注/翻译对照的编辑器，支持本地 Ollama、云端翻译服务与网络大模型 API 三种翻译后端，可将翻译结果作为批注写入文档，并支持按行、所选范围、整篇文档或未批注章节批量翻译。
+Translex 是一个基于 Qt 6 的桌面翻译写作工具。它提供了一个带批注/翻译对照的编辑器，支持本地 Ollama、云端翻译服务与网络大模型 API 三种翻译后端，可将翻译结果作为批注写入文档，并支持按行、所选范围、整篇文档或未批注章节批量翻译。
 
 ## 主要功能
 
@@ -63,7 +63,7 @@ translateX 是一个基于 Qt 6 的桌面翻译写作工具。它提供了一个
 
 | 目标 | 说明 |
 | --- | --- |
-| `translateXqml` | QML 版（当前主线，FluentUI + Ribbon） |
+| `translex` | QML 版（当前主线，FluentUI + Ribbon） |
 
 > 旧 QtWidgets 版已拆分到 `widgets` 分支维护，本分支（main）仅保留 QML 版。
 
@@ -83,7 +83,7 @@ cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.5.3/msvc201
 cmake --build build-vs2026-x64 --config Debug
 ```
 
-构建成功后，可执行文件位于 `build-vs2026-x64\Debug\translateXqml.exe`，Qt 运行时会通过 `windeployqt` 自动部署。
+构建成功后，可执行文件位于 `build-vs2026-x64\Debug\translex.exe`，Qt 运行时会通过 `windeployqt` 自动部署。
 
 > 提示：如果构建时出现 “找不到 Qt6”，请检查是否在 `D:\Software\Qt\<版本>\<套件>\` 下存在 `lib\cmake\Qt6\Qt6Config.cmake`，并确保 `CMAKE_PREFIX_PATH` 指向该套件目录。
 
@@ -115,7 +115,7 @@ ctest --test-dir build-vs2026-x64 -C Debug -L perf
 cmake --build build-vs2026-x64 --config Release --target package
 ```
 
-产物生成于 `build-vs2026-x64\translateX-1.0.0.exe`（NSIS 安装程序）与 `translateX-1.0.0.zip`。如果环境中未安装 NSIS，项目会自动回退生成 ZIP 包。
+产物生成于 `build-vs2026-x64\Translex-1.0.0.exe`（NSIS 安装程序）与 `Translex-1.0.0.zip`。如果环境中未安装 NSIS，项目会自动回退生成 ZIP 包。
 
 ## 翻译配置
 
@@ -140,8 +140,8 @@ cmake --build build-vs2026-x64 --config Release --target package
 
 ## 敏感信息与隐私
 
-- **API Key 加密存储**：通过 `SecureStorage`（机器指纹密钥 + 随机盐 + 校验）加密后写入 `%APPDATA%/translateX/secure.ini`，磁盘上不出现明文。
-- **日志**：写入 `%APPDATA%/translateX/` 下的每日日志，不包含文档内容。
+- **API Key 加密存储**：通过 `SecureStorage`（机器指纹密钥 + 随机盐 + 校验）加密后写入 `%APPDATA%/Translex/secure.ini`，磁盘上不出现明文。
+- **日志**：写入 `%APPDATA%/Translex/` 下的每日日志，不包含文档内容。
 - **打包产物**：仅包含可执行文件与运行时依赖，不含任何用户配置。
 
 ## Qt AI 开发工具（skills + MCP）

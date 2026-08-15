@@ -203,7 +203,7 @@ TranslationResult OllamaBackend::generate(
     QUrl url(endpoint + QStringLiteral("/api/generate"));
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
-    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("translateX/1.0"));
+    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Translex/1.0"));
 
     QJsonObject payload;
     payload.insert(QStringLiteral("model"), model);
@@ -362,7 +362,7 @@ QStringList OllamaBackend::fetchModels(QString *errorMessage) const
 
     QUrl url(endpoint + QStringLiteral("/api/tags"));
     QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("translateX/1.0"));
+    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Translex/1.0"));
 
     NetworkCall call(5000);
     call.reply = call.manager.get(request);
@@ -415,7 +415,7 @@ TranslationResult OnlineBackend::translate(
     url.setQuery(query);
 
     QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("translateX/1.0"));
+    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Translex/1.0"));
     request.setRawHeader("Accept", "application/json");
 
     const int timeoutMs = options.timeoutMs > 0 ? qMin(options.timeoutMs, 30000) : 30000;
@@ -502,7 +502,7 @@ TranslationResult NetworkModelBackend::requestChat(
 
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
-    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("translateX/1.0"));
+    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Translex/1.0"));
     if (!options.apiKey().isEmpty()) {
         request.setRawHeader("Authorization", QStringLiteral("Bearer %1").arg(options.apiKey()).toUtf8());
     }

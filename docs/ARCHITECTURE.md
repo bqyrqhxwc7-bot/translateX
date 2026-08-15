@@ -1,9 +1,9 @@
-# translateX 架构文档
+# Translex 架构文档
 
 ## 1. 项目结构
 
 ```
-translateX/
+Translex/
 ├── CMakeLists.txt            # 顶层构建：应用 + 测试 + 打包
 ├── src/
 │   ├── main_qml.cpp          # QML 版入口（当前主线）
@@ -34,7 +34,7 @@ translateX/
 │   ├── services/             # 服务层设计（见 §3 清单）
 │   └── ui/                   # UI 设计（ribbon-toolbar.md、translate-panel.md）
 ├── tests/                    # 单元测试 + 性能基准（11 个目标，见 §4）
-│   ├── CMakeLists.txt        # 共享服务抽为 translateX_services 静态库
+│   ├── CMakeLists.txt        # 共享服务抽为 translex_services 静态库
 │   └── tst_*.cpp
 ├── samples/demo.trx          # .trx 示例文档（含富文本/图片显示层）
 ├── third_party/FluentUI/     # FluentUI 1.7.7（BSD-3-Clause，git 子模块，本地补丁）
@@ -101,7 +101,7 @@ translateX/
 
 ## 4. 测试策略
 
-测试共享源码抽为 `translateX_services` 静态库（`tests/CMakeLists.txt`），避免 11 个目标重复编译 15 个服务源。
+测试共享源码抽为 `translex_services` 静态库（`tests/CMakeLists.txt`），避免 11 个目标重复编译 15 个服务源。
 
 ```powershell
 # 构建 + 运行全部测试（需 Qt bin 在 PATH）
@@ -146,11 +146,11 @@ ctest --test-dir build-vs2026-x64 -C Debug -L perf
 1. 在 `src/services/` 新建 `XxxService`（QObject，Q_INVOKABLE）
 2. 在 `main_qml.cpp` 用 `setContextProperty` 暴露（应用级，NoStack 页面重建不丢状态）
 3. QML 中直接调用
-4. 在 `tests/` 添加对应 `tst_xxx.cpp` 并加入 `translateX_services` 静态库
+4. 在 `tests/` 添加对应 `tst_xxx.cpp` 并加入 `translex_services` 静态库
 
 ## 6. 发布注意事项
 
 - 打包：`cmake --build build-vs2026-x64 --config Release --target package`（NSIS/ZIP）
 - 关闭测试构建：`-DBUILD_TESTING=OFF`
-- 日志/配置写入 `%APPDATA%/sr291/translateX/`，不在安装目录写文件（避免权限问题）
+- 日志/配置写入 `%APPDATA%/sr291/Translex/`，不在安装目录写文件（避免权限问题）
 - FluentUI 为 BSD-3-Clause，项目整体 MIT（见 LICENSE + THIRD_PARTY 说明）

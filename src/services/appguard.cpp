@@ -25,7 +25,7 @@ QString logDirectory()
 QString logFilePathForSession()
 {
     const QString stamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd"));
-    return logDirectory() + QStringLiteral("/translateX-%1.log").arg(stamp);
+    return logDirectory() + QStringLiteral("/Translex-%1.log").arg(stamp);
 }
 
 } // namespace
@@ -39,7 +39,7 @@ AppGuard::AppGuard(QObject *parent)
     : QObject(parent)
 {
     g_logPath = logFilePathForSession();
-    qInfo() << "=== translateX 启动 ===";
+    qInfo() << "=== Translex 启动 ===";
     qInfo() << "应用:" << QCoreApplication::applicationName()
             << "版本:" << QCoreApplication::applicationVersion();
     qInfo() << "Qt 版本:" << qVersion();

@@ -1,4 +1,4 @@
-# translateX Service 架构与插件规范
+# Translex Service 架构与插件规范
 
 > 状态：设计定稿（v1）
 > 本文档定义 service 的**提供方式**，是第三方开发者编写插件的依据。
@@ -14,7 +14,7 @@
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  QML UI (import TranslateX.Services 1.0)        │
+│  QML UI (import Translex.Services 1.0)        │
 ├─────────────────────────────────────────────────┤
 │  服务注册表 ServiceRegistry (单例)              │
 │  ├─ register("ollama", Factory)                │
@@ -131,8 +131,8 @@ public:
     virtual std::shared_ptr<ITranslationBackend> createBackend(const QString &id) = 0;
 };
 
-#define TranslateXPlugin_iid "org.translatex.ITranslationPlugin/1.0"
-Q_DECLARE_INTERFACE(ITranslationPlugin, TranslateXPlugin_iid)
+#define TranslexPlugin_iid "org.translex.ITranslationPlugin/1.0"
+Q_DECLARE_INTERFACE(ITranslationPlugin, TranslexPlugin_iid)
 ```
 
 ### 4.2 插件接入流程
@@ -149,7 +149,7 @@ Q_DECLARE_INTERFACE(ITranslationPlugin, TranslateXPlugin_iid)
 qt_add_library(my_translation_plugin SHARED
     myplugin.cpp
 )
-target_link_libraries(my_translation_plugin PRIVATE translateX_sdk)
+target_link_libraries(my_translation_plugin PRIVATE Translex_sdk)
 ```
 
 ```cpp
@@ -157,7 +157,7 @@ class MyBackend : public ITranslationBackend { /* ... */ };
 
 class MyPlugin : public QObject, public ITranslationPlugin {
     Q_OBJECT
-    Q_PLUGIN_METADATA(IID TranslateXPlugin_iid)
+    Q_PLUGIN_METADATA(IID TranslexPlugin_iid)
     Q_INTERFACES(ITranslationPlugin)
 public:
     QStringList backendIds() const override { return { "translation.mybackend" }; }

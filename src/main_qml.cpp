@@ -22,10 +22,10 @@ Q_IMPORT_QML_PLUGIN(FluentUIPlugin)
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
-    app.setApplicationName(QStringLiteral("translateX"));
-    app.setApplicationVersion(QStringLiteral(TRANSLATEX_VERSION));
+    app.setApplicationName(QStringLiteral("Translex"));
+    app.setApplicationVersion(QStringLiteral(TRANSLEX_VERSION));
     app.setOrganizationName(QStringLiteral("sr291"));
-    app.setOrganizationDomain(QStringLiteral("local.translatex"));
+    app.setOrganizationDomain(QStringLiteral("local.translex"));
 
     // 稳定性：安装全局日志与崩溃诊断
     AppGuard guard(&app);
@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
         Qt::QueuedConnection);
 
     // 注册核心服务（可插拔服务层）
-    qmlRegisterType<DocumentModel>("TranslateX.Services", 1, 0, "DocumentModel");
+    qmlRegisterType<DocumentModel>("Translex.Services", 1, 0, "DocumentModel");
 
     // 翻译服务单例（供 QML 直接调用）
     TranslationService translationService;
@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
     // 暴露主窗口（浮窗 Qt.Tool 经 transientParent 与主窗口关联）：先置空占位，避免 QML
     // 早期求值报"未定义"；load 完成后更新为实际根窗口（FluWindow）
     engine.rootContext()->setContextProperty("mainWindow", (QObject *)nullptr);
-    engine.loadFromModule("translateX", "Main");
+    engine.loadFromModule("Translex", "Main");
 
     const auto roots = engine.rootObjects();
     if (!roots.isEmpty()) {

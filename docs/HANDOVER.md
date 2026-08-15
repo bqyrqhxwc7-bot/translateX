@@ -1,4 +1,4 @@
-# translateX 交接与指挥蓝图
+# Translex 交接与指挥蓝图
 
 > 生成：2026-08-15 · 用途：**opencode / 后续开发者接手时的总纲**
 > 接手顺序：先读本文件 → 再读 [`AGENTS.md`](../AGENTS.md)（协作规范）→ [`ARCHITECTURE.md`](ARCHITECTURE.md)（架构）
@@ -18,7 +18,7 @@ Qt 6 桌面**翻译写作工具**：带批注/翻译对照的编辑器，支持 
 | C++ | C++17；CMake 4.2.1；生成器 **VS 2026 x64**（`build-vs2026-x64/`） |
 | UI | QML + **FluentUI 1.7.7**（子模块 `third_party/FluentUI`） |
 | 第三方 | **QuaZip 1.7.2** + **zlib 1.3.2**（子模块，docx 导入，均**静态**编译） |
-| 测试 | 12 个目标，共享服务抽为 `translateX_services` 静态库 |
+| 测试 | 12 个目标，共享服务抽为 `translex_services` 静态库 |
 
 **关键命令**（Windows PowerShell，工作目录=仓库根）：
 
@@ -94,7 +94,7 @@ src/services/              # ★ 服务层（Q_INVOKABLE，QML 直接调）
   serviceregistry / appguard
 qml/TranslateHomePage.qml  # 核心 UI（1725 行：Ribbon/编辑器/右键菜单/浮窗/设置浮层）
 qml/Main.qml / TranslateSettingsPage.qml / TranslatePanelContent.qml / ConfigSectionCard.qml
-tests/                     # 12 目标；CMakeLists 抽 translateX_services 静态库
+tests/                     # 12 目标；CMakeLists 抽 translex_services 静态库
 samples/demo.trx           # .trx 示例（含富文本/图片显示层）
 samples/demo.docx          # docx 示例（gen_docx.py 生成，纯 stdlib 可再生成）
 docs/                      # 设计文档（services/ + ui/ + ARCHITECTURE.md + 本文件）
@@ -130,7 +130,7 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 
 ### 其他
 - 测试 exe 需 Qt bin 在 PATH（0xc0000135）
-- 构建前停掉运行中的 `translateXqml.exe`（LNK1168 文件占用）
+- 构建前停掉运行中的 `translex.exe`（LNK1168 文件占用）
 - 构建日志/`reconfigure*.log` 等已 gitignore
 
 ## 7. 子模块补丁（⚠️ 保持本地状态，勿提交/勿还原）

@@ -143,8 +143,8 @@ FluScrollablePage {
     // ---------- 卡片：翻译后端 ----------
     Rectangle {
         Layout.fillWidth: true
-        radius: 8
-        color: FluTheme.dark ? Qt.rgba(1, 1, 1, 0.03) : Qt.rgba(1, 1, 1, 1)
+        radius: DesignTokens.radiusCard
+        color: DesignTokens.bgCard
         border.color: FluTheme.dividerColor
         implicitHeight: cardBackendCol.implicitHeight + 32
 
@@ -201,8 +201,8 @@ FluScrollablePage {
     // ---------- 卡片：翻译选项 ----------
     Rectangle {
         Layout.fillWidth: true
-        radius: 8
-        color: FluTheme.dark ? Qt.rgba(1, 1, 1, 0.03) : Qt.rgba(1, 1, 1, 1)
+        radius: DesignTokens.radiusCard
+        color: DesignTokens.bgCard
         border.color: FluTheme.dividerColor
         implicitHeight: cardOptionsCol.implicitHeight + 32
 
@@ -348,8 +348,8 @@ FluScrollablePage {
     // ---------- 卡片：术语表 ----------
     Rectangle {
         Layout.fillWidth: true
-        radius: 8
-        color: FluTheme.dark ? Qt.rgba(1, 1, 1, 0.03) : Qt.rgba(1, 1, 1, 1)
+        radius: DesignTokens.radiusCard
+        color: DesignTokens.bgCard
         border.color: FluTheme.dividerColor
         implicitHeight: cardTermsCol.implicitHeight + 32
 
@@ -439,8 +439,8 @@ FluScrollablePage {
     // ---------- 卡片：显示（原文/批注字号滑动条） ----------
     Rectangle {
         Layout.fillWidth: true
-        radius: 8
-        color: FluTheme.dark ? Qt.rgba(1, 1, 1, 0.03) : Qt.rgba(1, 1, 1, 1)
+        radius: DesignTokens.radiusCard
+        color: DesignTokens.bgCard
         border.color: FluTheme.dividerColor
         implicitHeight: cardDisplayCol.implicitHeight + 32
 
@@ -510,8 +510,8 @@ FluScrollablePage {
     // ---------- 卡片：查找（选项从 Ribbon 移入设置，保持功能区简洁） ----------
     Rectangle {
         Layout.fillWidth: true
-        radius: 8
-        color: FluTheme.dark ? Qt.rgba(1, 1, 1, 0.03) : Qt.rgba(1, 1, 1, 1)
+        radius: DesignTokens.radiusCard
+        color: DesignTokens.bgCard
         border.color: FluTheme.dividerColor
         implicitHeight: cardFindCol.implicitHeight + 32
 

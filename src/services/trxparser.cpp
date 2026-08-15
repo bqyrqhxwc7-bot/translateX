@@ -12,7 +12,9 @@
 
 namespace {
 
-const QString kTrxTag = QStringLiteral("translateX");
+const QString kTrxTag = QStringLiteral("Translex");
+// 旧版 .trx 标记（改名前的 translateX 文档），读取时兼容
+const QString kLegacyTrxTag = QStringLiteral("translateX");
 const int kTrxVersion = 1;
 
 void setError(QString *error, const QString &message)
@@ -72,8 +74,9 @@ bool TrxParser::read(const QString &path, DocumentModel *model,
         return false;
     }
     const QJsonObject root = doc.object();
-    if (root.value(QLatin1String("trx")).toString() != kTrxTag) {
-        setError(error, QStringLiteral("不是 translateX 文档（缺少 trx 标记）"));
+    const QString tag = root.value(QLatin1String("trx")).toString();
+    if (tag != kTrxTag && tag != kLegacyTrxTag) {
+        setError(error, QStringLiteral("不是 Translex 文档（缺少 trx 标记）"));
         return false;
     }
 

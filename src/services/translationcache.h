@@ -25,7 +25,7 @@ public:
     // 磁盘缓存开关（默认开）
     void setDiskCacheEnabled(bool enabled);
     bool diskCacheEnabled() const;
-    // 磁盘缓存目录（%APPDATA%/translateX/cache/）
+    // 磁盘缓存目录（%APPDATA%/Translex/cache/）
     static QString diskCacheDir();
     // 清理超过最大天数的磁盘缓存
     void cleanDiskCache(int maxAgeDays = 14);

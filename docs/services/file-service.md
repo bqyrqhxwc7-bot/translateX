@@ -55,7 +55,7 @@ Line = { text: string          // 编辑层（权威，用户可编辑）
 
 ```json
 {
-  "trx": "translateX",
+  "trx": "Translex",
   "version": 1,
   "meta": {
     "sourceFile": "原文件名或空",
