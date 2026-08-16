@@ -58,7 +58,7 @@ git push origin main
 | **C pdf 导入/导出** | PdfParser：每页一行导入（QPdfDocument）+ 文本页导出（QPdfWriter）；**导出文本层不可提取**（Qt 6.5.3 缺陷，视觉正确） | `services/pdf-service.md` |
 | **D 大文件降级** | 超 5 万行 / 200MB 进受限模式：显示层回退纯文本 + 禁批注编辑/翻译，编辑/查找/章节保留；顶部提示条 | `services/large-file.md` |
 
-**测试**：13 目标全绿（`tst_docx` 7 用例含 `sampleFile` 回归 `samples/demo.docx`；`tst_pdf` 6 用例，样本 `samples/demo.pdf` 为手写干净文本层 PDF；`tst_documentmanager` 含 3 个受限模式用例）。
+**测试**：13 目标全绿（`tst_docx` 7 用例含 `sampleFile` 回归 `samples/demo.docx`；`tst_pdf` 8 用例，样本 `samples/demo.pdf` 为手写干净文本层 PDF；`tst_documentmanager` 含 4 个受限模式用例）。
 
 ## 3. 路线图（下一步从这里开始）
 
@@ -134,6 +134,7 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 - 构建日志/`reconfigure*.log` 等已 gitignore
 - **QPdfWriter 文本层缺陷**（Qt 6.5.3）：导出 PDF 提取乱码（ASCII 重复、CJK 变 ?），视觉正常；测试夹具/往返断言禁止依赖它（详见 `pdf-service.md` §3.0/§6）
 - **火绒安全会挂起新 exe**（行为分析以调试方式创建进程，症状：进程停在 DbgBreakPoint、cdb 附加被拒、`tst_docx`/`tst_pdf` 等含 ZIP/PDF 写入代码的新测试 exe 无法启动）→ 把项目目录加进火绒信任区（白名单）；若某次测试突然“卡死”，先怀疑它
+- **QML pragma Singleton 绑定失效**（Qt 6.5，踩过）：`qml/DesignTokens.qml` 曾用 `pragma Singleton`，运行期全部属性 undefined（绑定从未求值，`NO_CACHEGEN` 也无效），报错形如 `Unable to assign [undefined] to double` 刷屏且探针不执行 → 改为**普通组件 + 页面内实例化**（`DesignTokens { id: tokens }`）；delegate/内联 Window 内不能访问实例 id，须经页面属性中转（`page.rowRadius`/`page.cardRadius` 模式，见 `qml/TranslateHomePage.qml` 头部注释）
 
 ## 7. 子模块补丁（⚠️ 保持本地状态，勿提交/勿还原）
 

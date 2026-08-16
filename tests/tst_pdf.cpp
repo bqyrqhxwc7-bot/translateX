@@ -55,6 +55,28 @@ bool writeSimplePdf(const QString &path)
     return true;
 }
 
+// 空 PDF（0 页）：Catalog + 空 Pages
+QByteArray emptyPdf()
+{
+    QByteArray pdf;
+    pdf += "%PDF-1.4\n";
+    pdf += "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n";
+    pdf += "2 0 obj << /Type /Pages /Kids [] /Count 0 >> endobj\n";
+    pdf += "trailer << /Root 1 0 R /Size 3 >>\n%%EOF\n";
+    return pdf;
+}
+
+bool writeBytes(const QString &path, const QByteArray &data)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly)) {
+        return false;
+    }
+    f.write(data);
+    f.close();
+    return true;
+}
+
 // 渲染页 → 统计非白像素（验证导出 PDF 确实绘制了字形，而非空白页）
 int darkPixelCount(const QString &pdfPath, int page)
 {
@@ -179,7 +201,48 @@ private slots:
         QCOMPARE(doc.load(outPath), QPdfDocument::Error::None);
     }
 
-    // 仓库样本回归：samples/demo.pdf（缺失时自动生成，便于入库）
+    // 空 PDF（0 页）：不崩溃。pdfium 对 0 页文档行为不一（可能拒绝加载），
+    // 断言「成功则 0 行，失败则有错误」两种可接受路径。
+    void readEmptyPdf()
+    {
+        const QString path = m_tempDir.path() + QStringLiteral("/empty_pages.pdf");
+        QVERIFY(writeBytes(path, emptyPdf()));
+        DocumentModel model;
+        QVariantMap meta;
+        QString error;
+        const bool ok = PdfParser::read(path, &model, nullptr, meta, &error);
+        if (ok) {
+            QCOMPARE(model.lineCount(), 0);
+        } else {
+            QVERIFY(!error.isEmpty());
+        }
+    }
+
+    // 密码 PDF：拒绝打开且给出错误（不误读、不崩溃）
+    void readEncryptedPdf()
+    {
+        // 最小加密 PDF（Standard 安全字典）：QPdfDocument 无法用空密码解密
+        QByteArray pdf;
+        pdf += "%PDF-1.4\n";
+        pdf += "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n";
+        pdf += "2 0 obj << /Type /Pages /Kids [] /Count 0 >> endobj\n";
+        pdf += "3 0 obj << /Filter /Standard /V 2 /R 3 /O <00000000000000000000000000000000> "
+               "/U <00000000000000000000000000000000> /P -4 /Length 32 >> endobj\n";
+        pdf += "trailer << /Root 1 0 R /Size 4 /Encrypt 3 0 R >>\n%%EOF\n";
+        const QString path = m_tempDir.path() + QStringLiteral("/locked.pdf");
+        QVERIFY(writeBytes(path, pdf));
+
+        DocumentModel model;
+        QVariantMap meta;
+        QString error;
+        QVERIFY(!PdfParser::read(path, &model, nullptr, meta, &error));
+        QVERIFY(!error.isEmpty());
+        QVERIFY(model.lineCount() == 0);
+    }
+
+    // 仓库样本回归：samples/demo.pdf（缺失时自动生成，便于入库）。
+    // 说明：samples/demo.pdf 已入库，此生成分支仅为首次克隆/样本被删时的兜底；
+    // 样本文件本身是测试夹具（手写干净文本层 PDF），写入源码树属预期行为。
     void sampleFile()
     {
         const QString samplePath = QStringLiteral(SOURCE_DIR) + QStringLiteral("/samples/demo.pdf");

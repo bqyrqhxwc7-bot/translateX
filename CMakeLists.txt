@@ -91,6 +91,7 @@ qt_add_qml_module(translex
     URI Translex
     VERSION 1.0
     RESOURCE_PREFIX /qt/qml
+    NO_CACHEGEN
     QML_FILES
         qml/Main.qml
         qml/DesignTokens.qml

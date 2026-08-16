@@ -22,6 +22,7 @@ private slots:
     void largeFileLimitedModeByLines();
     void largeFileLimitedModeBySize();
     void largeFileLimitedModeResetsOnNew();
+    void limitedModeTrxRoundTripPreservesDisplay();
 
 private:
     QTemporaryDir m_temp;
@@ -194,6 +195,34 @@ void TestDocumentManager::largeFileLimitedModeResetsOnNew()
 
     m_mgr.newDocument({ QStringLiteral("a"), QStringLiteral("b") });
     QVERIFY(!m_model.limitedMode());
+}
+
+// 受限模式下 .trx 保存：显示层数据（rich）不丢（data() 掩蔽仅影响渲染）
+void TestDocumentManager::limitedModeTrxRoundTripPreservesDisplay()
+{
+    m_mgr.newDocument({ QStringLiteral("行一"), QStringLiteral("行二") });
+    m_model.setLineRich(0, QStringLiteral("<b>富文本</b>"));
+    m_model.setLineDisplay(0, QStringLiteral("rich"));
+    m_model.setLimitedMode(true);
+
+    // 受限模式下渲染层对外纯文本，但数据保留
+    QCOMPARE(m_model.data(m_model.index(0), DocumentModel::DisplayRole).toString(),
+             QStringLiteral("plain"));
+    QCOMPARE(m_model.richAt(0), QStringLiteral("<b>富文本</b>"));
+
+    const QString path = m_temp.filePath(QStringLiteral("limited.trx"));
+    QVERIFY(m_mgr.saveFileAs(path));
+
+    // 新实例读回：显示层完整往返
+    DocumentModel model2;
+    CommentService comments2;
+    DocumentManager mgr2;
+    mgr2.setDocument(&model2);
+    mgr2.setComments(&comments2);
+    QVERIFY(mgr2.openFile(path));
+    QCOMPARE(model2.lineCount(), 2);
+    QCOMPARE(model2.richAt(0), QStringLiteral("<b>富文本</b>"));
+    QCOMPARE(model2.displayAt(0), QStringLiteral("rich"));
 }
 
 QTEST_GUILESS_MAIN(TestDocumentManager)

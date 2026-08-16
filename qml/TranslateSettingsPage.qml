@@ -12,6 +12,11 @@ FluScrollablePage {
     title: qsTr("设置")
     launchMode: FluPageType.SingleTask
 
+    // 视觉语言 token 实例（普通组件，见 docs/ui/visual-language.md）
+    DesignTokens {
+        id: tokens
+    }
+
     // ---------- 本地状态 ----------
     property var glossaryMap: ({})          // 术语表（原文 → 标准译文）
     property var backendModel: []           // [{ id, name }]
@@ -143,8 +148,8 @@ FluScrollablePage {
     // ---------- 卡片：翻译后端 ----------
     Rectangle {
         Layout.fillWidth: true
-        radius: DesignTokens.radiusCard
-        color: DesignTokens.bgCard
+        radius: tokens.radiusCard
+        color: tokens.bgCard
         border.color: FluTheme.dividerColor
         implicitHeight: cardBackendCol.implicitHeight + 32
 
@@ -201,8 +206,8 @@ FluScrollablePage {
     // ---------- 卡片：翻译选项 ----------
     Rectangle {
         Layout.fillWidth: true
-        radius: DesignTokens.radiusCard
-        color: DesignTokens.bgCard
+        radius: tokens.radiusCard
+        color: tokens.bgCard
         border.color: FluTheme.dividerColor
         implicitHeight: cardOptionsCol.implicitHeight + 32
 
@@ -348,8 +353,8 @@ FluScrollablePage {
     // ---------- 卡片：术语表 ----------
     Rectangle {
         Layout.fillWidth: true
-        radius: DesignTokens.radiusCard
-        color: DesignTokens.bgCard
+        radius: tokens.radiusCard
+        color: tokens.bgCard
         border.color: FluTheme.dividerColor
         implicitHeight: cardTermsCol.implicitHeight + 32
 
@@ -439,8 +444,8 @@ FluScrollablePage {
     // ---------- 卡片：显示（原文/批注字号滑动条） ----------
     Rectangle {
         Layout.fillWidth: true
-        radius: DesignTokens.radiusCard
-        color: DesignTokens.bgCard
+        radius: tokens.radiusCard
+        color: tokens.bgCard
         border.color: FluTheme.dividerColor
         implicitHeight: cardDisplayCol.implicitHeight + 32
 
@@ -510,8 +515,8 @@ FluScrollablePage {
     // ---------- 卡片：查找（选项从 Ribbon 移入设置，保持功能区简洁） ----------
     Rectangle {
         Layout.fillWidth: true
-        radius: DesignTokens.radiusCard
-        color: DesignTokens.bgCard
+        radius: tokens.radiusCard
+        color: tokens.bgCard
         border.color: FluTheme.dividerColor
         implicitHeight: cardFindCol.implicitHeight + 32
 

@@ -35,12 +35,22 @@ FluContentPage {
     // 翻译服务（主进程提供，context property 全局可见）
     readonly property var translator: translationService
 
+    // 视觉语言 token 实例（普通组件；delegate/内联组件内经页面属性中转）
+    DesignTokens {
+        id: tokens
+    }
+
     // 状态栏图标（0=无图标）
     property int statusIconSource: 0
     property color statusIconColor: FluTheme.fontSecondaryColor
     // 大文件受限模式（>5 万行 / >200MB，DocumentManager 打开时自动置位）：
     // 禁富文本/图片渲染、批注编辑、翻译；编辑/滚动/查找/章节正常
     readonly property bool limited: documentModel.limitedMode
+    // delegate/内联组件内不能直接访问实例 id（tokens），经页面属性中转
+    //（Qt 6.5 的 QML pragma Singleton 在本应用内绑定不生效的替代方案，见 HANDOVER.md §6）
+    readonly property int rowRadius: tokens.radiusControl
+    readonly property color rowFindHighlight: tokens.findHighlight
+    readonly property int cardRadius: tokens.radiusCard   // 浮窗（inline Window）用
     // 翻译进度状态
     property bool translating: false
     property int progressDone: 0
@@ -153,13 +163,13 @@ FluContentPage {
                 commentService.setComment(lineNumber, text)
                 statusLabel.text = qsTr("第 %1 行翻译完成").arg(lineNumber + 1)
                 statusIconSource = FluentIcons.Message
-                statusIconColor = DesignTokens.success
+                statusIconColor = tokens.success
             } else {
                 // 翻译失败：清除该行旧译文批注（避免残留过时/回显原文）
                 commentService.removeComment(lineNumber)
                 statusLabel.text = qsTr("第 %1 行翻译失败").arg(lineNumber + 1)
                 statusIconSource = FluentIcons.Warning
-                statusIconColor = DesignTokens.error
+                statusIconColor = tokens.error
             }
         }
         function onBatchFinished(total, ok, failed) {
@@ -346,7 +356,7 @@ FluContentPage {
         } else {
             statusLabel.text = qsTr("打开失败：%1").arg(path)
             statusIconSource = FluentIcons.Warning
-            statusIconColor = DesignTokens.error
+            statusIconColor = tokens.error
         }
         refreshDocStatus()
         chapterService.rebuild()
@@ -432,7 +442,7 @@ FluContentPage {
     function limitedBlocked() {
         statusLabel.text = qsTr("大文件受限模式：已禁用翻译与批注编辑")
         statusIconSource = FluentIcons.Warning
-        statusIconColor = DesignTokens.warning
+        statusIconColor = tokens.warning
     }
 
     // 翻译当前行
@@ -986,8 +996,8 @@ FluContentPage {
             visible: page.limited
             Layout.fillWidth: true
             Layout.preferredHeight: 30
-            radius: DesignTokens.radiusControl
-            color: DesignTokens.findHighlight
+            radius: tokens.radiusControl
+            color: tokens.findHighlight
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 12
@@ -996,7 +1006,7 @@ FluContentPage {
                 FluIcon {
                     iconSource: FluentIcons.Warning
                     iconSize: 15
-                    color: DesignTokens.warning
+                    color: tokens.warning
                 }
                 FluText {
                     text: qsTr("大文件受限模式：已禁用富文本/图片渲染、批注编辑与翻译（编辑/查找/章节正常）")
@@ -1012,7 +1022,7 @@ FluContentPage {
         FluFrame {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            radius: DesignTokens.radiusCard
+            radius: tokens.radiusCard
 
             ListView {
                 id: lineView
@@ -1044,7 +1054,7 @@ FluContentPage {
                     // 原文 36 + 批注区（自动换行，随内容增高）
                     height: 36 + (row.model.hasComment || page.commentDraftLine === index
                                   ? Math.max(20, commentMeasurer.contentHeight) + 6 : 0)
-                    radius: DesignTokens.radiusControl
+                    radius: page.rowRadius   // 经页面属性中转（delegate 内单例访问缺陷，见上）
                     // 当前行 → 主题色浅背景；多选行 → 主题色更浅；批注行 → 主题色最浅；hover → itemHoverColor；否则透明
                     color: {
                         if (index === page.currentLine) {
@@ -1061,7 +1071,7 @@ FluContentPage {
                         }
                         if (page.isFindMatch(index)) {
                             // 查找命中：琥珀色浅底，与主题色（当前行/选中/批注）区分
-                            return DesignTokens.findHighlight
+                            return page.rowFindHighlight
                         }
                         return row.hovered ? FluTheme.itemHoverColor : "transparent"
                     }
@@ -1331,8 +1341,8 @@ FluContentPage {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 34
-            radius: DesignTokens.radiusCard
-            color: DesignTokens.bgCardAlt
+            radius: tokens.radiusCard
+            color: tokens.bgCardAlt
             border.color: FluTheme.dividerColor
 
             RowLayout {
@@ -1361,7 +1371,7 @@ FluContentPage {
                     visible: false
                     width: 8
                     height: 8
-                    radius: DesignTokens.radiusControl
+                    radius: tokens.radiusControl
                     color: FluTheme.primaryColor
                     Layout.alignment: Qt.AlignVCenter
                 }
@@ -1410,7 +1420,7 @@ FluContentPage {
             } else {
                 statusLabel.text = qsTr("批注导出失败")
                 statusIconSource = FluentIcons.Warning
-                statusIconColor = DesignTokens.error
+                statusIconColor = tokens.error
             }
         }
     }
@@ -1425,7 +1435,7 @@ FluContentPage {
             } else {
                 statusLabel.text = qsTr("批注导入失败")
                 statusIconSource = FluentIcons.Warning
-                statusIconColor = DesignTokens.error
+                statusIconColor = tokens.error
             }
         }
     }
@@ -1481,8 +1491,8 @@ FluContentPage {
             id: menuCard
             width: 200
             height: menuCol.implicitHeight + 8
-            radius: DesignTokens.radiusCard
-            color: DesignTokens.bgCard
+            radius: tokens.radiusCard
+            color: tokens.bgCard
             border.color: FluTheme.dividerColor
             border.width: 1
             ColumnLayout {
@@ -1535,7 +1545,7 @@ FluContentPage {
                             visible: modelData.key !== "sep"
                             anchors.fill: parent
                             anchors.margins: 1
-                            radius: DesignTokens.radiusControl
+                            radius: page.rowRadius   // 经页面属性中转（delegate 内单例访问缺陷）
                             color: menuRowHover.hovered ? FluTheme.itemHoverColor : "transparent"
                             opacity: parent.menuRowEnabled ? 1 : 0.4
                             HoverHandler { id: menuRowHover }
@@ -1590,8 +1600,8 @@ FluContentPage {
             width: 420
             height: settingsCol.implicitHeight + 32
             anchors.centerIn: parent
-            radius: DesignTokens.radiusCard
-            color: DesignTokens.bgCard
+            radius: tokens.radiusCard
+            color: tokens.bgCard
             border.color: FluTheme.dividerColor
             border.width: 1
             ColumnLayout {
@@ -1728,7 +1738,7 @@ FluContentPage {
         // 自绘卡片（透明窗口 + 圆角 + 边框，保持 Fluent 观感）
         Rectangle {
             anchors.fill: parent
-            radius: DesignTokens.radiusCard
+            radius: page.cardRadius   // 内联 Window 组件内经 page 属性中转
             border.width: 1
             border.color: FluTheme.dividerColor
             color: FluTheme.dark ? Qt.rgba(0.13, 0.13, 0.13, 0.98) : Qt.rgba(1, 1, 1, 0.98)

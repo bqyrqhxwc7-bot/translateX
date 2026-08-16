@@ -44,14 +44,16 @@ if(WIN32)
     get_target_property(QT_QMAKE_EXECUTABLE Qt6::qmake IMPORTED_LOCATION)
     get_filename_component(QT_TEST_BIN_DIR "${QT_QMAKE_EXECUTABLE}" DIRECTORY)
     get_filename_component(QT_TEST_PLUGIN_DIR "${QT_TEST_BIN_DIR}/../plugins" ABSOLUTE)
+    # 调试版 Qt DLL 带 d 后缀（Qt6Cored.dll），Release 无；用生成器表达式自适应
+    set(QT_DBG_SUFFIX "$<$<CONFIG:Debug>:d>")
     set(QT_TEST_RUNTIME_DLLS
-        ${QT_TEST_BIN_DIR}/Qt6Cored.dll
-        ${QT_TEST_BIN_DIR}/Qt6Guid.dll
-        ${QT_TEST_BIN_DIR}/Qt6Networkd.dll
-        ${QT_TEST_BIN_DIR}/Qt6Concurrentd.dll
-        ${QT_TEST_BIN_DIR}/Qt6Pdfd.dll
-        ${QT_TEST_BIN_DIR}/Qt6Testd.dll
-        ${QT_TEST_BIN_DIR}/Qt6Core5Compatd.dll
+        "${QT_TEST_BIN_DIR}/Qt6Core${QT_DBG_SUFFIX}.dll"
+        "${QT_TEST_BIN_DIR}/Qt6Gui${QT_DBG_SUFFIX}.dll"
+        "${QT_TEST_BIN_DIR}/Qt6Network${QT_DBG_SUFFIX}.dll"
+        "${QT_TEST_BIN_DIR}/Qt6Concurrent${QT_DBG_SUFFIX}.dll"
+        "${QT_TEST_BIN_DIR}/Qt6Pdf${QT_DBG_SUFFIX}.dll"
+        "${QT_TEST_BIN_DIR}/Qt6Test${QT_DBG_SUFFIX}.dll"
+        "${QT_TEST_BIN_DIR}/Qt6Core5Compat${QT_DBG_SUFFIX}.dll"
     )
     add_custom_command(TARGET translex_services POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${QT_TEST_RUNTIME_DLLS}

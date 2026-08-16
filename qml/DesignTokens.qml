@@ -1,9 +1,11 @@
-pragma Singleton
+// 视觉语言 token（Outlook / Fluent 2 对齐，见 docs/ui/visual-language.md）
+// 规则：新页面一律引用本组件或 FluTheme，禁止硬编码色值/圆角。
+// 注意：不用 pragma Singleton——Qt 6.5 的 QML 单例在本应用内绑定不生效
+//（属性全部 undefined，Qt 缺陷，详见 HANDOVER.md §6）；改为页面内实例化使用，
+// delegate/内联组件内不能直接访问实例 id，需经页面属性（如 page.rowRadius）中转。
 import QtQuick
 import FluentUI
 
-// 视觉语言 token（Outlook / Fluent 2 对齐，见 docs/ui/visual-language.md）
-// 规则：新页面一律引用本单例或 FluTheme，禁止硬编码色值/圆角。
 QtObject {
     // ---- 背景层级 ----
     // 应用/导航背景（FluTheme.windowBackgroundColor 即应用级背景）
