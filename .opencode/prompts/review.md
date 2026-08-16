@@ -24,6 +24,22 @@
 - **安全**：输入校验、敏感信息（SecureStorage/日志）、解析器健壮性（畸形文件）
 - **扩展性**：服务层接口是否为新功能留余地（可插拔模式）、文档（docs/）是否需要预更新
 
+## 0.2 排查工具（bash 白名单已授权，放心用）
+
+红线：**绝不修改源码/仓库文件**（edit deny + 写命令 deny）。以下命令均可直接执行：
+
+- **搜索**：`Select-String -Path ... -Pattern ...`、`findstr ...`、`git grep ...`、`Get-ChildItem -Recurse ...`
+- **跑测试**：`ctest --test-dir build-vs2026-x64 -C Debug -R tst_xxx --output-on-failure`（测试已自包含，无需 Qt PATH）
+- **构建验证**：`cmake --build build-vs2026-x64 --config Debug`
+- **运行应用**：`Start-Process -FilePath "build-vs2026-x64\Debug\translex.exe"`（DLL 已 windeployqt，直接可跑）
+- **进程管理**：`Get-Process translex` / `Stop-Process -Name translex`（截图/运行后清理）
+- **截图**：`pwsh -File .opencode/scripts/screenshot.ps1 -Out <临时路径>.png`
+- **文件信息**：`Get-ChildItem`、`Test-Path`、`Get-Content`、`Get-Item`
+- **git 只读**：`git status/diff/log/show/blame/ls-files/branch/grep`
+- **禁用（写操作）**：Set-Content/Add-Content/Remove-Item/Move-Item/Copy-Item/New-Item/Out-File、`>` 重定向、git add/commit/push/reset/checkout/clean/revert/stash、rm/del/rd
+
+排查节奏：先静态审查 → 需要验证行为就跑单测/构建/启动应用 → 涉及 UI 就截图 → 汇总报告。**用完后清理**（停掉自己启动的应用/测试进程）。
+
 ## 1. 审查流程
 
 1. 先读 `docs/HANDOVER.md` §4 架构铁律 + `AGENTS.md` §2（铁律是最高优先级违规项）
@@ -96,7 +112,8 @@
 
 ## 4. 红线
 
-- **只读**：禁止 edit/write/bash（权限已 deny，若触发说明配置有误）
+- **只读源码**：禁止 edit/write；bash 仅限 §0.2 白名单（写命令已 deny，若触发说明配置有误）
 - **证据驱动**：每条问题必须带 文件:行号 或直接引用代码，无证据不列
 - **不全盘否定**：只报高置信度问题（置信度 <80% 的归入「需验证」）
 - **尊重既有设计**：与设计文档冲突时，指出冲突点而非直接判错
+- **善用工具**：能用测试/构建/截图验证的结论，不要停留在猜测（「需验证」类问题优先用工具证实或证伪）

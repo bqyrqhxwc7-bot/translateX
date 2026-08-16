@@ -71,7 +71,7 @@ ctest --test-dir build-vs2026-x64 -C Debug -L perf
 - **模型切换**：`Ctrl+X 然后 M` 打开模型列表（Go 套餐内 DeepSeek V4 Flash/Pro、GLM 等）。
 - **个人终端偏好**（tui.json 键位等）放全局 `~/.config/opencode/tui.json`，不入仓库；换机器后需重配（重配内容：`prompt.autocomplete.complete` 改 `ctrl+space`，保 Tab 切换 agent）。
 - **视觉 MCP（vision）**：审查 UI 截图/设计稿时用 `vision describe_image <截图路径>`。提供者默认 **opencode-go 的 minimax-m3**（实测支持视觉，自动读 `~/.local/share/opencode/auth.json`，**零 key 配置**）；备选智谱 GLM（key 放 `.opencode/mcp/vision/keys.local.json`，gitignore）或本地 Ollama（`OLLAMA_VISION_MODEL`）。服务器在 `.opencode/mcp/vision/server.mjs`，改后重启 opencode 生效。
-- **review agent**：`Tab` 切到 review 或 `@review`；方法论在 `.opencode/prompts/review.md`（视觉审查 + 架构铁律 + 证据驱动，输出 必须修/建议修/可选 分级）。**UI 审查它会主动截图**（`.opencode/scripts/screenshot.ps1` 启动应用并截主窗口，bash 白名单只开此脚本）；看图方式：模型原生视觉（如切 minimax-m3）直接读图，否则走 vision MCP。截图审查时直接给它截图路径最快。
+- **review agent**：`Tab` 切到 review 或 `@review`；方法论在 `.opencode/prompts/review.md`。**只读红线**：不能改源码（edit deny + 写命令 deny），但可跑审查类命令——`ctest -R` 单测、`cmake --build`、启动应用（Start-Process）、进程管理、`Select-String`/`git grep` 搜索、只读 git、截图脚本（`.opencode/scripts/screenshot.ps1`）。**UI 审查它会主动截图**；看图方式：模型原生视觉（如切 minimax-m3）直接读图，否则走 vision MCP。给它截图路径最快。
 
 ## 7. 工作流程
 
