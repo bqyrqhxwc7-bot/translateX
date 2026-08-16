@@ -166,7 +166,7 @@ private slots:
         QVERIFY(!error.isEmpty());
     }
 
-    // 空文档导出（0 行）不崩溃
+    // 空文档导出（0 行）不崩溃且产出可加载的合法 PDF
     void writeEmpty()
     {
         DocumentModel model;
@@ -175,6 +175,8 @@ private slots:
         const QString outPath = m_tempDir.path() + QStringLiteral("/empty.pdf");
         QVERIFY(PdfParser::write(outPath, &model, nullptr, meta, &error));
         QVERIFY(QFile::exists(outPath));
+        QPdfDocument doc;
+        QCOMPARE(doc.load(outPath), QPdfDocument::Error::None);
     }
 
     // 仓库样本回归：samples/demo.pdf（缺失时自动生成，便于入库）

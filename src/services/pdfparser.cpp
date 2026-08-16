@@ -144,6 +144,7 @@ bool PdfParser::write(const QString &path, const DocumentModel *model,
     }
     painter.end();
 
+    meta.insert(QStringLiteral("sourceFormat"), QStringLiteral("pdf"));
     meta.insert(QStringLiteral("sourceFile"), QFileInfo(path).fileName());
     return true;
 }

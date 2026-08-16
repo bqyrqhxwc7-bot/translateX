@@ -49,7 +49,7 @@ QPdfWriter 导出的 PDF **渲染视觉正确，但文本层不可提取**（QPd
 ### 3.1 流程
 
 1. `QPdfWriter writer(path)`：A4 + 边距 20mm（`setPageSize(QPageSize(QPageSize::A4))`、`setPageMargins(QMarginsF(20,20,20,20), QPageLayout::Millimeter)`）、`setTitle/setCreator("Translex")`
-2. `QPainter painter(&writer)`；字体 `Microsoft YaHei 12pt`（Windows 中文字体稳定）
+2. `QPainter painter(&writer)`；字体 **DengXian 12pt**（须为可嵌入 TTF，见 §3.2）
 3. 逐行绘制：`QFontMetrics::boundingRect(0,0,width,INT_MAX, Qt::TextWordWrap, line)` 求折行高度 `h`
    - `y + h > writer.height()` → `writer.newPage()`，y 归零
    - `painter.drawText(QRect(0, y, width, h), Qt::TextWordWrap, line)`；`y += h + 4`

@@ -596,7 +596,13 @@ FluContentPage {
     function goPrevComment() { gotoComment(-1) }
     function goNextComment() { gotoComment(1) }
     function exportComments() { exportCommentsDialog.open() }
-    function importComments() { importCommentsDialog.open() }
+    function importComments() {
+        if (page.limited) {
+            page.limitedBlocked()
+            return
+        }
+        importCommentsDialog.open()
+    }
 
     // ---------- 查找/替换（FindService） ----------
     function doFindNext(query) {
@@ -1248,7 +1254,8 @@ FluContentPage {
                         anchors.leftMargin: 12 + 44 + 10   // 对齐原文文本（行号宽 + 间距）
                         anchors.rightMargin: 12
                         height: Math.max(20, commentMeasurer.contentHeight)
-                        property bool commentEditing: page.currentLine === index
+                        property bool commentEditing: !page.limited
+                            && page.currentLine === index
                             && (row.model.hasComment || page.commentDraftLine === index)
 
                         // 换行高度测量（透明度 0，始终参与布局；编辑/只读共用）
@@ -1288,6 +1295,8 @@ FluContentPage {
                             color: FluTheme.accentColor
                             wrapMode: Text.Wrap
                             selectByMouse: true
+                            // 受限模式兜底只读（commentEditing 已挡编辑态，双保险）
+                            readOnly: page.limited
                             onTextChanged: {
                                 if (commentBox.commentEditing) {
                                     commentService.setComment(index, text)

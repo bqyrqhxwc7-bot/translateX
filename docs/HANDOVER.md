@@ -18,7 +18,7 @@ Qt 6 桌面**翻译写作工具**：带批注/翻译对照的编辑器，支持 
 | C++ | C++17；CMake 4.2.1；生成器 **VS 2026 x64**（`build-vs2026-x64/`） |
 | UI | QML + **FluentUI 1.7.7**（子模块 `third_party/FluentUI`） |
 | 第三方 | **QuaZip 1.7.2** + **zlib 1.3.2**（子模块，docx 导入，均**静态**编译） |
-| 测试 | 12 个目标，共享服务抽为 `translex_services` 静态库 |
+| 测试 | 13 个目标，共享服务抽为 `translex_services` 静态库 |
 
 **关键命令**（Windows PowerShell，工作目录=仓库根）：
 
@@ -58,7 +58,7 @@ git push origin main
 | **C pdf 导入/导出** | PdfParser：每页一行导入（QPdfDocument）+ 文本页导出（QPdfWriter）；**导出文本层不可提取**（Qt 6.5.3 缺陷，视觉正确） | `services/pdf-service.md` |
 | **D 大文件降级** | 超 5 万行 / 200MB 进受限模式：显示层回退纯文本 + 禁批注编辑/翻译，编辑/查找/章节保留；顶部提示条 | `services/large-file.md` |
 
-**测试**：13 目标全绿（`tst_docx` 7 用例含 `sampleFile` 回归 `samples/demo.docx`；`tst_pdf` 8 用例，样本 `samples/demo.pdf` 为手写干净文本层 PDF；`tst_documentmanager` 含 3 个受限模式用例）。
+**测试**：13 目标全绿（`tst_docx` 7 用例含 `sampleFile` 回归 `samples/demo.docx`；`tst_pdf` 6 用例，样本 `samples/demo.pdf` 为手写干净文本层 PDF；`tst_documentmanager` 含 3 个受限模式用例）。
 
 ## 3. 路线图（下一步从这里开始）
 
@@ -94,7 +94,7 @@ src/services/              # ★ 服务层（Q_INVOKABLE，QML 直接调）
   serviceregistry / appguard
 qml/TranslateHomePage.qml  # 核心 UI（1725 行：Ribbon/编辑器/右键菜单/浮窗/设置浮层）
 qml/Main.qml / TranslateSettingsPage.qml / TranslatePanelContent.qml / ConfigSectionCard.qml
-tests/                     # 12 目标；CMakeLists 抽 translex_services 静态库
+tests/                     # 13 目标；CMakeLists 抽 translex_services 静态库
 samples/demo.trx           # .trx 示例（含富文本/图片显示层）
 samples/demo.docx          # docx 示例（gen_docx.py 生成，纯 stdlib 可再生成）
 docs/                      # 设计文档（services/ + ui/ + ARCHITECTURE.md + 本文件）
