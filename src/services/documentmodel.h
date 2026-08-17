@@ -75,6 +75,10 @@ public:
     Q_INVOKABLE bool canRedo() const;
     Q_INVOKABLE void clearUndoHistory();
 
+    // 文档统计（迭代4）：一次性全量遍历的快照，仅打开/翻译完成/批注变更时调用。
+    // 返回 { lines, nonEmptyLines, chars, words, comments, richLines, imageLines }。
+    Q_INVOKABLE QVariantMap stats() const;
+
 signals:
     void lineCountChanged();
     void undoStackChanged();   // 撤销/重做可用性变化（供 UI 刷新按钮）

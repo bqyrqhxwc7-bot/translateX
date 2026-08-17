@@ -200,6 +200,11 @@ FluContentPage {
         page.findCaseSensitive = Boolean(configService.get("ui", "findCaseSensitive"))
         page.findWholeWord = Boolean(configService.get("ui", "findWholeWord"))
         page.findFuzzy = Boolean(configService.get("ui", "findFuzzy"))
+        // 自动保存（迭代4）：配置开关同步到 DocumentManager；启动时检测崩溃残留
+        documentManager.setAutosaveEnabled(Boolean(configService.get("ui", "autosaveEnabled")))
+        if (documentManager.hasAutosave()) {
+            restoreAutosaveDialog.open()
+        }
         // 浮窗位置在 floatWindow.Component.onCompleted 中恢复（真实窗口屏幕坐标）
         // 翻译选项已由 TranslationService 从 ConfigService 持久化恢复，无需在此强制覆盖
     }
@@ -227,6 +232,7 @@ FluContentPage {
                 statusIconSource = FluentIcons.Warning
                 statusIconColor = tokens.error
             }
+            refreshDocStatus()
         }
         function onBatchFinished(total, ok, failed) {
             page.translating = false
@@ -444,10 +450,13 @@ FluContentPage {
         chapterService.rebuild()
     }
 
-    // 刷新状态栏：文档名 + 修改标记
+    // 刷新状态栏：文档名 + 修改标记 + 文档统计（迭代4）
     function refreshDocStatus() {
         documentNameLabel.text = documentManager.documentName()
         dirtyDot.visible = documentManager.isDirty()
+        const s = documentModel.stats()
+        docStatsLabel.text = qsTr("共 %1 行 · %2 字 · %3 条批注")
+                             .arg(s.lines).arg(s.chars).arg(s.comments)
     }
 
     // 最近文件菜单重建（打开文件后自动记录）
@@ -1555,6 +1564,12 @@ FluContentPage {
                     color: FluTheme.fontPrimaryColor
                 }
                 FluText {
+                    id: docStatsLabel
+                    text: ""
+                    font.pixelSize: 12
+                    color: FluTheme.fontTertiaryColor
+                }
+                FluText {
                     text: currentLine >= 0 ? qsTr("当前行 %1").arg(currentLine + 1) : ""
                     font.pixelSize: 12
                     color: FluTheme.fontTertiaryColor
@@ -1620,6 +1635,25 @@ FluContentPage {
         negativeText: qsTr("取消")
         positiveText: qsTr("新建")
         onPositiveClicked: doNewDocument()
+    }
+
+    // ---------- 崩溃恢复（自动保存，迭代4） ----------
+    FluContentDialog {
+        id: restoreAutosaveDialog
+        title: qsTr("恢复未保存的更改")
+        message: qsTr("检测到上次未保存的更改，是否恢复？")
+        negativeText: qsTr("丢弃")
+        positiveText: qsTr("恢复")
+        onNegativeClicked: documentManager.discardAutosave()
+        onPositiveClicked: {
+            if (documentManager.restoreAutosave()) {
+                statusLabel.text = qsTr("已恢复上次未保存的更改")
+                statusIconSource = FluentIcons.Message
+                statusIconColor = tokens.success
+            }
+            refreshDocStatus()
+            chapterService.rebuild()
+        }
     }
 
     // ---------- 行右键菜单（页面内浮层：NoStack 下 Popup 不可用） ----------

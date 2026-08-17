@@ -54,13 +54,16 @@ git push origin main
 | 浮窗 | 真独立 Window（Qt.Tool+Frameless）、位置记忆、启动显示 | `ui/translate-panel.md` |
 | 设置页 | schema 驱动（`ui.json`），字号滑条、查找开关、浮窗开关 | `services/config-service.md` |
 | TTS 朗读 | **迭代3**：独立 TextToSpeechService（朗读选中行/选区、语速、停止；跨平台 Qt6TextToSpeech，无模块/引擎优雅降级） | `services/text-to-speech.md` |
+| 文档统计 | **迭代4**：`DocumentModel::stats()`（行/非空行/字/词/批注/富文本/图片行），状态栏「共 N 行 · M 字 · K 条批注」 | `services/iteration4-stats-autosave-glossary.md` |
+| 自动保存 | **迭代4**：dirty 时每 60s 写 `%APPDATA%/Translex/autosave/<名>.autosave.trx`（完整往返含批注）；正常保存/打开/新建后清理；启动检测崩溃残留 → 恢复/丢弃弹窗；受限模式与 `ui.autosaveEnabled` 关闭时跳过 | `services/iteration4-stats-autosave-glossary.md` |
+| 术语自动提取 | **迭代4**：`TermGlossary::extractCandidates`（英文高频词 ≥3 次、停用词/已有术语过滤、频率降序）；设置页「从文档提取」弹窗勾选加入 | `services/iteration4-stats-autosave-glossary.md` |
 | **A3 .trx** | 显示层（富文本/图片）完整往返、编辑即降级 | `services/file-service.md` |
 | **B docx 导入** | DocxParser：段落→行 + 粗/斜/颜色/字号/字体 + 图片(data URI) | `services/file-service.md` |
 | **B2 docx 导出批注** | DocxParser::write：原文 + 译文批注，`docxCommentStyle: inline`（黄色高亮）/`native`（Word 原生批注，可读回） | `services/docx-comment-export.md` |
 | **C pdf 导入/导出** | PdfParser：每页一行导入（QPdfDocument）+ 文本页导出（QPdfWriter）；**导出文本层不可提取**（Qt 6.5.3 缺陷，视觉正确） | `services/pdf-service.md` |
 | **D 大文件降级** | 超 5 万行 / 200MB 进受限模式：显示层回退纯文本 + 禁批注编辑/翻译，编辑/查找/章节保留；顶部提示条 | `services/large-file.md` |
 
-**测试**：14 目标全绿（`tst_docx` 10 用例：7 导入 + 3 导出（writeInline/writeNative/roundTrip，批注=译文往返保真）；`tst_pdf` 9 用例；`tst_documentmanager` 含 4 个受限模式用例；`tst_texttospeech` 4 用例（无 TTS 引擎环境 graceful 通过））。
+**测试**：14 目标全绿（`tst_docx` 10 用例：7 导入 + 3 导出（writeInline/writeNative/roundTrip，批注=译文往返保真）；`tst_pdf` 9 用例；`tst_documentmanager` 含 4 个受限模式 + 6 个自动保存用例；`tst_texttospeech` 4 用例（无 TTS 引擎环境 graceful 通过）；`tst_documentmodel` 含 stats 用例；`tst_quality` 含 extractCandidates 用例）。
 
 ## 3. 路线图（下一步从这里开始）
 
@@ -68,11 +71,13 @@ git push origin main
 | --- | --- | --- |
 | ~~迭代2~~ | ~~docx 导出批注（①译文内联高亮 ②Word 原生批注，做成选项 `docxCommentStyle: inline/native`）~~ | ✅ 完成（2026-08-17，见 `services/docx-comment-export.md`） |
 | ~~迭代3~~ | ~~TTS 朗读（Qt6TextToSpeech 已装，Windows SAPI 系统语音）~~ | ✅ 完成（2026-08-17，见 `services/text-to-speech.md`；用户确认：选中行+选区朗读、语速+停止、语音跟随系统） |
-| 迭代4 | 翻译历史面板、文档统计、Markdown 导出、术语自动提取、首启向导、自动保存 | 非阻塞 |
+| ~~迭代4（部分）~~ | ~~文档统计、自动保存、术语自动提取~~ | ✅ 完成（2026-08-17，见 `services/iteration4-stats-autosave-glossary.md`） |
+| 迭代4（剩余） | 翻译历史面板、Markdown 导出、首启向导 | 非阻塞 |
 | 候选 | pdf 导出文本层修复（Qt 升级后复查）、.trx 图片 external 降级（>1MB 转外置）、docx 导出 `Original` 纯原文模式 | 非阻塞 |
 
 > 迭代2（2026-08-17 完成）：docx 导出批注（`DocxParser::write` + `docxCommentStyle` 配置 + tst_docx 3 个新用例）。
 > 迭代3（2026-08-17 完成）：TTS 朗读（独立 `TextToSpeechService`，`TRANSLEX_HAS_TTS` 条件编译，无模块/引擎优雅降级；工具栏/右键菜单入口；tst_texttospeech 4 用例）。
+> 迭代4 部分（2026-08-17 完成）：文档统计（`DocumentModel::stats` + 状态栏）、自动保存（60s tick + `.autosave.trx` + 崩溃恢复弹窗 + `ui.autosaveEnabled`）、术语自动提取（`TermGlossary::extractCandidates` + 设置页弹窗勾选；仅英文，中文暂不支持）。
 
 > 迭代1（2026-08-17 完成）：P0 回归修复（backendCombo 残留引用）、A2 句边界分块（`sentenceAwareChunking`）、B1 后端连接测试（`testBackendConnection`）、B2 拖放打开、B3 快捷键总览（`?`）、A1 质量自检复核面板（qualityWarning 汇总+跳转）、设置页语言选择 Flow 换行修复。
 > 每项任务实施蓝图见 §8；**开工前先读对应 `docs/services/` 文档，遵循 AGENTS.md**。

@@ -23,6 +23,7 @@ private slots:
     void undoRedoTextEdit();
     void undoRedoInsertRemove();
     void undoHistoryClearedOnSetLines();
+    void stats();   // 迭代4：文档统计
 };
 
 void TestDocumentModel::init()
@@ -231,6 +232,38 @@ void TestDocumentModel::undoHistoryClearedOnSetLines()
     model.setLines({ "x" });
     QVERIFY(!model.canUndo());
     QVERIFY(!model.canRedo());
+}
+
+void TestDocumentModel::stats()
+{
+    DocumentModel model;
+    model.setLines({
+        "hello world",
+        "  ",
+        "中文 文本 mixed",
+        "line four",
+    });
+    model.setComment(0, "译文一");
+    model.setComment(3, "译文二");
+    model.setLineDisplay(2, "rich");
+    model.setLineDisplay(3, "image");
+
+    const QVariantMap s = model.stats();
+    QCOMPARE(s.value("lines").toInt(), 4);
+    QCOMPARE(s.value("nonEmptyLines").toInt(), 3);   // 第 2 行全空白
+    // chars：非空白字符数（"hello world"=10，"中文 文本 mixed"=9，"line four"=8）
+    QCOMPARE(s.value("chars").toInt(), 27);
+    // words：空白分词数（2 + 0 + 3 + 2 = 7）
+    QCOMPARE(s.value("words").toInt(), 7);
+    QCOMPARE(s.value("comments").toInt(), 2);
+    QCOMPARE(s.value("richLines").toInt(), 1);
+    QCOMPARE(s.value("imageLines").toInt(), 1);
+
+    // 空模型
+    DocumentModel empty;
+    const QVariantMap e = empty.stats();
+    QCOMPARE(e.value("lines").toInt(), 0);
+    QCOMPARE(e.value("comments").toInt(), 0);
 }
 
 QTEST_GUILESS_MAIN(TestDocumentModel)

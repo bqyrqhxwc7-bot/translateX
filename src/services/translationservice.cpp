@@ -6,6 +6,7 @@
 #include <QDebug>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QVariantList>
 
 #include "serviceregistry.h"
 #include "translationbackend.h"
@@ -202,6 +203,21 @@ void TranslationService::persistGlossary()
 QVariantMap TranslationService::glossary() const
 {
     return m_glossary.toMap();
+}
+
+QVariantList TranslationService::extractTermCandidates(const QStringList &lines,
+                                                       int minFreq, int maxCount)
+{
+    const auto candidates = m_glossary.extractCandidates(lines, minFreq, maxCount);
+    QVariantList out;
+    out.reserve(candidates.size());
+    for (const auto &pair : candidates) {
+        QVariantMap item;
+        item.insert(QStringLiteral("word"), pair.first);
+        item.insert(QStringLiteral("count"), pair.second);
+        out.append(item);
+    }
+    return out;
 }
 
 void TranslationService::setQualityGateEnabled(bool enabled)

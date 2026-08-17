@@ -45,6 +45,10 @@ public:
     Q_INVOKABLE void setGlossary(const QVariantMap &terms);
     Q_INVOKABLE void clearGlossary();
     Q_INVOKABLE QVariantMap glossary() const;
+    // 术语自动提取（迭代4）：从行文本提取高频英文词候选（频率降序，过滤停用词/已有术语），
+    // 返回 [{word, count}]；中文分词暂不支持（见 docs/services/iteration4-stats-autosave-glossary.md §3）
+    Q_INVOKABLE QVariantList extractTermCandidates(const QStringList &lines,
+                                                   int minFreq = 3, int maxCount = 20);
     // 质量：自检开关
     Q_INVOKABLE void setQualityGateEnabled(bool enabled);
     Q_INVOKABLE bool qualityGateEnabled() const;

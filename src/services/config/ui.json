@@ -78,10 +78,19 @@
     {
       "key": "findFuzzy",
       "displayName": "模糊查找",
-      "description": "查询字符按顺序出现即匹配（子序列模糊匹配），不要求连续",
+      "description": "查找字符按顺序部分匹配（忽略中文分词）？需要澄清",
       "type": "bool",
       "default": false,
       "group": "查找"
+    },
+    {
+      "key": "autosaveEnabled",
+      "displayName": "自动保存",
+      "description": "编辑时每 60 秒自动保存到应用数据目录（崩溃后可恢复；受限模式/大文件自动禁用）",
+      "type": "bool",
+      "default": true,
+      "group": "自动保存"
     }
   ]
 }
+

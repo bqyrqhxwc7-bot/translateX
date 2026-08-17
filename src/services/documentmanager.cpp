@@ -1,10 +1,12 @@
 #include "documentmanager.h"
 
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QTimer>
 
 #include "documentmodel.h"
 #include "commentservice.h"
@@ -25,6 +27,11 @@ bool isDocx(const QString &path)
 bool isPdf(const QString &path)
 {
     return QFileInfo(path).suffix().compare(QLatin1String("pdf"), Qt::CaseInsensitive) == 0;
+}
+// 自动保存文件标记（避免对 autosave 文件本身再自动保存）
+bool isAutosavePath(const QString &path)
+{
+    return QFileInfo(path).fileName().endsWith(QLatin1String(".autosave.trx"));
 }
 } // namespace
 
@@ -51,6 +58,10 @@ void DocumentManager::applyLargeFileLimit(const QString &path)
 DocumentManager::DocumentManager(QObject *parent)
     : QObject(parent)
 {
+    m_autosaveTimer = new QTimer(this);
+    m_autosaveTimer->setInterval(60 * 1000);
+    connect(m_autosaveTimer, &QTimer::timeout, this, &DocumentManager::onAutosaveTick);
+    m_autosaveTimer->start();
 }
 
 void DocumentManager::setDocument(DocumentModel *model)
@@ -113,6 +124,7 @@ bool DocumentManager::newDocument(const QStringList &initialLines)
         m_comments->clear();
     }
     m_suppressDirty = false;
+    clearAutosaveFor(m_path);
     m_path.clear();
     m_meta.clear();
     if (m_model) {
@@ -141,8 +153,12 @@ bool DocumentManager::openFile(const QString &path)
             emit operationFailed(error.isEmpty() ? QStringLiteral("打开 .trx 文件失败") : error);
             return false;
         }
+        clearAutosaveFor(m_path);
         m_path = path;
         setDirty(false);
+        if (isAutosavePath(path)) {
+            QFile::remove(path);
+        }
         emit documentChanged(m_path);
         applyLargeFileLimit(path);
         addRecentFile(path);
@@ -160,8 +176,12 @@ bool DocumentManager::openFile(const QString &path)
             emit operationFailed(error.isEmpty() ? QStringLiteral("导入 .docx 失败") : error);
             return false;
         }
+        clearAutosaveFor(m_path);
         m_path = path;
         setDirty(false);
+        if (isAutosavePath(path)) {
+            QFile::remove(path);
+        }
         emit documentChanged(m_path);
         applyLargeFileLimit(path);
         addRecentFile(path);
@@ -179,8 +199,12 @@ bool DocumentManager::openFile(const QString &path)
             emit operationFailed(error.isEmpty() ? QStringLiteral("导入 .pdf 失败") : error);
             return false;
         }
+        clearAutosaveFor(m_path);
         m_path = path;
         setDirty(false);
+        if (isAutosavePath(path)) {
+            QFile::remove(path);
+        }
         emit documentChanged(m_path);
         applyLargeFileLimit(path);
         addRecentFile(path);
@@ -266,6 +290,102 @@ void DocumentManager::clearRecentFiles()
     emit recentFilesChanged();
 }
 
+// ---- 自动保存（迭代4）----
+
+void DocumentManager::setAutosaveEnabled(bool enabled)
+{
+    m_autosaveEnabled = enabled;
+    if (enabled) {
+        m_autosaveTimer->start();
+    } else {
+        m_autosaveTimer->stop();
+    }
+}
+
+QString DocumentManager::sanitizeFileName(QString name)
+{
+    name.replace(QRegularExpression(QStringLiteral(R"([\\/:*?"<>|])")), QStringLiteral("_"));
+    if (name.isEmpty()) {
+        name = QStringLiteral("未命名");
+    }
+    return name;
+}
+
+QString DocumentManager::autosaveDir()
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation)
+                        + QStringLiteral("/autosave");
+    QDir().mkpath(dir);
+    return dir;
+}
+
+QString DocumentManager::autosavePathFor(const QString &path)
+{
+    const QString base = path.isEmpty() ? QStringLiteral("未命名")
+                                        : QFileInfo(path).completeBaseName();
+    return autosaveDir() + QLatin1Char('/') + sanitizeFileName(base)
+           + QStringLiteral(".autosave.trx");
+}
+
+QString DocumentManager::autosavePath() const
+{
+    return autosavePathFor(m_path);
+}
+
+bool DocumentManager::hasAutosave() const
+{
+    const QDir dir(autosaveDir());
+    const QStringList files = dir.entryList(QStringList() << QStringLiteral("*.autosave.trx"),
+                                            QDir::Files);
+    return !files.isEmpty();
+}
+
+bool DocumentManager::restoreAutosave()
+{
+    const QDir dir(autosaveDir());
+    const QStringList files = dir.entryList(QStringList() << QStringLiteral("*.autosave.trx"),
+                                            QDir::Files, QDir::Time);
+    if (files.isEmpty()) {
+        return false;
+    }
+    return openFile(dir.absoluteFilePath(files.first()));
+}
+
+void DocumentManager::discardAutosave()
+{
+    const QDir dir(autosaveDir());
+    const QStringList files = dir.entryList(QStringList() << QStringLiteral("*.autosave.trx"),
+                                            QDir::Files);
+    for (const QString &f : files) {
+        QFile::remove(dir.absoluteFilePath(f));
+    }
+}
+
+void DocumentManager::clearAutosaveFor(const QString &path)
+{
+    // 空路径 = 未命名文档（autosavePathFor 内部映射为“未命名”）
+    QFile::remove(autosavePathFor(path));
+}
+
+void DocumentManager::onAutosaveTick()
+{
+    if (!m_autosaveEnabled || !m_dirty || !m_model) {
+        return;
+    }
+    // 受限模式（大文件）禁用自动保存，避免反复写盘
+    if (m_model->limitedMode()) {
+        return;
+    }
+    // 自动保存文件本身不再二次自动保存
+    if (isAutosavePath(m_path)) {
+        return;
+    }
+    QString error;
+    if (!TrxParser::write(autosavePath(), m_model, m_comments, m_meta, &error)) {
+        emit operationFailed(error.isEmpty() ? QStringLiteral("自动保存失败") : error);
+    }
+}
+
 bool DocumentManager::saveFile()
 {
     if (m_path.isEmpty()) {
@@ -294,8 +414,12 @@ bool DocumentManager::writeDocument(const QString &path)
             emit operationFailed(error.isEmpty() ? QStringLiteral("保存 .trx 文件失败") : error);
             return false;
         }
+        clearAutosaveFor(m_path);
         m_path = path;
         setDirty(false);
+        if (isAutosavePath(path)) {
+            QFile::remove(path);
+        }
         emit documentChanged(m_path);
         return true;
     }
@@ -309,8 +433,12 @@ bool DocumentManager::writeDocument(const QString &path)
             emit operationFailed(error.isEmpty() ? QStringLiteral("保存 .docx 文件失败") : error);
             return false;
         }
+        clearAutosaveFor(m_path);
         m_path = path;
         setDirty(false);
+        if (isAutosavePath(path)) {
+            QFile::remove(path);
+        }
         emit documentChanged(m_path);
         return true;
     }
@@ -322,8 +450,12 @@ bool DocumentManager::writeDocument(const QString &path)
             emit operationFailed(error.isEmpty() ? QStringLiteral("导出 .pdf 失败") : error);
             return false;
         }
+        clearAutosaveFor(m_path);
         m_path = path;
         setDirty(false);
+        if (isAutosavePath(path)) {
+            QFile::remove(path);
+        }
         emit documentChanged(m_path);
         return true;
     }
@@ -350,6 +482,7 @@ bool DocumentManager::writeDocument(const QString &path)
         m_comments->exportToFile(path + QStringLiteral(".comments.json"));
     }
 
+    clearAutosaveFor(m_path);
     m_path = path;
     setDirty(false);
     emit documentChanged(m_path);

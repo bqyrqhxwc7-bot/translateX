@@ -2,6 +2,7 @@
 #include <QTemporaryDir>
 #include <QFile>
 #include <QSignalSpy>
+#include <QStandardPaths>
 
 #include "services/documentmanager.h"
 #include "services/documentmodel.h"
@@ -23,16 +24,28 @@ private slots:
     void largeFileLimitedModeBySize();
     void largeFileLimitedModeResetsOnNew();
     void limitedModeTrxRoundTripPreservesDisplay();
+    // 迭代4：自动保存
+    void autosaveWritesFileOnDirty();
+    void autosaveClearedOnSave();
+    void autosaveDisabledSkips();
+    void autosaveLimitedModeSkips();
+    void autosaveRestoreRoundTrip();
+    void autosaveDiscardRemoves();
 
 private:
     QTemporaryDir m_temp;
     DocumentModel m_model;
     CommentService m_comments;
     DocumentManager m_mgr;
+    // 触发自动保存 tick（QTimer 60s 无法在测试中等待，直接调用私有槽）
+    void fireAutosaveTick() { QVERIFY(QMetaObject::invokeMethod(&m_mgr, "onAutosaveTick")); }
 };
 
 void TestDocumentManager::initTestCase()
 {
+    // 自动保存/recent 落盘在 AppConfigLocation：测试模式重定向到 .qttest 目录，
+    // 避免污染真实用户数据目录
+    QStandardPaths::setTestModeEnabled(true);
     QVERIFY(m_temp.isValid());
     m_mgr.setDocument(&m_model);
     m_mgr.setComments(&m_comments);
@@ -223,6 +236,102 @@ void TestDocumentManager::limitedModeTrxRoundTripPreservesDisplay()
     QCOMPARE(model2.lineCount(), 2);
     QCOMPARE(model2.richAt(0), QStringLiteral("<b>富文本</b>"));
     QCOMPARE(model2.displayAt(0), QStringLiteral("rich"));
+}
+
+// ---- 迭代4：自动保存 ----
+
+// dirty 时 tick 生成 .autosave.trx（含批注），未修改时不再写
+void TestDocumentManager::autosaveWritesFileOnDirty()
+{
+    m_mgr.discardAutosave();
+    m_mgr.newDocument({ QStringLiteral("alpha"), QStringLiteral("beta") });
+    m_comments.setComment(0, QStringLiteral("译文甲"));
+
+    m_model.updateLineText(1, QStringLiteral("beta changed"));
+    QVERIFY(m_mgr.isDirty());
+
+    fireAutosaveTick();
+    const QString autosave = m_mgr.autosavePath();
+    QVERIFY(QFile::exists(autosave));
+    QVERIFY(m_mgr.hasAutosave());
+
+    // 未修改时再次 tick 不报错（文件仍在）
+    m_mgr.saveFileAs(m_temp.filePath(QStringLiteral("docA.txt")));
+    fireAutosaveTick();
+    QVERIFY(!m_mgr.hasAutosave());
+}
+
+// 正常保存后清理对应自动保存文件
+void TestDocumentManager::autosaveClearedOnSave()
+{
+    m_mgr.discardAutosave();
+    m_mgr.newDocument({ QStringLiteral("x"), QStringLiteral("y") });
+    m_model.updateLineText(0, QStringLiteral("edited"));
+    fireAutosaveTick();
+    QVERIFY(m_mgr.hasAutosave());
+
+    QVERIFY(m_mgr.saveFileAs(m_temp.filePath(QStringLiteral("docB.txt"))));
+    QVERIFY(!m_mgr.hasAutosave());
+}
+
+// 配置关闭后不自动保存
+void TestDocumentManager::autosaveDisabledSkips()
+{
+    m_mgr.discardAutosave();
+    m_mgr.setAutosaveEnabled(false);
+    m_mgr.newDocument({ QStringLiteral("x") });
+    m_model.updateLineText(0, QStringLiteral("edited"));
+    fireAutosaveTick();
+    QVERIFY(!m_mgr.hasAutosave());
+    m_mgr.setAutosaveEnabled(true);
+}
+
+// 受限模式（大文件）跳过自动保存
+void TestDocumentManager::autosaveLimitedModeSkips()
+{
+    m_mgr.discardAutosave();
+    DocumentManager::setLargeFileLimits(1, 0);   // 1 行即受限
+    const QString path = m_temp.filePath(QStringLiteral("big.txt"));
+    QFile f(path);
+    QVERIFY(f.open(QIODevice::WriteOnly));
+    f.write("a\nb\n");
+    f.close();
+    QVERIFY(m_mgr.openFile(path));
+    QVERIFY(m_model.limitedMode());
+    m_model.updateLineText(0, QStringLiteral("edited"));
+    fireAutosaveTick();
+    QVERIFY(!m_mgr.hasAutosave());
+    DocumentManager::setLargeFileLimits(50000, 200LL * 1024 * 1024);   // 还原默认
+}
+
+// 恢复：restoreAutosave 后行/批注一致，且自动保存文件被清理
+void TestDocumentManager::autosaveRestoreRoundTrip()
+{
+    m_mgr.discardAutosave();
+    m_mgr.newDocument({ QStringLiteral("恢复一"), QStringLiteral("恢复二") });
+    m_comments.setComment(1, QStringLiteral("译文乙"));
+    m_model.updateLineText(0, QStringLiteral("恢复一（改）"));
+    fireAutosaveTick();
+    QVERIFY(m_mgr.hasAutosave());
+
+    QVERIFY(m_mgr.restoreAutosave());
+    QVERIFY(!m_mgr.hasAutosave());   // 恢复成功即清理
+    QCOMPARE(m_model.lineCount(), 2);
+    QCOMPARE(m_model.lineText(0), QStringLiteral("恢复一（改）"));
+    QCOMPARE(m_comments.commentAt(1), QStringLiteral("译文乙"));
+}
+
+// 丢弃：删除全部自动保存文件
+void TestDocumentManager::autosaveDiscardRemoves()
+{
+    m_mgr.discardAutosave();
+    m_mgr.newDocument({ QStringLiteral("x") });
+    m_model.updateLineText(0, QStringLiteral("edited"));
+    fireAutosaveTick();
+    QVERIFY(m_mgr.hasAutosave());
+
+    m_mgr.discardAutosave();
+    QVERIFY(!m_mgr.hasAutosave());
 }
 
 QTEST_GUILESS_MAIN(TestDocumentManager)

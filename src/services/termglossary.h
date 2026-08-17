@@ -38,6 +38,14 @@ public:
     // 返回未命中的术语列表（用于报告）
     QStringList missingTerms(const QString &sourceText, const QString &translatedText) const;
 
+    // 术语自动提取（迭代4）：从行文本提取高频英文词候选。
+    // - 提取 ASCII 字母序列（≥3 字母），转小写
+    // - 过滤内置停用词与已收录术语
+    // - 频率 ≥ minFreq，按频率降序，最多 maxCount 个
+    // 返回 {word, count} 列表；中文分词暂不支持（返回空）。
+    QList<QPair<QString, int>> extractCandidates(const QStringList &lines,
+                                                 int minFreq = 3, int maxCount = 20) const;
+
 private:
     QHash<QString, QString> m_terms; // source → translation
 };

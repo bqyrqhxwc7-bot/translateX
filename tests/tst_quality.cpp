@@ -80,6 +80,8 @@ private slots:
     void chunkingBudgetSplit();
     void chunkingSentenceBoundary();
     void glossaryAffectsCacheKey();
+    void extractCandidatesBasic();
+    void extractCandidatesFiltering();
 };
 
 void TestQuality::initTestCase()
@@ -353,6 +355,47 @@ void TestQuality::glossaryAffectsCacheKey()
     const QString k1 = cache.key(QStringLiteral("hello API"), withGlossary);
     const QString k2 = cache.key(QStringLiteral("hello API"), withoutGlossary);
     QVERIFY(k1 != k2); // 术语表变化应改变缓存键，避免旧缓存复用
+}
+
+// ---- 迭代4：术语自动提取 ----
+
+void TestQuality::extractCandidatesBasic()
+{
+    TermGlossary g;
+    const QStringList lines{
+        QStringLiteral("The API provides the API endpoint for the API client."),
+        QStringLiteral("The client uses the API client endpoint."),
+        QStringLiteral("中文行不参与提取"),
+    };
+    const auto candidates = g.extractCandidates(lines, 3, 20);
+    // API 出现 4 次、client 3 次、endpoint 2 次（< minFreq 3 被过滤）
+    QCOMPARE(candidates.size(), 2);
+    QCOMPARE(candidates[0].first, QStringLiteral("api"));
+    QCOMPARE(candidates[0].second, 4);
+    QCOMPARE(candidates[1].first, QStringLiteral("client"));
+    QCOMPARE(candidates[1].second, 3);
+}
+
+void TestQuality::extractCandidatesFiltering()
+{
+    TermGlossary g;
+    // 停用词（the/and/for）与已收录术语（api）被过滤；maxCount 截断；大小写归一
+    g.setTerm(QStringLiteral("api"), QStringLiteral("应用程序接口"));
+    const QStringList lines{
+        QStringLiteral("The API and the client for the server."),
+        QStringLiteral("API client server client server"),
+    };
+    const auto candidates = g.extractCandidates(lines, 2, 2);
+    // 候选：client(3) server(3)；api 已在术语表被排除；the/and/for 停用词排除
+    QCOMPARE(candidates.size(), 2);
+    QCOMPARE(candidates[0].first, QStringLiteral("client"));
+    QCOMPARE(candidates[0].second, 3);
+    QCOMPARE(candidates[1].first, QStringLiteral("server"));
+    QCOMPARE(candidates[1].second, 3);
+
+    // minFreq/maxCount 边界：minFreq 0 → 视为 1；maxCount 0 → 视为 1
+    const auto edge = g.extractCandidates(lines, 0, 0);
+    QCOMPARE(edge.size(), 1);
 }
 
 QTEST_GUILESS_MAIN(TestQuality)

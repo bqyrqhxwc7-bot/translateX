@@ -84,6 +84,48 @@ FluScrollablePage {
         infoBar.showInfo(qsTr("已清空术语表"))
     }
 
+    // ---------- 术语自动提取（迭代4） ----------
+    // 从文档原文提取高频英文词 → 弹窗勾选 → 加入术语表
+    function extractTerms() {
+        const lines = []
+        const count = documentModel.lineCount()
+        for (let i = 0; i < count; ++i) {
+            lines.push(documentModel.lineText(i))
+        }
+        const candidates = translationService.extractTermCandidates(lines, 3, 20)
+        termCandidateModel.clear()
+        for (const c of candidates) {
+            termCandidateModel.append({ word: c.word, count: c.count, checked: false })
+        }
+        if (termCandidateModel.count === 0) {
+            infoBar.showWarning(qsTr("未提取到高频词（英文单词需出现 3 次以上；中文暂不支持自动提取）"))
+            return
+        }
+        extractDialog.open()
+    }
+
+    function extractSelectAll(checked) {
+        for (let i = 0; i < termCandidateModel.count; ++i) {
+            termCandidateModel.setProperty(i, "checked", checked)
+        }
+    }
+
+    function addExtractedTerms() {
+        let added = 0
+        for (let i = 0; i < termCandidateModel.count; ++i) {
+            if (termCandidateModel.get(i).checked) {
+                const w = termCandidateModel.get(i).word
+                glossaryMap[w] = w
+                ++added
+            }
+        }
+        if (added > 0) {
+            translationService.setGlossary(glossaryMap)
+            rebuildTermList()
+            infoBar.showSuccess(qsTr("已添加 %1 个术语（译文占位，请修改为标准译文）").arg(added))
+        }
+    }
+
     function rebuildTermList() {
         termModel.clear()
         for (const key of Object.keys(glossaryMap)) {
@@ -466,12 +508,64 @@ FluScrollablePage {
                     Layout.fillWidth: true
                 }
                 FluButton {
+                    text: qsTr("从文档提取")
+                    onClicked: extractTerms()
+                }
+                FluButton {
                     text: qsTr("清空术语表")
                     enabled: termModel.count > 0
                     onClicked: clearTerms()
                 }
             }
         }
+    }
+
+    // ---------- 术语提取弹窗（迭代4） ----------
+    FluContentDialog {
+        id: extractDialog
+        title: qsTr("从文档提取术语")
+        negativeText: qsTr("取消")
+        positiveText: qsTr("添加选中")
+        contentDelegate: Component {
+            ColumnLayout {
+                width: 420
+                spacing: 8
+                FluText {
+                    text: qsTr("勾选要加入术语表的词（译文初始为原文占位，添加后请修改为标准译文）：")
+                    color: FluTheme.fontSecondaryColor
+                    wrapMode: Text.Wrap
+                }
+                ListModel {
+                    id: termCandidateModel
+                }
+                ListView {
+                    id: extractListView
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.min(contentHeight, 240)
+                    model: termCandidateModel
+                    clip: true
+                    spacing: 2
+                    delegate: RowLayout {
+                        width: extractListView.width
+                        spacing: 8
+                        FluCheckBox {
+                            checked: model.checked
+                            onToggled: termCandidateModel.setProperty(index, "checked", checked)
+                        }
+                        FluText {
+                            text: qsTr("%1（出现 %2 次）").arg(model.word).arg(model.count)
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                    }
+                }
+                FluCheckBox {
+                    text: qsTr("全选")
+                    onToggled: extractSelectAll(checked)
+                }
+            }
+        }
+        onPositiveClicked: addExtractedTerms()
     }
 
     // ---------- 卡片：显示（原文/批注字号滑动条） ----------

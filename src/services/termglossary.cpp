@@ -1,5 +1,62 @@
 #include "termglossary.h"
 
+#include <algorithm>
+
+#include <QRegularExpression>
+#include <QSet>
+
+namespace {
+// 英文停用词（提取候选时过滤；中文分词暂不支持）
+const QSet<QString> &stopWords()
+{
+    static const QSet<QString> words = {
+        QStringLiteral("a"), QStringLiteral("an"), QStringLiteral("the"),
+        QStringLiteral("and"), QStringLiteral("or"), QStringLiteral("but"),
+        QStringLiteral("of"), QStringLiteral("to"), QStringLiteral("in"),
+        QStringLiteral("on"), QStringLiteral("at"), QStringLiteral("for"),
+        QStringLiteral("with"), QStringLiteral("from"), QStringLiteral("by"),
+        QStringLiteral("is"), QStringLiteral("are"), QStringLiteral("was"),
+        QStringLiteral("were"), QStringLiteral("be"), QStringLiteral("been"),
+        QStringLiteral("being"), QStringLiteral("has"), QStringLiteral("have"),
+        QStringLiteral("had"), QStringLiteral("do"), QStringLiteral("does"),
+        QStringLiteral("did"), QStringLiteral("this"), QStringLiteral("that"),
+        QStringLiteral("these"), QStringLiteral("those"), QStringLiteral("it"),
+        QStringLiteral("its"), QStringLiteral("not"), QStringLiteral("so"),
+        QStringLiteral("if"), QStringLiteral("then"), QStringLiteral("than"),
+        QStringLiteral("as"), QStringLiteral("also"), QStringLiteral("only"),
+        QStringLiteral("more"), QStringLiteral("most"), QStringLiteral("such"),
+        QStringLiteral("will"), QStringLiteral("would"), QStringLiteral("can"),
+        QStringLiteral("could"), QStringLiteral("should"), QStringLiteral("may"),
+        QStringLiteral("might"), QStringLiteral("very"), QStringLiteral("just"),
+        QStringLiteral("about"), QStringLiteral("into"), QStringLiteral("over"),
+        QStringLiteral("under"), QStringLiteral("after"), QStringLiteral("before"),
+        QStringLiteral("while"), QStringLiteral("when"), QStringLiteral("where"),
+        QStringLiteral("what"), QStringLiteral("which"), QStringLiteral("who"),
+        QStringLiteral("whom"), QStringLiteral("why"), QStringLiteral("how"),
+        QStringLiteral("you"), QStringLiteral("your"), QStringLiteral("yours"),
+        QStringLiteral("he"), QStringLiteral("his"), QStringLiteral("him"),
+        QStringLiteral("she"), QStringLiteral("her"), QStringLiteral("they"),
+        QStringLiteral("their"), QStringLiteral("them"), QStringLiteral("we"),
+        QStringLiteral("our"), QStringLiteral("ours"), QStringLiteral("i"),
+        QStringLiteral("my"), QStringLiteral("me"), QStringLiteral("all"),
+        QStringLiteral("any"), QStringLiteral("each"), QStringLiteral("every"),
+        QStringLiteral("some"), QStringLiteral("no"), QStringLiteral("nor"),
+        QStringLiteral("too"), QStringLiteral("very"), QStringLiteral("up"),
+        QStringLiteral("down"), QStringLiteral("out"), QStringLiteral("off"),
+        QStringLiteral("again"), QStringLiteral("further"), QStringLiteral("once"),
+        QStringLiteral("here"), QStringLiteral("there"), QStringLiteral("because"),
+        QStringLiteral("until"), QStringLiteral("while"), QStringLiteral("both"),
+        QStringLiteral("each"), QStringLiteral("few"), QStringLiteral("own"),
+        QStringLiteral("same"), QStringLiteral("other"), QStringLiteral("another"),
+        QStringLiteral("much"), QStringLiteral("many"), QStringLiteral("such"),
+        QStringLiteral("than"), QStringLiteral("too"), QStringLiteral("very"),
+        QStringLiteral("can"), QStringLiteral("will"), QStringLiteral("just"),
+        QStringLiteral("don"), QStringLiteral("should"), QStringLiteral("now"),
+    };
+    return words;
+}
+} // namespace
+
 void TermGlossary::setTerm(const QString &source, const QString &translation)
 {
     if (source.trimmed().isEmpty()) {
@@ -102,4 +159,46 @@ QStringList TermGlossary::missingTerms(const QString &sourceText, const QString 
         }
     }
     return missing;
+}
+
+QList<QPair<QString, int>> TermGlossary::extractCandidates(const QStringList &lines,
+                                                           int minFreq, int maxCount) const
+{
+    QList<QPair<QString, int>> result;
+    if (minFreq < 1) {
+        minFreq = 1;
+    }
+    if (maxCount < 1) {
+        maxCount = 1;
+    }
+    const QRegularExpression wordRe(QStringLiteral("[A-Za-z]{3,}"));
+    QHash<QString, int> freq;
+    for (const QString &line : lines) {
+        auto it = wordRe.globalMatch(line);
+        while (it.hasNext()) {
+            const QString word = it.next().captured().toLower();
+            if (stopWords().contains(word) || contains(word)) {
+                continue;
+            }
+            ++freq[word];
+        }
+    }
+    // 频率 ≥ minFreq，按频率降序（同频按字母序稳定）
+    QList<QPair<QString, int>> candidates;
+    for (auto it = freq.constBegin(); it != freq.constEnd(); ++it) {
+        if (it.value() >= minFreq) {
+            candidates.append(qMakePair(it.key(), it.value()));
+        }
+    }
+    std::sort(candidates.begin(), candidates.end(),
+              [](const QPair<QString, int> &a, const QPair<QString, int> &b) {
+                  if (a.second != b.second) {
+                      return a.second > b.second;
+                  }
+                  return a.first < b.first;
+              });
+    for (int i = 0; i < candidates.size() && i < maxCount; ++i) {
+        result.append(candidates.at(i));
+    }
+    return result;
 }

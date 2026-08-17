@@ -1,5 +1,8 @@
 #include "documentmodel.h"
 
+#include <QRegularExpression>
+#include <QVariantMap>
+
 #include "commentservice.h"
 
 DocumentModel::DocumentModel(QObject *parent)
@@ -408,4 +411,50 @@ void DocumentModel::clearUndoHistory()
     m_undoStack.clear();
     m_redoStack.clear();
     emit undoStackChanged();
+}
+
+QVariantMap DocumentModel::stats() const
+{
+    QVariantMap out;
+    int nonEmpty = 0;
+    qint64 chars = 0;
+    qint64 words = 0;
+    int richLines = 0;
+    int imageLines = 0;
+    for (int i = 0; i < m_lines.size(); ++i) {
+        const LineEntry &entry = m_lines.at(i);
+        if (!entry.text.trimmed().isEmpty()) {
+            ++nonEmpty;
+        }
+        // 非空白字符数
+        const QString compact = entry.text;
+        for (const QChar &c : compact) {
+            if (!c.isSpace()) {
+                ++chars;
+            }
+        }
+        // 空白分词数（不含首尾空白的空串）
+        const QStringList parts = compact.split(QRegularExpression(QStringLiteral("\\s+")),
+                                                 Qt::SkipEmptyParts);
+        words += parts.size();
+        if (entry.display == QStringLiteral("rich")) {
+            ++richLines;
+        } else if (entry.display == QStringLiteral("image")) {
+            ++imageLines;
+        }
+    }
+    int comments = 0;
+    for (int i = 0; i < m_lines.size(); ++i) {
+        if (hasCommentAt(i)) {
+            ++comments;
+        }
+    }
+    out.insert(QStringLiteral("lines"), m_lines.size());
+    out.insert(QStringLiteral("nonEmptyLines"), nonEmpty);
+    out.insert(QStringLiteral("chars"), chars);
+    out.insert(QStringLiteral("words"), words);
+    out.insert(QStringLiteral("comments"), comments);
+    out.insert(QStringLiteral("richLines"), richLines);
+    out.insert(QStringLiteral("imageLines"), imageLines);
+    return out;
 }
