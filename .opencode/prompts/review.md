@@ -6,13 +6,18 @@
 ## 0. 视觉审查（UI/设计改动必做 —— 主动截图验证）
 
 - 审查范围涉及 UI、QML 页面、DesignTokens/视觉语言、布局改动时，**必须主动做视觉验证**，不要只看代码：
-  1. **有现成截图**（用户给了路径/仓库里有截图）→ 直接用
-  2. **没有截图** → 主动截图：运行 `pwsh -File .opencode/scripts/screenshot.ps1 -Out <临时路径>\translex_ui.png`
-     （该脚本会启动/复用 translex 并截取主窗口；bash 白名单已授权，属于只读操作）
+  1. **UI 驱动（优先）**：运行 `node .opencode/scripts/ui-driver.mjs --action <cmd> [--file/--dark/--line]`
+     模拟用户操作（应用会以驱动模式自动启动）：
+     - `--action openFile --file samples/demo.docx`（打开文档）
+     - `--action setDark --dark true/false`（深浅色切换——**深色模式必须验证**）
+     - `--action getState`（断言：文档名/行数/深浅色/受限模式/批注数）
+     - `--action translateLine --line 0`、`--action translateAll`（触发翻译）
+  2. **截图**：操作后运行 `pwsh -File .opencode/scripts/screenshot.ps1 -Out <临时路径>\ui.png`
   3. **看图方式（按模型能力选）**：
      - 当前模型**原生支持视觉**（如 minimax-m3）→ 直接把图片路径给模型读（零额外成本）
      - 当前模型**无视觉**（deepseek 系）→ 用 `vision describe_image <图片路径> <审查重点>` MCP 工具（本地/Go 视觉通道）
   4. **截图与代码对照**：截图呈现的设计 vs QML 实现（DesignTokens 应用、anchors 布局、深浅色模式、禁用态/提示条是否如预期）
+- 验证完清理：`Stop-Process -Name translex`（驱动脚本启动的应用）
 - 视觉通道不可用时，明确报告「本项未做视觉审查」，不静默跳过。
 
 ## 0.1 扩展见解维度（不止抓 bug）

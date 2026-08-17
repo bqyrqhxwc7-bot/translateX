@@ -162,3 +162,11 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 3. 建 Todo 清单，小步实现，**每步可编译可测试**
 4. 改动实现必须同步更新对应 `.md` 文档
 5. 完成标准：构建通过 + `ctest` 全绿 + 文档同步 + 汇报（变更/影响/下一步）
+
+### UI 驱动（应用内测试钩子，2026-08-17）
+- 用途：review agent 模拟用户操作（打开文件/切主题/翻译/查状态），配合截图做 UI 自动化验证
+- 架构：TRANSLEX_UI_DRIVER=1 启动 -> src/driver_service.cpp（QLocalServer named pipe translex-ui-driver，JSON 行协议）-> QML UiDriverActions（业务动作，onCompleted 注册 sink）
+- 客户端：.opencode/scripts/ui-driver.mjs（Node net.connect 到 pipe；应用未运行自动以驱动模式启动）
+- 命令：openFile / setDark / getState / translateLine / translateAll
+- 踩坑：QML 函数参数在 meta 系统暴露为 QVariant（invokeMethod 须 Q_ARG(QVariant)）；客户端需自行 end() 连接（服务端不主动断开）；ui_ 前缀文件名会被 AUTOUIC 误判（命名 driver_service 规避）
+- review 流程：.opencode/prompts/review.md §0（驱动操作 -> 截图 -> vision 断言 -> Stop-Process 清理）

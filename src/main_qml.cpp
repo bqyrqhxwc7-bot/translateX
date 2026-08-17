@@ -10,6 +10,7 @@
 #include "services/documentmanager.h"
 #include "services/chapterservice.h"
 #include "services/findservice.h"
+#include "driver_service.h"
 
 #ifdef FLUENTUI_BUILD_STATIC_LIB
 #  include <QtQml/qqmlextensionplugin.h>
@@ -70,6 +71,14 @@ int main(int argc, char *argv[])
     // 暴露主窗口（浮窗 Qt.Tool 经 transientParent 与主窗口关联）：先置空占位，避免 QML
     // 早期求值报"未定义"；load 完成后更新为实际根窗口（FluWindow）
     engine.rootContext()->setContextProperty("mainWindow", (QObject *)nullptr);
+
+    // UI 驱动桥（测试钩子）：仅 TRANSLEX_UI_DRIVER=1 时启用，供 review agent
+    // 模拟用户操作（打开文件/切主题/翻译/查状态），见 src/ui_driver_service.h
+    UiDriverService uiDriverService;
+    if (qEnvironmentVariableIsSet("TRANSLEX_UI_DRIVER")) {
+        engine.rootContext()->setContextProperty("uiDriverBridge", &uiDriverService);
+    }
+
     engine.loadFromModule("Translex", "Main");
 
     const auto roots = engine.rootObjects();

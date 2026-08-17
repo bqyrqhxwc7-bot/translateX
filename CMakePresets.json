@@ -27,7 +27,7 @@
     },
     {
       "name": "mingw",
-      "displayName": "MinGW g++ + Ninja (跨平台验证)",
+      "displayName": "MinGW g++ + Ninja（需 Qt mingw 套件含 Pdf 模块；当前本机套件缺 Qt6Pdf 会 configure 报错）",
       "generator": "Ninja",
       "binaryDir": "build-mingw",
       "cacheVariables": {

@@ -20,6 +20,15 @@ endif()
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Concurrent Network Qml Quick QuickWidgets Svg ShaderTools PrintSupport Pdf)
 
+# 硬性要求 Qt6Pdf：PDF 导入/导出是 Translex 核心功能，缺组件直接拒绝编译
+#（不做静默降级——编译出"没有 PDF"的版本且无提示会误导使用者）。
+if(NOT Qt6Pdf_FOUND)
+    message(FATAL_ERROR
+        "缺少 Qt6Pdf 组件：Translex 的 PDF 导入/导出依赖 QtPdf 模块。\n"
+        "请用 Qt Maintenance Tool 为当前套件添加「Qt PDF」模块，"
+        "或改用含 Pdf 组件的 Qt 套件（如 msvc2019_64）构建。")
+endif()
+
 # FluentUI (BSD-3-Clause) : Microsoft Fluent Design component library for Qt QML ----
 # 全量迁移到 QML：FluentUI 静态库作为子目录集成（third_party/FluentUI）。
 set(FLUENTUI_BUILD_EXAMPLES OFF CACHE BOOL "Build FluentUI demo applications." FORCE)
@@ -52,8 +61,13 @@ add_subdirectory(third_party/quazip)
 set(TRANSLEX_QML_VERSION "1.1.0-qml")
 
 # ---- QML 骨架（FluentUI 全量迁移目标）----
+# ui_driver_service.h 以 ui_ 前缀开头，会被 AUTOUIC 误判为 .ui 头文件（AutoUic error）
+set_source_files_properties(src/driver_service.cpp PROPERTIES SKIP_AUTOUIC ON)
+
 qt_add_executable(translex
     src/main_qml.cpp
+    src/driver_service.cpp
+    src/driver_service.h
     src/services/appguard.cpp
     src/services/appguard.h
     src/services/documentmodel.cpp
@@ -100,6 +114,7 @@ qt_add_qml_module(translex
     QML_FILES
         qml/Main.qml
         qml/DesignTokens.qml
+        qml/UiDriverActions.qml
         qml/TranslateHomePage.qml
         qml/TranslateSettingsPage.qml
         qml/ConfigSectionCard.qml

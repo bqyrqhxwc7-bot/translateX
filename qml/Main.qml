@@ -20,6 +20,11 @@ FluWindow {
         z: 7
     }
 
+    // UI 驱动操作（测试钩子）：仅 uiDriverBridge 存在（TRANSLEX_UI_DRIVER=1）时生效
+    UiDriverActions {
+        id: uiDriverActions
+    }
+
     FluNavigationView {
         id: navView
         anchors.fill: parent

@@ -36,6 +36,7 @@
           "*": "deny",
           "pwsh -File .opencode/scripts/*": "allow",
           "powershell -File .opencode/scripts/*": "allow",
+          "node .opencode/scripts/*": "allow",
           "Get-*": "allow",
           "Select-String*": "allow",
           "findstr*": "allow",
