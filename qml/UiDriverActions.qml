@@ -66,6 +66,52 @@ QtObject {
         return JSON.stringify({ ok: ok, translated: lines.length })
     }
 
+    // ---- 导出（另存为：txt/trx/docx/pdf，按扩展名分发）----
+    function saveFileAs(path) {
+        const ok = documentManager.saveFileAs(path)
+        return JSON.stringify({ ok: ok, name: documentManager.documentName(),
+                                path: documentManager.currentPath() })
+    }
+
+    // ---- 新建文档 ----
+    function newDocument() {
+        documentManager.newDocument()
+        return JSON.stringify({ ok: true, lines: documentModel.lineCount() })
+    }
+
+    // ---- 文档元数据（导出后检查 sourceFormat/sourceFile 等）----
+    function getMeta() {
+        return JSON.stringify(documentManager.documentMeta())
+    }
+
+    // ---- 读指定行文本（断言导出/编辑结果）----
+    function getLineText(line) {
+        if (line < 0 || line >= documentModel.lineCount()) {
+            return JSON.stringify({ ok: false, error: "行号越界" })
+        }
+        return JSON.stringify({ ok: true, text: documentModel.lineText(line) })
+    }
+
+    // ---- 编辑指定行（模拟输入文字；arg = [line, text]）----
+    function setLineText(arg) {
+        const line = Number(arg[0])
+        const text = String(arg[1])
+        if (line < 0 || line >= documentModel.lineCount()) {
+            return JSON.stringify({ ok: false, error: "行号越界" })
+        }
+        documentModel.updateLineText(line, text)
+        return JSON.stringify({ ok: true, line: line, text: documentModel.lineText(line) })
+    }
+
+    // ---- 批注：读取 / 清空 ----
+    function getComments() {
+        return JSON.stringify(commentService.allComments())
+    }
+    function clearComments() {
+        commentService.clear()
+        return JSON.stringify({ ok: true })
+    }
+
     Component.onCompleted: {
         // 仅在有驱动桥时注册（正常启动 uiDriverBridge 为 undefined）
         if (typeof uiDriverBridge !== "undefined" && uiDriverBridge !== null) {

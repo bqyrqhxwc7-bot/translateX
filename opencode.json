@@ -25,7 +25,7 @@
       "model": "opencode-go/deepseek-v4-flash"
     },
     "review": {
-      "description": "Qt/QML 代码审查：只读审查，绝不改代码；给出结构化问题清单与修复建议（方法论见 .opencode/prompts/review.md）",
+      "description": "Qt/QML 代码审查：不修改项目文件与数据（可运行程序/导出到临时目录/检查产物/清理自己产生的临时文件），不负责修改；给出结构化问题清单与修复建议（方法论见 .opencode/prompts/review.md）",
       "mode": "all",
       "model": "opencode-go/deepseek-v4-flash",
       "temperature": 0.1,
@@ -74,7 +74,9 @@
           "git stash*": "deny",
           "rm *": "deny",
           "del *": "deny",
-          "rd *": "deny"
+          "rd *": "deny",
+          "Remove-Item $env:TEMP\\opencode\\*": "allow",
+          "Remove-Item \"$env:TEMP\\opencode\\*\"": "allow"
         }
       }
     },

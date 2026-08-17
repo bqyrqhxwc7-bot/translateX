@@ -31,19 +31,38 @@
 
 ## 0.2 排查工具（bash 白名单已授权，放心用）
 
-红线：**绝不修改源码/仓库文件**（edit deny + 写命令 deny）。以下命令均可直接执行：
+红线：**不修改项目文件与数据、不负责修改**（edit deny + 写命令 deny）。但**可以运行程序、导出到临时目录、检查产物、清理自己产生的临时文件**。以下命令均可直接执行：
 
 - **搜索**：`Select-String -Path ... -Pattern ...`、`findstr ...`、`git grep ...`、`Get-ChildItem -Recurse ...`
 - **跑测试**：`ctest --test-dir build-vs2026-x64 -C Debug -R tst_xxx --output-on-failure`（测试已自包含，无需 Qt PATH）
 - **构建验证**：`cmake --build build-vs2026-x64 --config Debug`
 - **运行应用**：`Start-Process -FilePath "build-vs2026-x64\Debug\translex.exe"`（DLL 已 windeployqt，直接可跑）
 - **进程管理**：`Get-Process translex` / `Stop-Process -Name translex`（截图/运行后清理）
+- **UI 驱动**：`node .opencode/scripts/ui-driver.mjs --action <cmd> ...`（模拟用户操作，见 §0）
 - **截图**：`pwsh -File .opencode/scripts/screenshot.ps1 -Out <临时路径>.png`
 - **文件信息**：`Get-ChildItem`、`Test-Path`、`Get-Content`、`Get-Item`
 - **git 只读**：`git status/diff/log/show/blame/ls-files/branch/grep`
-- **禁用（写操作）**：Set-Content/Add-Content/Remove-Item/Move-Item/Copy-Item/New-Item/Out-File、`>` 重定向、git add/commit/push/reset/checkout/clean/revert/stash、rm/del/rd
+- **清理自己产生的临时文件**：`Remove-Item $env:TEMP\opencode\*`（截图/导出产物/往返测试文件——**必须清理**，不留缓存）
+- **禁用（项目文件/数据写操作）**：Set-Content/Add-Content/Out-File、`>` 重定向、git add/commit/push/reset/checkout/clean/revert/stash、rm/del/rd、对项目目录的 Remove-Item/Copy-Item/Move-Item/New-Item
 
-排查节奏：先静态审查 → 需要验证行为就跑单测/构建/启动应用 → 涉及 UI 就截图 → 汇总报告。**用完后清理**（停掉自己启动的应用/测试进程）。
+排查节奏：先静态审查 → 需要验证行为就跑单测/构建/启动应用 → 涉及 UI 就驱动操作+截图 → 涉及格式就导出往返 → 汇总报告。**用完后清理**（停掉自己启动的应用/测试进程、删除临时导出与截图）。
+
+## 0.3 导出往返检查（格式功能必做）
+
+审查涉及文件格式（txt/trx/docx/pdf）或 DocumentManager/解析器改动时，**必须做导出→再导入往返验证**：
+
+1. 驱动打开源文档：`node .opencode/scripts/ui-driver.mjs --action openFile --file samples/demo.docx`
+2. 导出到临时目录：`node .opencode/scripts/ui-driver.mjs --action saveFileAs --path $env:TEMP\opencode\rt.pdf`
+   （txt/trx/docx/pdf 各测一次；**反复导出** 2-3 次验证稳定性）
+3. 检查导出产物：`Get-Item $env:TEMP\opencode\rt.pdf`（存在/大小）；`getMeta` 断言 sourceFormat
+4. 再导入：`--action openFile --file $env:TEMP\opencode\rt.pdf` → `getState`（行数）→ `getLineText --line 0`（内容）断言往返保真
+5. 清理：`Remove-Item $env:TEMP\opencode\rt.pdf`
+
+## 0.4 无用文件与缓存检查（每次审查必做）
+
+- **无用文件**：`git status --short`（未跟踪/残留产物）、`git ls-files` 对照源码目录（未引用的 .cpp/.h/.qml）、`samples/` 与根目录的临时产物（demo_out*、*.log、*.png 等）
+- **自己产生的缓存**：审查结束前检查 `$env:TEMP\opencode\` 下本次产生的截图/导出/往返文件**是否已清理**；应用/测试进程是否已停止（`Get-Process translex, tst_*`）
+- 发现项目内无用文件 → 报告（不删除，不负责修改）；发现自己的残留 → 立即清理
 
 ## 1. 审查流程
 
@@ -117,8 +136,9 @@
 
 ## 4. 红线
 
-- **只读源码**：禁止 edit/write；bash 仅限 §0.2 白名单（写命令已 deny，若触发说明配置有误）
+- **不修改项目文件与数据**：禁止 edit/write；bash 仅限 §0.2 白名单（对项目目录的写命令已 deny）。**可以**：运行程序、导出到临时目录、检查产物、清理自己产生的临时文件
 - **证据驱动**：每条问题必须带 文件:行号 或直接引用代码，无证据不列
 - **不全盘否定**：只报高置信度问题（置信度 <80% 的归入「需验证」）
 - **尊重既有设计**：与设计文档冲突时，指出冲突点而非直接判错
-- **善用工具**：能用测试/构建/截图验证的结论，不要停留在猜测（「需验证」类问题优先用工具证实或证伪）
+- **善用工具**：能用测试/构建/驱动/导出往返验证的结论，不要停留在猜测（「需验证」类问题优先用工具证实或证伪）
+- **不留残留**：审查结束前清理自己启动的进程与临时文件（§0.4）

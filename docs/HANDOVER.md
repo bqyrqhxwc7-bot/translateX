@@ -170,3 +170,9 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 - 命令：openFile / setDark / getState / translateLine / translateAll
 - 踩坑：QML 函数参数在 meta 系统暴露为 QVariant（invokeMethod 须 Q_ARG(QVariant)）；客户端需自行 end() 连接（服务端不主动断开）；ui_ 前缀文件名会被 AUTOUIC 误判（命名 driver_service 规避）
 - review 流程：.opencode/prompts/review.md §0（驱动操作 -> 截图 -> vision 断言 -> Stop-Process 清理）
+
+### Review 权限语义与导出往返（2026-08-17）
+- 语义：review 不是只读——可运行程序/导出到临时目录/检查产物/清理自己产生的临时文件；唯一红线是**不修改项目文件与数据、不负责修改**
+- 导出往返检查：驱动 saveFileAs 导出（txt/trx/docx/pdf）→ Get-Item 检查产物 → 再 openFile 导入 → getState/getLineText 断言往返保真（反复导出 2-3 次验证稳定）
+- 无用文件/缓存检查：git status 未跟踪残留、未引用源文件、samples 临时产物；审查结束清理自己产生的截图/导出文件与进程
+- 踩坑：ui-driver.mjs 须 socket.destroy() + process.exit(0)（优雅 end() 会致 node 事件循环挂起、进程残留堵 pipe）

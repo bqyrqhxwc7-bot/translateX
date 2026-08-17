@@ -8,9 +8,18 @@
 //   node .opencode/scripts/ui-driver.mjs --action getState
 //   node .opencode/scripts/ui-driver.mjs --action translateLine --line 0
 //   node .opencode/scripts/ui-driver.mjs --action translateAll
-// 组合示例（操作 → 截图 → vision 断言）：
+//   node .opencode/scripts/ui-driver.mjs --action saveFileAs --path %TEMP%\out.pdf   (导出)
+//   node .opencode/scripts/ui-driver.mjs --action getMeta
+//   node .opencode/scripts/ui-driver.mjs --action getLineText --line 0
+//   node .opencode/scripts/ui-driver.mjs --action setLineText --line 0 --text "新内容"  (模拟输入)
+//   node .opencode/scripts/ui-driver.mjs --action getComments
+//   node .opencode/scripts/ui-driver.mjs --action clearComments
+//   node .opencode/scripts/ui-driver.mjs --action newDocument
+// 组合示例（导出往返检查）：
 //   node .opencode/scripts/ui-driver.mjs --action openFile --file samples/demo.docx
-//   pwsh -File .opencode/scripts/screenshot.ps1 -Out %TEMP%\ui.png
+//   node .opencode/scripts/ui-driver.mjs --action saveFileAs --path %TEMP%\roundtrip.pdf
+//   node .opencode/scripts/ui-driver.mjs --action openFile --file %TEMP%\roundtrip.pdf
+//   node .opencode/scripts/ui-driver.mjs --action getState
 import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -21,7 +30,7 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const pipeName = 'translex-ui-driver';
 const pipePath = process.platform === 'win32' ? `\\\\.\\pipe\\${pipeName}` : pipeName;
 
-// ---- 参数解析：--action <cmd> --file <path> --dark <true|false> --line <n> ----
+// ---- 参数解析：--action <cmd> --file <path> --dark <bool> --line <n> --text <s> --path <p> ----
 const argv = process.argv.slice(2);
 const opts = { action: 'getState' };
 for (let i = 0; i < argv.length; ++i) {
@@ -29,11 +38,20 @@ for (let i = 0; i < argv.length; ++i) {
   else if (argv[i] === '--file') opts.file = argv[++i];
   else if (argv[i] === '--dark') opts.dark = argv[++i] === 'true' || argv[++i] === '1';
   else if (argv[i] === '--line') opts.line = parseInt(argv[++i], 10);
+  else if (argv[i] === '--text') opts.text = argv[++i];
+  else if (argv[i] === '--path') opts.path = argv[++i];
   else if (argv[i] === '--wait') opts.wait = parseInt(argv[++i], 10);
 }
 
-const commandArgs = { openFile: opts.file, setDark: opts.dark,
-                      translateLine: opts.line };
+// 命令 → 参数（数组传给 QML 函数；无参数用 undefined）
+const commandArgs = {
+  openFile: opts.file,
+  setDark: opts.dark,
+  translateLine: opts.line,
+  saveFileAs: opts.path,
+  getLineText: opts.line,
+  setLineText: [opts.line, opts.text],
+};
 
 function send(cmd, args, id) {
   return new Promise((resolve, reject) => {
@@ -49,7 +67,7 @@ function send(cmd, args, id) {
         const line = buf.slice(0, nl);
         buf = buf.slice(nl + 1);
         try {
-          socket.end();
+          socket.destroy();   // 立即销毁，避免事件循环挂起
           resolve(JSON.parse(line));
         } catch {
           socket.destroy();
@@ -112,6 +130,8 @@ async function main() {
     // 本脚本启动的应用：保活给后续截图用（review 结束时用 Stop-Process 清理）
     console.error('ui-driver: 应用已启动并保持运行（后续截图用 screenshot.ps1，结束后 Stop-Process -Name translex）');
   }
+  // 显式退出：socket 优雅关闭可能使事件循环挂起导致进程残留
+  process.exit(0);
 }
 
 main().catch((e) => {
