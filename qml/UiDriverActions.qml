@@ -112,6 +112,16 @@ QtObject {
         return JSON.stringify({ ok: true })
     }
 
+    // ---- 导航（main.qml 注入 navView 引用；index 0=编辑 1=设置）----
+    property var navViewRef: null
+    function navigate(index) {
+        if (!navViewRef) {
+            return JSON.stringify({ ok: false, error: "navView 未注入" })
+        }
+        navViewRef.setCurrentIndex(Number(index))
+        return JSON.stringify({ ok: true, index: Number(index) })
+    }
+
     Component.onCompleted: {
         // 仅在有驱动桥时注册（正常启动 uiDriverBridge 为 undefined）
         if (typeof uiDriverBridge !== "undefined" && uiDriverBridge !== null) {

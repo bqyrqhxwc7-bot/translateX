@@ -32,6 +32,36 @@ FluContentPage {
     // NoStack 页面重建时内容跨页面保留，未保存编辑不丢失。
     property int currentLine: -1
 
+    // 拖放打开文件（txt/trx/docx/pdf）：覆盖全页，拖入直接打开
+    DropArea {
+        anchors.fill: parent
+        z: 100
+        onEntered: (drag) => {
+            drag.accepted = drag.hasUrls
+        }
+        onDropped: (drag) => {
+            if (!drag.hasUrls) {
+                return
+            }
+            const urls = drag.urls
+            if (urls.length === 0) {
+                return
+            }
+            const path = urls[0].toString().replace(/^file:\/\//, "")
+            if (documentManager.openFile(path)) {
+                statusLabel.text = qsTr("已打开：%1").arg(documentManager.documentName())
+                statusIconSource = 0
+                statusIconColor = FluTheme.fontSecondaryColor
+            } else {
+                statusLabel.text = qsTr("打开失败：%1").arg(path)
+                statusIconSource = FluentIcons.Warning
+                statusIconColor = tokens.error
+            }
+            refreshDocStatus()
+            chapterService.rebuild()
+        }
+    }
+
     // 翻译服务（主进程提供，context property 全局可见）
     readonly property var translator: translationService
 
@@ -200,11 +230,17 @@ FluContentPage {
             page.translating = false
             statusLabel.text = qsTr("翻译完成：成功 %1 / 失败 %2（共 %3 行）")
                                 .arg(ok).arg(failed).arg(total)
+            // 有质量告警 → 弹出复核面板（收集在 onQualityWarning）
+            if (page.qualityWarnings.count > 0) {
+                page.qualityReport.visible = true
+            }
         }
         function onTranslationStarted(total) {
             page.translating = true
             page.progressTotal = total
             page.progressDone = 0
+            page.qualityWarnings.clear()   // 新一批翻译，清空上一批质量告警
+            page.qualityReport.visible = false
         }
         function onTranslationProgress(done, total) {
             page.progressDone = done
@@ -224,6 +260,8 @@ FluContentPage {
         function onQualityWarning(lineNumber, issue) {
             const loc = lineNumber >= 0 ? qsTr("第 %1 行：").arg(lineNumber + 1) : ""
             infoBar.showWarning(loc + issue, 6000)
+            // 收集到复核面板（onBatchFinished 汇总展示）
+            page.qualityWarnings.append({ line: lineNumber, issue: issue })
         }
     }
 
@@ -302,6 +340,11 @@ FluContentPage {
     Shortcut {
         sequence: "Ctrl+Alt+Shift+T"
         onActivated: translateAllPending()
+    }
+    // 快捷键总览（? 呼出/关闭）
+    Shortcut {
+        sequence: "?"
+        onActivated: shortcutHelp.visible = !shortcutHelp.visible
     }
 
     // 撤销/重做后：钳制当前行并刷新编辑行文本（TextEdit 用户输入会解除绑定）
@@ -1724,6 +1767,170 @@ FluContentPage {
         id: floatShowTimer
         interval: 350
         onTriggered: page.panelShown = true
+    }
+
+    // ---------- 快捷键总览（? 呼出；页面内覆盖层，NoStack 安全） ----------
+    Item {
+        id: shortcutHelp
+        visible: false
+        z: 9000
+        anchors.fill: parent
+        Rectangle {
+            anchors.fill: parent
+            color: page.overlayMask
+            MouseArea { anchors.fill: parent; onClicked: shortcutHelp.visible = false }
+        }
+        Rectangle {
+            width: 460
+            height: helpCol.implicitHeight + 32
+            anchors.centerIn: parent
+            radius: tokens.radiusCard
+            color: tokens.bgCard
+            border.color: FluTheme.dividerColor
+            border.width: 1
+            ColumnLayout {
+                id: helpCol
+                anchors.fill: parent
+                anchors.margins: 16
+                spacing: 8
+                FluText {
+                    text: qsTr("快捷键")
+                    font.pixelSize: 15
+                    font.bold: true
+                    color: FluTheme.fontPrimaryColor
+                }
+                Repeater {
+                    model: [
+                        { key: "Ctrl+Z", desc: qsTr("撤销") },
+                        { key: "Ctrl+Y", desc: qsTr("重做") },
+                        { key: "Ctrl+Alt+T", desc: qsTr("翻译当前行") },
+                        { key: "Ctrl+Alt+Shift+T", desc: qsTr("翻译全部待译行") },
+                        { key: "Ctrl+点击", desc: qsTr("多选行（再点取消）") },
+                        { key: "Enter", desc: qsTr("拆分行") },
+                        { key: "Backspace（行首）", desc: qsTr("合并上一行") },
+                        { key: "?", desc: qsTr("本快捷键总览") }
+                    ]
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
+                        FluText {
+                            text: modelData.key
+                            font.pixelSize: 13
+                            font.bold: true
+                            color: FluTheme.primaryColor
+                            Layout.preferredWidth: 170
+                        }
+                        FluText {
+                            text: modelData.desc
+                            font.pixelSize: 13
+                            color: FluTheme.fontPrimaryColor
+                            Layout.fillWidth: true
+                        }
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Item { Layout.fillWidth: true }
+                    FluButton { text: qsTr("关闭"); onClicked: shortcutHelp.visible = false }
+                }
+            }
+        }
+    }
+
+    // ---------- 质量自检复核面板（翻译后汇总 qualityWarning，点击跳转复核） ----------
+    // 警告收集：onQualityWarning 追加到 qualityWarnings；onBatchFinished 有告警时弹出。
+    ListModel {
+        id: qualityWarnings
+    }
+    Item {
+        id: qualityReport
+        visible: false
+        z: 9000
+        anchors.fill: parent
+        Rectangle {
+            anchors.fill: parent
+            color: page.overlayMask
+            MouseArea { anchors.fill: parent; onClicked: qualityReport.visible = false }
+        }
+        Rectangle {
+            width: 520
+            height: Math.min(qualityList.contentHeight + 96, parent.height - 160)
+            anchors.centerIn: parent
+            radius: tokens.radiusCard
+            color: tokens.bgCard
+            border.color: FluTheme.dividerColor
+            border.width: 1
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 16
+                spacing: 8
+                RowLayout {
+                    Layout.fillWidth: true
+                    FluText {
+                        text: qsTr("质量自检：%1 处需人工复核").arg(qualityWarnings.count)
+                        font.pixelSize: 15
+                        font.bold: true
+                        color: FluTheme.fontPrimaryColor
+                    }
+                    Item { Layout.fillWidth: true }
+                    FluButton {
+                        text: qsTr("关闭")
+                        onClicked: qualityReport.visible = false
+                    }
+                }
+                ListView {
+                    id: qualityList
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    model: qualityWarnings
+                    clip: true
+                    spacing: 2
+                    delegate: Rectangle {
+                        width: qualityList.width
+                        height: 44
+                        radius: tokens.radiusControl
+                        color: rowHovered ? FluTheme.itemHoverColor : "transparent"
+                        property bool rowHovered: false
+                        HoverHandler { onHoveredChanged: rowHovered = hovered }
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: 8
+                            spacing: 10
+                            FluText {
+                                text: model.line >= 0 ? qsTr("第 %1 行").arg(model.line + 1) : qsTr("全文")
+                                font.pixelSize: 12
+                                font.bold: true
+                                color: tokens.warning
+                                Layout.preferredWidth: 76
+                            }
+                            FluText {
+                                text: model.issue
+                                font.pixelSize: 13
+                                color: FluTheme.fontPrimaryColor
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                            }
+                            FluButton {
+                                text: qsTr("跳转")
+                                disabled: model.line < 0
+                                onClicked: {
+                                    page.focusLine(model.line)
+                                    qualityReport.visible = false
+                                }
+                            }
+                        }
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Item { Layout.fillWidth: true }
+                    FluButton {
+                        text: qsTr("全部已复核，清除列表")
+                        onClicked: qualityWarnings.clear()
+                    }
+                }
+            }
+        }
     }
 
     // ---------- 浮动翻译窗口（真独立 Window：可拖到屏幕任意位置，不再受页面范围限制） ----------

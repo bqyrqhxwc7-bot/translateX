@@ -43,6 +43,7 @@ for (let i = 0; i < argv.length; ++i) {
   else if (argv[i] === '--line') opts.line = parseInt(argv[++i], 10);
   else if (argv[i] === '--text') opts.text = argv[++i];
   else if (argv[i] === '--path') opts.path = argv[++i];
+  else if (argv[i] === '--index') opts.index = parseInt(argv[++i], 10);
   else if (argv[i] === '--wait') opts.wait = parseInt(argv[++i], 10);
 }
 
@@ -54,6 +55,7 @@ const commandArgs = {
   saveFileAs: opts.path,
   getLineText: opts.line,
   setLineText: [opts.line, opts.text],
+  navigate: opts.index,
 };
 
 function send(cmd, args, id) {

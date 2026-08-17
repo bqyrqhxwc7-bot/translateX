@@ -1,7 +1,9 @@
 #include <QtTest>
+#include <QDir>
 #include <atomic>
 #include <memory>
 
+#include "services/configservice.h"
 #include "services/termglossary.h"
 #include "services/qualitygate.h"
 #include "services/translationcache.h"
@@ -57,6 +59,8 @@ class TestQuality : public QObject
     Q_OBJECT
 
 private slots:
+    void initTestCase();
+    void cleanupTestCase();
     void glossaryRoundTrip();
     void glossaryConstraintPrompt();
     void glossaryVerify();
@@ -67,8 +71,21 @@ private slots:
     void chunkingMergesContiguous();
     void chunkingNonContiguous();
     void chunkingBudgetSplit();
+    void chunkingSentenceBoundary();
     void glossaryAffectsCacheKey();
 };
+
+void TestQuality::initTestCase()
+{
+    // 配置隔离：防止测试写入（如 setSentenceAwareChunking 落盘）污染真实配置/跨进程泄漏
+    ConfigService::setDataDirectoryForTest(
+        QDir::tempPath() + QStringLiteral("/tst_quality_config"));
+}
+
+void TestQuality::cleanupTestCase()
+{
+    QDir(QDir::tempPath() + QStringLiteral("/tst_quality_config")).removeRecursively();
+}
 
 void TestQuality::glossaryRoundTrip()
 {
@@ -261,6 +278,36 @@ void TestQuality::chunkingBudgetSplit()
     for (int i = 0; i < 5; ++i) {
         QCOMPARE(mock->batchCalls[i], QList<int>({ i }));
     }
+}
+
+void TestQuality::chunkingSentenceBoundary()
+{
+    auto mock = std::make_shared<MockBackend>();
+    ServiceRegistry::instance()->registerBackend(
+        QStringLiteral("test.mock"), [mock]() { return mock; }, QStringLiteral("Mock"));
+
+    TranslationService service;
+    service.setBackend(QStringLiteral("test.mock"));
+    service.setFallbackEnabled(false);
+    service.setCacheEnabled(false);
+    service.setMaxChunkChars(100000); // 预算充足，仅句边界截断
+
+    // 第 0 行以句号结尾 → 第 1 行必须另起一块（即使预算充足）
+    QStringList source{ "第一句。", "第二句", "第三句！", "第四句", "第五句" };
+    QList<int> targets{ 0, 1, 2, 3, 4 };
+    service.translateBatchSync(source, targets);
+
+    QCOMPARE(mock->batchCalls.size(), 3);
+    QCOMPARE(mock->batchCalls[0], QList<int>({ 0 }));
+    QCOMPARE(mock->batchCalls[1], QList<int>({ 1, 2 }));
+    QCOMPARE(mock->batchCalls[2], QList<int>({ 3, 4 }));
+
+    // 关闭句边界 → 全部合并为一块
+    mock->batchCalls.clear();
+    service.setSentenceAwareChunking(false);
+    service.translateBatchSync(source, targets);
+    QCOMPARE(mock->batchCalls.size(), 1);
+    QCOMPARE(mock->batchCalls[0], QList<int>({ 0, 1, 2, 3, 4 }));
 }
 
 void TestQuality::glossaryAffectsCacheKey()

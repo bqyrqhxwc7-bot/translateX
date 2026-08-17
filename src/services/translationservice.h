@@ -52,6 +52,8 @@ public:
     // 成本：智能分块开关 + 单块最大字符数
     Q_INVOKABLE void setSmartChunkingEnabled(bool enabled);
     Q_INVOKABLE void setMaxChunkChars(int chars);
+    // 质量：句边界分块（分块以完整句子为界，避免跨句合并）
+    Q_INVOKABLE void setSentenceAwareChunking(bool enabled);
 
     // 目标语言预检测：文本是否已基本是目标语言（当前支持中文→中文跳过），
     // 避免把已是目标语言的行拿去翻译（模型回显 → 误报“疑似未翻译”）
@@ -63,6 +65,9 @@ public:
     // ---- 进度 / 取消 ----
     Q_INVOKABLE void cancelTranslation();
     Q_INVOKABLE bool translationActive() const;
+
+    // ---- 连接测试（异步；结果经 connectionTested 信号返回）----
+    Q_INVOKABLE void testBackendConnection(const QString &backendId);
 
     // ---- 同步辅助（供测试/内部）----
     TranslationResult translateSync(const QString &text);
@@ -81,6 +86,8 @@ signals:
     void translationStarted(int total);
     void translationProgress(int done, int total);
     void translationCanceled();
+    // 连接测试结果（backendId, ok, message）
+    void connectionTested(const QString &backendId, bool ok, const QString &message);
 
 private:
     QStringList withContextLines(const QStringList &sourceLines, int lineNumber) const;
@@ -88,9 +95,12 @@ private:
 
     std::shared_ptr<ITranslationBackend> currentBackend() const;
     std::shared_ptr<ITranslationBackend> fallbackBackend() const;
+    std::shared_ptr<ITranslationBackend> backendForId(const QString &id) const;
 
     // 成本：估算文本 token 数（中英文近似：中文 1 字≈1 token，英文 4 字符≈1 token）
     static int estimateTokens(const QString &text);
+    // 质量：文本是否以句末标点结尾（分段感知分块用）
+    static bool endsWithSentenceBoundary(const QString &text);
     // 成本：按 token 预算合并相邻目标行为块（减少请求数）
     QList<QList<int>> buildChunks(const QStringList &sourceLines, const QList<int> &targetLines) const;
 
@@ -112,6 +122,7 @@ private:
     bool m_cacheEnabled = true;
     bool m_fallbackEnabled = true;
     bool m_smartChunking = true;
+    bool m_sentenceAwareChunking = true;
     bool m_qualityGateEnabled = true;
     int m_maxChunkChars = 14000;
     int m_timeoutMs = 0;

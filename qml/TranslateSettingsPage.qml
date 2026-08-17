@@ -24,6 +24,9 @@ FluScrollablePage {
     // 单选组重算驱动（函数调用绑定不会自动重算，参照 ConfigSectionCard.configVersion）
     property int backendVersion: 0
     property int configVersion: 0
+    // 连接测试状态
+    property bool backendTesting: false
+    property bool backendTestOk: false
     // 显示/查找设置（与编辑器共用 config，页面重建时读取）
     property int originalFontSize: 14
     property int commentFontSize: 12
@@ -97,13 +100,8 @@ FluScrollablePage {
             arr.push({ id: ids[i], name: translationService.backendDisplayName(ids[i]) })
         }
         backendModel = arr
-        const cur = translationService.backend()
-        for (let i = 0; i < arr.length; ++i) {
-            if (arr[i].id === cur) {
-                backendCombo.currentIndex = i
-                break
-            }
-        }
+        // 单选组 checked 由 backendVersion 驱动重算
+        backendVersion++
     }
 
     // 当前后端 → 对应配置 section（仅已知带参数的后端显示参数区）
@@ -116,17 +114,18 @@ FluScrollablePage {
     Connections {
         target: translationService
         function onBackendChanged(id) {
-            for (let i = 0; i < backendModel.length; ++i) {
-                if (backendModel[i].id === id) {
-                    backendCombo.currentIndex = i
-                    break
-                }
-            }
+            // 单选组 checked 由 backendVersion 驱动重算
+            backendVersion++
             updateBackendSection()
         }
         function onQualityWarning(lineNumber, issue) {
             const loc = lineNumber >= 0 ? qsTr("第 %1 行：").arg(lineNumber + 1) : ""
             infoBar.showWarning(loc + issue, 4000)
+        }
+        function onConnectionTested(backendId, ok, message) {
+            backendTesting = false
+            backendTestOk = ok
+            backendTestLabel.text = ok ? qsTr("连接正常：%1").arg(message) : qsTr("连接失败：%1").arg(message)
         }
     }
 
@@ -212,6 +211,29 @@ FluScrollablePage {
                 Layout.fillWidth: true
                 visible: backendSection.length > 0
             }
+
+            // 连接测试（异步：Ollama 走模型扫描，网络模型走最小翻译探测）
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                FluButton {
+                    text: qsTr("测试连接")
+                    disabled: backendTesting
+                    onClicked: {
+                        backendTesting = true
+                        backendTestLabel.text = qsTr("测试中…")
+                        translationService.testBackendConnection(translationService.backend())
+                    }
+                }
+                FluText {
+                    id: backendTestLabel
+                    text: ""
+                    font.pixelSize: 12
+                    color: backendTestOk ? tokens.success : tokens.error
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                }
+            }
         }
     }
 
@@ -236,52 +258,64 @@ FluScrollablePage {
                 FluText { text: qsTr("翻译选项"); font.pixelSize: 16; font.bold: true }
             }
 
-            // 语言选择（手动渲染，保证可用；含 auto）
-            RowLayout {
+            // 语言选择（手动渲染，保证可用；含 auto；源/目标各占一行 Flow 防溢出）
+            ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 12
-                FluText {
-                    text: qsTr("源语言")
-                    Layout.alignment: Qt.AlignVCenter
-                }
+                spacing: 8
                 RowLayout {
-                    Layout.preferredWidth: 140
-                    spacing: 6
-                    Repeater {
-                        model: ["auto", "en", "zh-CN", "ja", "ko", "fr", "de", "es", "ru"]
-                        FluRadioButton {
-                            property string opt: modelData
-                            text: opt
-                            checked: {
-                                configVersion
-                                return configService.get("translation", "sourceLang") === opt
-                            }
-                            clickListener: () => {
-                                configService.set("translation", "sourceLang", opt)
-                                configVersion++
+                    Layout.fillWidth: true
+                    spacing: 12
+                    FluText {
+                        text: qsTr("源语言")
+                        Layout.alignment: Qt.AlignTop
+                        Layout.topMargin: 4
+                        Layout.preferredWidth: 64
+                    }
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: 6
+                        Repeater {
+                            model: ["auto", "en", "zh-CN", "ja", "ko", "fr", "de", "es", "ru"]
+                            FluRadioButton {
+                                property string opt: modelData
+                                text: opt
+                                checked: {
+                                    configVersion
+                                    return configService.get("translation", "sourceLang") === opt
+                                }
+                                clickListener: () => {
+                                    configService.set("translation", "sourceLang", opt)
+                                    configVersion++
+                                }
                             }
                         }
                     }
                 }
-                FluText {
-                    text: qsTr("目标语言")
-                    Layout.alignment: Qt.AlignVCenter
-                }
                 RowLayout {
-                    Layout.preferredWidth: 140
-                    spacing: 6
-                    Repeater {
-                        model: ["zh-CN", "en", "ja", "ko", "fr", "de", "es", "ru"]
-                        FluRadioButton {
-                            property string opt: modelData
-                            text: opt
-                            checked: {
-                                configVersion
-                                return configService.get("translation", "targetLang") === opt
-                            }
-                            clickListener: () => {
-                                configService.set("translation", "targetLang", opt)
-                                configVersion++
+                    Layout.fillWidth: true
+                    spacing: 12
+                    FluText {
+                        text: qsTr("目标语言")
+                        Layout.alignment: Qt.AlignTop
+                        Layout.topMargin: 4
+                        Layout.preferredWidth: 64
+                    }
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: 6
+                        Repeater {
+                            model: ["zh-CN", "en", "ja", "ko", "fr", "de", "es", "ru"]
+                            FluRadioButton {
+                                property string opt: modelData
+                                text: opt
+                                checked: {
+                                    configVersion
+                                    return configService.get("translation", "targetLang") === opt
+                                }
+                                clickListener: () => {
+                                    configService.set("translation", "targetLang", opt)
+                                    configVersion++
+                                }
                             }
                         }
                     }

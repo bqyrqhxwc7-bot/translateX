@@ -72,6 +72,14 @@
       "group": "成本"
     },
     {
+      "key": "sentenceAwareChunking",
+      "displayName": "句边界分块",
+      "description": "分块以完整句子为界（句末标点处截断），避免跨句合并影响翻译质量",
+      "type": "bool",
+      "default": true,
+      "group": "质量"
+    },
+    {
       "key": "maxChunkChars",
       "displayName": "单块最大字符",
       "description": "智能分块的单块字符预算",

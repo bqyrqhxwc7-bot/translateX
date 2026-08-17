@@ -64,8 +64,12 @@ git push origin main
 
 | 优先级 | 任务 | 状态/要求 |
 | --- | --- | --- |
-| 候选 | docx 导出、pdf 导出文本层修复（Qt 升级后复查）、.trx 图片 external 降级（>1MB 转外置）、术语表 UI、翻译历史面板 | 非阻塞 |
+| 迭代2 | docx 导出批注（①译文内联高亮 ②Word 原生批注，做成选项 `docxCommentStyle: inline/native`） | 用户已拍板两种都做 |
+| 迭代3 | TTS 朗读（Qt6TextToSpeech 已装，Windows SAPI 系统语音） | 无版权/金钱问题 |
+| 迭代4 | 翻译历史面板、文档统计、Markdown 导出、术语自动提取、首启向导、自动保存 | 非阻塞 |
+| 候选 | pdf 导出文本层修复（Qt 升级后复查）、.trx 图片 external 降级（>1MB 转外置） | 非阻塞 |
 
+> 迭代1（2026-08-17 完成）：P0 回归修复（backendCombo 残留引用）、A2 句边界分块（`sentenceAwareChunking`）、B1 后端连接测试（`testBackendConnection`）、B2 拖放打开、B3 快捷键总览（`?`）、A1 质量自检复核面板（qualityWarning 汇总+跳转）、设置页语言选择 Flow 换行修复。
 > 每项任务实施蓝图见 §8；**开工前先读对应 `docs/services/` 文档，遵循 AGENTS.md**。
 
 ## 4. 架构铁律（违反必出回归 bug）
@@ -92,8 +96,8 @@ src/services/              # ★ 服务层（Q_INVOKABLE，QML 直接调）
   chapterservice / findservice / documentmanager / trxparser / docxparser /
   configservice / securestorage / termglossary / qualitygate / translationcache /
   serviceregistry / appguard
-qml/TranslateHomePage.qml  # 核心 UI（1725 行：Ribbon/编辑器/右键菜单/浮窗/设置浮层）
-qml/Main.qml / TranslateSettingsPage.qml / TranslatePanelContent.qml / ConfigSectionCard.qml
+qml/TranslateHomePage.qml  # 核心 UI（约 2000 行：Ribbon/编辑器/右键菜单/浮窗/设置浮层/快捷键总览/质量复核面板）
+qml/Main.qml / TranslateSettingsPage.qml / TranslatePanelContent.qml / ConfigSectionCard.qml / UiDriverActions.qml
 tests/                     # 13 目标；CMakeLists 抽 translex_services 静态库
 samples/demo.trx           # .trx 示例（含富文本/图片显示层）
 samples/demo.docx          # docx 示例（gen_docx.py 生成，纯 stdlib 可再生成）
@@ -135,6 +139,9 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 - **QPdfWriter 文本层缺陷**（Qt 6.5.3）：导出 PDF 提取乱码（ASCII 重复、CJK 变 ?），视觉正常；测试夹具/往返断言禁止依赖它（详见 `pdf-service.md` §3.0/§6）
 - **火绒安全会挂起新 exe**（行为分析以调试方式创建进程，症状：进程停在 DbgBreakPoint、cdb 附加被拒、`tst_docx`/`tst_pdf` 等含 ZIP/PDF 写入代码的新测试 exe 无法启动）→ 把项目目录加进火绒信任区（白名单）；若某次测试突然“卡死”，先怀疑它
 - **QML pragma Singleton 绑定失效**（Qt 6.5，踩过）：`qml/DesignTokens.qml` 曾用 `pragma Singleton`，运行期全部属性 undefined（绑定从未求值，`NO_CACHEGEN` 也无效），报错形如 `Unable to assign [undefined] to double` 刷屏且探针不执行 → 改为**普通组件 + 页面内实例化**（`DesignTokens { id: tokens }`）；delegate/内联 Window 内不能访问实例 id，须经页面属性中转（`page.rowRadius`/`page.cardRadius` 模式，见 `qml/TranslateHomePage.qml` 头部注释）
+- **中文标点比较必须用码点**：`QLatin1Char('。')` 对多字节 UTF-8 字面量会截断（取最低字节），永不匹配 → 用 `QChar::unicode()` 与 `0x3002` 等码点比较（`endsWithSentenceBoundary` 踩过）
+- **测试配置隔离**：`ConfigService::set` 会落盘 `%APPDATA%`，测试进程间互相污染（MSVC 测试写 `sentenceAwareChunking=false` → clang 测试读到 false 失败）→ 测试必须 `ConfigService::setDataDirectoryForTest(临时目录)`（参照 `tst_quality::initTestCase`）
+- **UI 驱动点击坐标**：DPI 缩放（120%）下 `SetCursorPos` 用物理坐标、WM_LBUTTONDOWN 用客户区逻辑坐标；PowerShell `[ref]` 传 out int 参数在 pwsh 7 有怪癖（只填充首参），用 csc 编译 C# 工具最稳（`%TEMP%\opencode\cap.exe`/`wmclick.exe` 模式）
 
 ## 7. 子模块补丁（⚠️ 保持本地状态，勿提交/勿还原）
 

@@ -52,6 +52,7 @@
 
 ### 3.3 智能分块 ✅ 已实现
 - `TranslationService::buildChunks`：按 **token 预算**（`m_maxChunkChars`）合并**行号连续**的相邻行
+- **句边界分块**（`sentenceAwareChunking`，默认开）：当前块末行以句末标点结尾（`。！？…；.!?;`，中文标点按 Unicode 码点比较）即截断，避免跨句合并稀释上下文质量；`setSentenceAwareChunking` 可关
 - `translateBatchSync` 逐块调用 `backend->translateBatch(...)`；后端可覆盖 `translateBatch` 合并多行为一次请求，真正降请求数
 - 未覆盖 `translateBatch` 的后端按默认逐条循环，无回归
 - 行序保持、缓存命中行跳过、失败单行重试 + 降级链
@@ -80,6 +81,14 @@
 
 ### 4.4 严格输出 ✅ 已实现
 - `m_strictOutput`：仅输出译文，减少模型废话浪费 token
+
+### 4.5 质量自检复核面板 ✅ 已实现（2026-08-17）
+- `qualityWarning(lineNumber, issue)` 逐条发信号；主页收集到 `qualityWarnings` ListModel，`onBatchFinished` 有告警时弹出**复核面板**（行号+问题+跳转按钮，`focusLine` 定位复核），可清除列表
+- 翻译开始时自动清空上一批告警
+
+### 4.6 后端连接测试 ✅ 已实现（2026-08-17）
+- `testBackendConnection(backendId)`：异步（QtConcurrent + QFutureWatcher）创建后端实例，`healthCheck()` 非空即成功；否则最小翻译探测（`translate("hello")`，8s 超时）
+- 结果经 `connectionTested(backendId, ok, message)` 信号回传；设置页「测试连接」按钮展示（成功绿/失败红）
 
 ## 5. 接口（对齐 SERVICE-ARCHITECTURE.md）
 

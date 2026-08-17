@@ -31,6 +31,7 @@ TranslationService::TranslationService(QObject *parent)
     m_cacheEnabled = cfg->get(QStringLiteral("translation"), QStringLiteral("cacheEnabled")).toBool();
     m_fallbackEnabled = cfg->get(QStringLiteral("translation"), QStringLiteral("fallbackEnabled")).toBool();
     m_smartChunking = cfg->get(QStringLiteral("translation"), QStringLiteral("smartChunking")).toBool();
+    m_sentenceAwareChunking = cfg->get(QStringLiteral("translation"), QStringLiteral("sentenceAwareChunking")).toBool();
     m_maxChunkChars = qMax(256, cfg->get(QStringLiteral("translation"), QStringLiteral("maxChunkChars")).toInt());
     m_qualityGateEnabled = cfg->get(QStringLiteral("translation"), QStringLiteral("qualityGateEnabled")).toBool();
 
@@ -226,6 +227,28 @@ void TranslationService::setMaxChunkChars(int chars)
     ConfigService::instance()->set(QStringLiteral("translation"), QStringLiteral("maxChunkChars"), m_maxChunkChars);
 }
 
+void TranslationService::setSentenceAwareChunking(bool enabled)
+{
+    m_sentenceAwareChunking = enabled;
+    ConfigService::instance()->set(QStringLiteral("translation"), QStringLiteral("sentenceAwareChunking"), enabled);
+}
+
+bool TranslationService::endsWithSentenceBoundary(const QString &text)
+{
+    const QString t = text.trimmed();
+    if (t.isEmpty()) {
+        return false;
+    }
+    const ushort last = t.at(t.size() - 1).unicode();
+    // 注意：中文标点必须用码点比较（QLatin1Char 对多字节字面量会截断，永不匹配）
+    return last == 0x3002   // 。
+        || last == 0xFF01  // ！
+        || last == 0xFF1F  // ？
+        || last == 0x2026  // …
+        || last == 0xFF1B  // ；
+        || last == u'.' || last == u'!' || last == u'?' || last == u';';
+}
+
 int TranslationService::estimateTokens(const QString &text)
 {
     // 中文 1 字 ≈ 1 token；英文/数字 4 字符 ≈ 1 token
@@ -290,8 +313,12 @@ QList<QList<int>> TranslationService::buildChunks(
         const QString text = line >= 0 && line < sourceLines.size() ? sourceLines.at(line) : QString();
         const int len = text.size();
         const bool contiguous = current.isEmpty() || line == current.last() + 1;
+        // 分段感知：当前 chunk 末行已是完整句子（句末标点）→ 截断，
+        // 避免跨句合并稀释上下文质量（m_sentenceAwareChunking 开关）
+        const bool sentenceBoundary = m_sentenceAwareChunking && !current.isEmpty()
+            && endsWithSentenceBoundary(sourceLines.value(current.last()));
 
-        if (contiguous && currentChars + len <= budget) {
+        if (contiguous && !sentenceBoundary && currentChars + len <= budget) {
             current.append(line);
             currentChars += len;
         } else {
@@ -626,4 +653,52 @@ void TranslationService::cancelTranslation()
 bool TranslationService::translationActive() const
 {
     return m_translating.load();
+}
+
+void TranslationService::testBackendConnection(const QString &backendId)
+{
+    // 快照后端配置（异步期间不读 this 成员）
+    const QVariantMap config = m_backendConfig;
+    auto *watcher = new QFutureWatcher<QPair<bool, QString>>(this);
+    connect(watcher, &QFutureWatcherBase::finished, this,
+            [this, watcher, backendId]() {
+        const auto result = watcher->result();
+        emit connectionTested(backendId, result.first, result.second);
+        watcher->deleteLater();
+    });
+
+    watcher->setFuture(QtConcurrent::run([this, backendId, config]() {
+        QPair<bool, QString> out{ false, QStringLiteral("后端不可用") };
+        const auto backend = backendForId(backendId);
+        if (!backend) {
+            out.second = QStringLiteral("后端未注册");
+            return out;
+        }
+        backend->updateConfig(config);
+        // 优先用后端自带 healthCheck；空实现（如 Ollama）走最小翻译探测
+        const QString health = backend->healthCheck();
+        if (!health.isEmpty()) {
+            out.first = true;
+            out.second = health;
+            return out;
+        }
+        TranslationOptions opts;
+        opts.sourceLang = m_sourceLang;
+        opts.targetLang = m_targetLang;
+        opts.strictOutput = true;
+        opts.timeoutMs = 8000;
+        const TranslationResult r = backend->translate(QStringLiteral("hello"), opts, nullptr);
+        if (r.success) {
+            out.first = true;
+            out.second = QStringLiteral("连接正常");
+        } else {
+            out.second = r.errorMessage.isEmpty() ? QStringLiteral("连接失败") : r.errorMessage;
+        }
+        return out;
+    }));
+}
+
+std::shared_ptr<ITranslationBackend> TranslationService::backendForId(const QString &id) const
+{
+    return ServiceRegistry::instance()->createBackend(id);
 }
