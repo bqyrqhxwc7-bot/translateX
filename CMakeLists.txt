@@ -29,6 +29,15 @@ if(NOT Qt6Pdf_FOUND)
         "或改用含 Pdf 组件的 Qt 套件（如 msvc2019_64）构建。")
 endif()
 
+# TTS 朗读（迭代3）为可选功能：无 TextToSpeech 模块的平台照常构建（服务空实现降级）。
+find_package(Qt6 COMPONENTS TextToSpeech QUIET)
+if(TARGET Qt6::TextToSpeech)
+    set(TRANSLEX_HAS_TTS TRUE)
+else()
+    set(TRANSLEX_HAS_TTS FALSE)
+    message(WARNING "未找到 Qt6TextToSpeech 组件：TTS 朗读功能将不可用（应用其余功能正常）。")
+endif()
+
 # FluentUI (BSD-3-Clause) : Microsoft Fluent Design component library for Qt QML ----
 # 全量迁移到 QML：FluentUI 静态库作为子目录集成（third_party/FluentUI）。
 set(FLUENTUI_BUILD_EXAMPLES OFF CACHE BOOL "Build FluentUI demo applications." FORCE)
@@ -104,6 +113,8 @@ qt_add_executable(translex
     src/services/docxparser.h
     src/services/pdfparser.cpp
     src/services/pdfparser.h
+    src/services/texttospeechservice.cpp
+    src/services/texttospeechservice.h
 )
 
 qt_add_qml_module(translex
@@ -126,10 +137,16 @@ target_link_libraries(translex PRIVATE
     fluentuiplugin
     QuaZip::QuaZip
 )
+if(TRANSLEX_HAS_TTS)
+    target_link_libraries(translex PRIVATE Qt6::TextToSpeech)
+endif()
 target_compile_definitions(translex PRIVATE
     FLUENTUI_BUILD_STATIC_LIB
     TRANSLEX_VERSION="${TRANSLEX_QML_VERSION}"
 )
+if(TRANSLEX_HAS_TTS)
+    target_compile_definitions(translex PRIVATE TRANSLEX_HAS_TTS=1)
+endif()
 target_include_directories(translex PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/FluentUI/src")
 
 # FluentUI 生成大量 QML cache 源文件，MSVC 并发编译共享 PDB 会触发 C1041；

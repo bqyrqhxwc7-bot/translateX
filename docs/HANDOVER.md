@@ -53,24 +53,26 @@ git push origin main
 | 查找 | 大小写/整词/**模糊**（子序列）、替换 | `services/find-service.md` |
 | 浮窗 | 真独立 Window（Qt.Tool+Frameless）、位置记忆、启动显示 | `ui/translate-panel.md` |
 | 设置页 | schema 驱动（`ui.json`），字号滑条、查找开关、浮窗开关 | `services/config-service.md` |
+| TTS 朗读 | **迭代3**：独立 TextToSpeechService（朗读选中行/选区、语速、停止；跨平台 Qt6TextToSpeech，无模块/引擎优雅降级） | `services/text-to-speech.md` |
 | **A3 .trx** | 显示层（富文本/图片）完整往返、编辑即降级 | `services/file-service.md` |
 | **B docx 导入** | DocxParser：段落→行 + 粗/斜/颜色/字号/字体 + 图片(data URI) | `services/file-service.md` |
 | **B2 docx 导出批注** | DocxParser::write：原文 + 译文批注，`docxCommentStyle: inline`（黄色高亮）/`native`（Word 原生批注，可读回） | `services/docx-comment-export.md` |
 | **C pdf 导入/导出** | PdfParser：每页一行导入（QPdfDocument）+ 文本页导出（QPdfWriter）；**导出文本层不可提取**（Qt 6.5.3 缺陷，视觉正确） | `services/pdf-service.md` |
 | **D 大文件降级** | 超 5 万行 / 200MB 进受限模式：显示层回退纯文本 + 禁批注编辑/翻译，编辑/查找/章节保留；顶部提示条 | `services/large-file.md` |
 
-**测试**：13 目标全绿（`tst_docx` 10 用例：7 导入 + 3 导出（writeInline/writeNative/roundTrip，批注=译文往返保真）；`tst_pdf` 9 用例；`tst_documentmanager` 含 4 个受限模式用例）。
+**测试**：14 目标全绿（`tst_docx` 10 用例：7 导入 + 3 导出（writeInline/writeNative/roundTrip，批注=译文往返保真）；`tst_pdf` 9 用例；`tst_documentmanager` 含 4 个受限模式用例；`tst_texttospeech` 4 用例（无 TTS 引擎环境 graceful 通过））。
 
 ## 3. 路线图（下一步从这里开始）
 
 | 优先级 | 任务 | 状态/要求 |
 | --- | --- | --- |
 | ~~迭代2~~ | ~~docx 导出批注（①译文内联高亮 ②Word 原生批注，做成选项 `docxCommentStyle: inline/native`）~~ | ✅ 完成（2026-08-17，见 `services/docx-comment-export.md`） |
-| 迭代3 | TTS 朗读（Qt6TextToSpeech 已装，Windows SAPI 系统语音） | 无版权/金钱问题 |
+| ~~迭代3~~ | ~~TTS 朗读（Qt6TextToSpeech 已装，Windows SAPI 系统语音）~~ | ✅ 完成（2026-08-17，见 `services/text-to-speech.md`；用户确认：选中行+选区朗读、语速+停止、语音跟随系统） |
 | 迭代4 | 翻译历史面板、文档统计、Markdown 导出、术语自动提取、首启向导、自动保存 | 非阻塞 |
 | 候选 | pdf 导出文本层修复（Qt 升级后复查）、.trx 图片 external 降级（>1MB 转外置）、docx 导出 `Original` 纯原文模式 | 非阻塞 |
 
 > 迭代2（2026-08-17 完成）：docx 导出批注（`DocxParser::write` + `docxCommentStyle` 配置 + tst_docx 3 个新用例）。
+> 迭代3（2026-08-17 完成）：TTS 朗读（独立 `TextToSpeechService`，`TRANSLEX_HAS_TTS` 条件编译，无模块/引擎优雅降级；工具栏/右键菜单入口；tst_texttospeech 4 用例）。
 
 > 迭代1（2026-08-17 完成）：P0 回归修复（backendCombo 残留引用）、A2 句边界分块（`sentenceAwareChunking`）、B1 后端连接测试（`testBackendConnection`）、B2 拖放打开、B3 快捷键总览（`?`）、A1 质量自检复核面板（qualityWarning 汇总+跳转）、设置页语言选择 Flow 换行修复。
 > 每项任务实施蓝图见 §8；**开工前先读对应 `docs/services/` 文档，遵循 AGENTS.md**。

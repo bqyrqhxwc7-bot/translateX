@@ -10,6 +10,7 @@
 #include "services/documentmanager.h"
 #include "services/chapterservice.h"
 #include "services/findservice.h"
+#include "services/texttospeechservice.h"
 #include "driver_service.h"
 
 #ifdef FLUENTUI_BUILD_STATIC_LIB
@@ -67,6 +68,10 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("chapterService", &chapterService);
     FindService findService;
     engine.rootContext()->setContextProperty("findService", &findService);
+
+    // TTS 朗读服务（独立，不依赖其他 service；无 TTS 模块/引擎时优雅降级）
+    TextToSpeechService textToSpeechService;
+    engine.rootContext()->setContextProperty("textToSpeechService", &textToSpeechService);
 
     // 暴露主窗口（浮窗 Qt.Tool 经 transientParent 与主窗口关联）：先置空占位，避免 QML
     // 早期求值报"未定义"；load 完成后更新为实际根窗口（FluWindow）

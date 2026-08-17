@@ -27,6 +27,7 @@ set(SERVICE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/trxparser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/docxparser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/pdfparser.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/texttospeechservice.cpp
 )
 
 # 共享服务抽为静态库：11 个测试目标只需编译一次服务源码（避免约 130 次重复编译）。
@@ -36,6 +37,10 @@ qt_add_library(translex_services STATIC
 )
 target_include_directories(translex_services PUBLIC ${TEST_INCLUDE_DIRS})
 target_link_libraries(translex_services PUBLIC Qt6::Core Qt6::Network Qt6::Concurrent Qt6::Gui Qt6::Pdf QuaZip::QuaZip)
+if(TARGET Qt6::TextToSpeech)
+    target_link_libraries(translex_services PUBLIC Qt6::TextToSpeech)
+    target_compile_definitions(translex_services PUBLIC TRANSLEX_HAS_TTS=1)
+endif()
 
 # ---- 测试自包含：把 Qt 调试 DLL + 平台/图片插件拷到测试输出目录 ----
 # 否则测试 exe 在无 Qt bin PATH 的环境运行会弹「找不到 Qt6Xxxd.dll」系统错误框
@@ -55,6 +60,10 @@ if(WIN32)
         "${QT_TEST_BIN_DIR}/Qt6Test${QT_DBG_SUFFIX}.dll"
         "${QT_TEST_BIN_DIR}/Qt6Core5Compat${QT_DBG_SUFFIX}.dll"
     )
+    if(TARGET Qt6::TextToSpeech)
+        list(APPEND QT_TEST_RUNTIME_DLLS
+            "${QT_TEST_BIN_DIR}/Qt6TextToSpeech${QT_DBG_SUFFIX}.dll")
+    endif()
     add_custom_command(TARGET translex_services POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${QT_TEST_RUNTIME_DLLS}
                 "$<TARGET_FILE_DIR:translex_services>"
@@ -135,3 +144,8 @@ qt_add_executable(tst_pdf tst_pdf.cpp)
 target_link_libraries(tst_pdf PRIVATE translex_services Qt6::Test)
 target_compile_definitions(tst_pdf PRIVATE SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME tst_pdf COMMAND tst_pdf)
+
+# ---- TTS 朗读服务测试（降级路径 + 配置往返；无引擎环境同样通过）----
+qt_add_executable(tst_texttospeech tst_texttospeech.cpp)
+target_link_libraries(tst_texttospeech PRIVATE translex_services Qt6::Test)
+add_test(NAME tst_texttospeech COMMAND tst_texttospeech)

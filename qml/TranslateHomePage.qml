@@ -113,6 +113,8 @@ FluContentPage {
     property real panelWidth: 280
     // 多选翻译：Ctrl+点击 加入/移出选中集
     property var selectedLines: []
+    // 行内编辑框当前选区（delegate 内 TextEdit 经此中转，供右键菜单「朗读选区」）
+    property string editorSelectedText: ""
     // 翻译面板模式（ppt=Ribbon 功能区 / floating=独立浮窗）与默认显示
     property string panelMode: "floating"
     property bool panelVisible: false
@@ -262,6 +264,19 @@ FluContentPage {
             infoBar.showWarning(loc + issue, 6000)
             // 收集到复核面板（onBatchFinished 汇总展示）
             page.qualityWarnings.append({ line: lineNumber, issue: issue })
+        }
+    }
+
+    // TTS 朗读状态（迭代3）：逐行朗读时高亮当前行；无引擎时提示
+    Connections {
+        target: textToSpeechService
+        function onLineStarted(lineNumber) {
+            if (lineNumber >= 0 && page.currentLine !== lineNumber) {
+                page.focusLine(lineNumber)
+            }
+        }
+        function onUnavailable() {
+            infoBar.showWarning(qsTr("系统无 TTS 引擎，无法朗读（Linux 需 speech-dispatcher）"), 5000)
         }
     }
 
@@ -618,6 +633,63 @@ FluContentPage {
         translator.translateLines(lines, all)
     }
 
+    // ---------- TTS 朗读（迭代3，独立 service） ----------
+    // 朗读选中行：有译文批注读译文（听译文校验），无批注读原文；逐行队列 + 行高亮跟随
+    function speakSelectedLines() {
+        if (textToSpeechService.speaking) {
+            textToSpeechService.stop()
+            return
+        }
+        if (selectedLines.length === 0) {
+            statusLabel.text = qsTr("请先选中要朗读的行（Ctrl+点击可多选）")
+            return
+        }
+        const items = []
+        for (const ln of selectedLines) {
+            const text = documentModel.lineText(ln)
+            if (!text.trim()) continue
+            const comment = documentModel.hasCommentAt(ln) ? documentModel.commentAt(ln) : ""
+            items.push({ line: ln, text: comment && comment.trim() ? comment : text })
+        }
+        if (items.length === 0) {
+            statusLabel.text = qsTr("没有可朗读的选中行")
+            return
+        }
+        if (!textToSpeechService.speakLines(items)) {
+            statusLabel.text = qsTr("系统无 TTS 引擎，无法朗读")
+            return
+        }
+        statusLabel.text = qsTr("正在朗读 %1 行...").arg(items.length)
+    }
+    // 朗读单行（右键菜单「朗读此行」：targetLine 可能不在选中集）
+    function speakLine(lineNumber) {
+        const text = documentModel.lineText(lineNumber)
+        if (!text.trim()) {
+            statusLabel.text = qsTr("该行为空，无法朗读")
+            return
+        }
+        const comment = documentModel.hasCommentAt(lineNumber) ? documentModel.commentAt(lineNumber) : ""
+        const items = [{ line: lineNumber, text: comment && comment.trim() ? comment : text }]
+        if (!textToSpeechService.speakLines(items)) {
+            statusLabel.text = qsTr("系统无 TTS 引擎，无法朗读")
+            return
+        }
+        statusLabel.text = qsTr("正在朗读第 %1 行...").arg(lineNumber + 1)
+    }
+    // 朗读行内编辑框选区（右键菜单「朗读选区」）
+    function speakSelection() {
+        const sel = page.editorSelectedText
+        if (!sel || !sel.trim()) {
+            statusLabel.text = qsTr("没有选中文本")
+            return
+        }
+        if (!textToSpeechService.speakText(sel)) {
+            statusLabel.text = qsTr("系统无 TTS 引擎，无法朗读")
+            return
+        }
+        statusLabel.text = qsTr("正在朗读选区...")
+    }
+
     // ---------- 章节（ChapterService） ----------
     function refreshChapterState() {
         page.chapterTitles = chapterService.chapterTitles()
@@ -933,6 +1005,12 @@ FluContentPage {
                         FluFilledButton { text: qsTr("翻译当前行"); enabled: !page.limited; onClicked: translateCurrent() }
                         FluButton { text: qsTr("翻译全部待译行"); enabled: !page.limited; onClicked: translateAllPending() }
                         FluButton { text: qsTr("翻译选中行"); enabled: page.selectedLines.length > 0 && !page.limited; onClicked: translateSelected() }
+                        // TTS 朗读（迭代3）：朗读选中行（有译文读译文，否则读原文）；朗读中变「停止」
+                        FluButton {
+                            text: textToSpeechService.speaking ? qsTr("停止朗读") : qsTr("朗读选中行")
+                            enabled: page.selectedLines.length > 0
+                            onClicked: page.speakSelectedLines()
+                        }
                         FluDivider { orientation: Qt.Vertical; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
                         // 浮窗切换（PPT 式 ↔ 浮窗；唯一模式入口）
                         // checked 反映「浮窗是否实际显示」；覆盖 clickListener 直接切换（不依赖
@@ -1247,6 +1325,7 @@ FluContentPage {
                             clip: true
                             visible: page.currentLine === index
                             readOnly: page.currentLine !== index
+                            onSelectedTextChanged: page.editorSelectedText = selectedText
 
                             // 编辑实时同步到模型（只在当前行时）
                             onTextChanged: {
@@ -1598,6 +1677,9 @@ FluContentPage {
                         { key: "addComment", text: qsTr("添加/编辑批注") },
                         { key: "delComment", text: qsTr("删除批注") },
                         { key: "sep" },
+                        { key: "speakLine", text: qsTr("朗读此行") },
+                        { key: "speakSelection", text: qsTr("朗读选区") },
+                        { key: "sep" },
                         { key: "cut", text: qsTr("剪切") },
                         { key: "copy", text: qsTr("复制") },
                         { key: "paste", text: qsTr("粘贴") },
@@ -1621,7 +1703,9 @@ FluContentPage {
                             ? !documentModel.limitedMode
                                 && (modelData.key !== "delComment"
                                     || (lineMenu.targetLine >= 0 && documentModel.hasCommentAt(lineMenu.targetLine)))
-                            : true
+                            : modelData.key === "speakSelection"
+                                ? page.editorSelectedText.trim().length > 0
+                                : true
                         // 分隔线
                         Rectangle {
                             visible: modelData.key === "sep"
@@ -1659,6 +1743,8 @@ FluContentPage {
                                     switch (modelData.key) {
                                     case "addComment": page.focusComment(ln); break
                                     case "delComment": page.deleteCommentAt(ln); break
+                                    case "speakLine": page.speakLine(ln); break
+                                    case "speakSelection": page.speakSelection(); break
                                     case "cut": page.clipboardOp("cut"); break
                                     case "copy": page.clipboardOp("copy"); break
                                     case "paste": page.clipboardOp("paste"); break
