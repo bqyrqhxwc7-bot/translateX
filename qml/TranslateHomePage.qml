@@ -73,6 +73,7 @@ FluContentPage {
     readonly property int rowRadius: tokens.radiusControl
     readonly property color rowFindHighlight: tokens.findHighlight
     readonly property int cardRadius: tokens.radiusCard   // 浮窗（inline Window）用
+    readonly property color bgFloatWindow: tokens.bgFloatWindow   // 浮窗背景（inline Window 用）
     // 翻译进度状态
     property bool translating: false
     property int progressDone: 0
@@ -1112,12 +1113,19 @@ FluContentPage {
                     }
 
                     // 进入批注编辑：从模型刷新文本并聚焦（防 ListView 复用残留 + draft 空文本）
+                    // 注意：Qt.callLater 不可靠（铁律），用 Timer 延迟聚焦
                     function startCommentEdit() {
                         commentEditor.text = row.model.commentText
-                        Qt.callLater(function () {
+                        commentFocusTimer.start()
+                    }
+
+                    Timer {
+                        id: commentFocusTimer
+                        interval: 0
+                        onTriggered: {
                             commentEditor.forceActiveFocus()
                             commentEditor.cursorPosition = commentEditor.length
-                        })
+                        }
                     }
 
                     // 撤销/重做后刷新编辑行文本（TextEdit 用户输入会解除绑定）
@@ -1782,7 +1790,7 @@ FluContentPage {
             radius: page.cardRadius   // 内联 Window 组件内经 page 属性中转
             border.width: 1
             border.color: FluTheme.dividerColor
-            color: FluTheme.dark ? Qt.rgba(0.13, 0.13, 0.13, 0.98) : Qt.rgba(1, 1, 1, 0.98)
+            color: page.bgFloatWindow
             clip: true
 
             ColumnLayout {

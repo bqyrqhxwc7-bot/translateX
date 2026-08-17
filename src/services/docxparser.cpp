@@ -149,28 +149,6 @@ QString escapeHtml(QString t)
     return t;
 }
 
-// 图片 mime（data URI 用）
-QString mimeForSuffix(const QString &suffix)
-{
-    const QString s = suffix.toLower();
-    if (s == QLatin1String("jpg") || s == QLatin1String("jpeg")) {
-        return QStringLiteral("jpeg");
-    }
-    if (s == QLatin1String("png")) {
-        return QStringLiteral("png");
-    }
-    if (s == QLatin1String("gif")) {
-        return QStringLiteral("gif");
-    }
-    if (s == QLatin1String("bmp")) {
-        return QStringLiteral("bmp");
-    }
-    if (s == QLatin1String("webp")) {
-        return QStringLiteral("webp");
-    }
-    return s;
-}
-
 } // namespace
 
 bool DocxParser::read(const QString &path, DocumentModel *model,
@@ -261,7 +239,6 @@ bool DocxParser::read(const QString &path, DocumentModel *model,
 
     QVariantList imageList;
     QHash<QString, QByteArray> imageData;      // rId → base64 字节（data URI 用）
-    QHash<QString, QString> imageMime;         // rId → mime
     const QString wordPrefix = QStringLiteral("word/");
     for (const QString &rId : imageIdOrder) {
         const QString target = rels.value(rId);
@@ -277,10 +254,8 @@ bool DocxParser::read(const QString &path, DocumentModel *model,
             continue;
         }
         const QString suffix = QFileInfo(mediaPath).suffix();
-        const QString mime = mimeForSuffix(suffix);
         const QByteArray b64 = bytes.toBase64();
         imageData.insert(rId, b64);
-        imageMime.insert(rId, mime);
 
         QVariantMap img;
         img.insert(QStringLiteral("id"), rId);

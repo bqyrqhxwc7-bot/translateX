@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("mainWindow", (QObject *)nullptr);
 
     // UI 驱动桥（测试钩子）：仅 TRANSLEX_UI_DRIVER=1 时启用，供 review agent
-    // 模拟用户操作（打开文件/切主题/翻译/查状态），见 src/ui_driver_service.h
+    // 模拟用户操作（打开文件/切主题/翻译/查状态），见 src/driver_service.h
     UiDriverService uiDriverService;
     if (qEnvironmentVariableIsSet("TRANSLEX_UI_DRIVER")) {
         engine.rootContext()->setContextProperty("uiDriverBridge", &uiDriverService);

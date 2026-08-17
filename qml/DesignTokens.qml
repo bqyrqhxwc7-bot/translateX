@@ -12,6 +12,10 @@ QtObject {
     readonly property color bgApp: FluTheme.windowBackgroundColor
     // 卡片/面板/浮窗背景
     readonly property color bgCard: FluTheme.dark ? "#292929" : "#FFFFFF"
+    // 浮窗背景（半透明，与卡片区分层级）
+    readonly property color bgFloatWindow: FluTheme.dark
+                                            ? Qt.rgba(0.13, 0.13, 0.13, 0.98)
+                                            : Qt.rgba(1, 1, 1, 0.98)
     // 次级卡片/分区底
     readonly property color bgCardAlt: FluTheme.dark
                                         ? Qt.rgba(1, 1, 1, 0.05)

@@ -21,6 +21,9 @@ FluScrollablePage {
     property var glossaryMap: ({})          // 术语表（原文 → 标准译文）
     property var backendModel: []           // [{ id, name }]
     property string backendSection: ""      // 当前后端对应的配置 section（schema 渲染用）
+    // 单选组重算驱动（函数调用绑定不会自动重算，参照 ConfigSectionCard.configVersion）
+    property int backendVersion: 0
+    property int configVersion: 0
     // 显示/查找设置（与编辑器共用 config，页面重建时读取）
     property int originalFontSize: 14
     property int commentFontSize: 12
@@ -173,14 +176,23 @@ FluScrollablePage {
                     text: qsTr("后端")
                     Layout.alignment: Qt.AlignVCenter
                 }
-                FluComboBox {
-                    id: backendCombo
+                // NoStack 下 FluComboBox 的 Popup 不可用（铁律），改用行内单选组
+                RowLayout {
                     Layout.fillWidth: true
-                    model: backendModel
-                    textRole: "name"
-                    onActivated: (index) => {
-                        if (index >= 0 && index < backendModel.length) {
-                            translationService.setBackend(backendModel[index].id)
+                    spacing: 6
+                    Repeater {
+                        model: backendModel
+                        FluRadioButton {
+                            property string opt: modelData.id
+                            text: modelData.name
+                            checked: {
+                                backendVersion
+                                return translationService.backend() === modelData.id
+                            }
+                            clickListener: () => {
+                                translationService.setBackend(modelData.id)
+                                backendVersion++
+                            }
                         }
                     }
                 }
@@ -232,29 +244,47 @@ FluScrollablePage {
                     text: qsTr("源语言")
                     Layout.alignment: Qt.AlignVCenter
                 }
-                FluComboBox {
-                    id: sourceLangCombo
+                RowLayout {
                     Layout.preferredWidth: 140
-                    model: ["auto", "en", "zh-CN", "ja", "ko", "fr", "de", "es", "ru"]
-                    Component.onCompleted: {
-                        const v = configService.get("translation", "sourceLang")
-                        currentIndex = model.indexOf(v)
+                    spacing: 6
+                    Repeater {
+                        model: ["auto", "en", "zh-CN", "ja", "ko", "fr", "de", "es", "ru"]
+                        FluRadioButton {
+                            property string opt: modelData
+                            text: opt
+                            checked: {
+                                configVersion
+                                return configService.get("translation", "sourceLang") === opt
+                            }
+                            clickListener: () => {
+                                configService.set("translation", "sourceLang", opt)
+                                configVersion++
+                            }
+                        }
                     }
-                    onActivated: configService.set("translation", "sourceLang", currentText)
                 }
                 FluText {
                     text: qsTr("目标语言")
                     Layout.alignment: Qt.AlignVCenter
                 }
-                FluComboBox {
-                    id: targetLangCombo
+                RowLayout {
                     Layout.preferredWidth: 140
-                    model: ["zh-CN", "en", "ja", "ko", "fr", "de", "es", "ru"]
-                    Component.onCompleted: {
-                        const v = configService.get("translation", "targetLang")
-                        currentIndex = model.indexOf(v)
+                    spacing: 6
+                    Repeater {
+                        model: ["zh-CN", "en", "ja", "ko", "fr", "de", "es", "ru"]
+                        FluRadioButton {
+                            property string opt: modelData
+                            text: opt
+                            checked: {
+                                configVersion
+                                return configService.get("translation", "targetLang") === opt
+                            }
+                            clickListener: () => {
+                                configService.set("translation", "targetLang", opt)
+                                configVersion++
+                            }
+                        }
                     }
-                    onActivated: configService.set("translation", "targetLang", currentText)
                 }
             }
 

@@ -36,7 +36,10 @@ const opts = { action: 'getState' };
 for (let i = 0; i < argv.length; ++i) {
   if (argv[i] === '--action') opts.action = argv[++i];
   else if (argv[i] === '--file') opts.file = argv[++i];
-  else if (argv[i] === '--dark') opts.dark = argv[++i] === 'true' || argv[++i] === '1';
+  else if (argv[i] === '--dark') {
+    const v = argv[++i];
+    opts.dark = (v === 'true' || v === '1');
+  }
   else if (argv[i] === '--line') opts.line = parseInt(argv[++i], 10);
   else if (argv[i] === '--text') opts.text = argv[++i];
   else if (argv[i] === '--path') opts.path = argv[++i];
