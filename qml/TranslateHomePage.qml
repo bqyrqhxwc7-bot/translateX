@@ -74,6 +74,7 @@ FluContentPage {
     readonly property color rowFindHighlight: tokens.findHighlight
     readonly property int cardRadius: tokens.radiusCard   // 浮窗（inline Window）用
     readonly property color bgFloatWindow: tokens.bgFloatWindow   // 浮窗背景（inline Window 用）
+    readonly property color overlayMask: tokens.overlayMask   // 模态遮罩
     // 翻译进度状态
     property bool translating: false
     property int progressDone: 0
@@ -1642,7 +1643,7 @@ FluContentPage {
         // 遮罩（点击关闭）
         Rectangle {
             anchors.fill: parent
-            color: Qt.rgba(0, 0, 0, 0.35)
+            color: page.overlayMask
             MouseArea { anchors.fill: parent; onClicked: commentSettings.closeSettings() }
         }
         Rectangle {
@@ -1846,6 +1847,10 @@ FluContentPage {
     }
 
     // ---------- 最近文件菜单 ----------
+    // 注意：FluMenu 是 Popup 控件（HANDOVER §4 点名不可用），但此处是**已知可用姿势**：
+    // 在可显示窗口内直接声明 + onAboutToShow 弹出前重建（非 onCompleted 创建），
+    // 规避了 NoStack 下 "Popup 在不可见父级" 的错位/失效问题；若新增 Popup 控件，
+    // 先照此模式验证，不要直接照抄 FluComboBox 的禁用结论。
     FluMenu {
         id: recentMenu
         // 弹出前重建（而非 onCompleted）：FluMenuItem 在不可见 Menu 内创建会触发

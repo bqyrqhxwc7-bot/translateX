@@ -14,7 +14,7 @@ Translex/
 │       ├── commentservice.*    # 批注单一数据源（provider 委托）
 │       ├── chapterservice.*    # 章节识别与跳转
 │       ├── findservice.*       # 查找替换（大小写/整词/模糊）
-│       ├── documentmanager.*   # 文档打开/保存/最近文件（.txt/.trx 分发）
+│       ├── documentmanager.*   # 文档打开/保存/最近文件（.txt/.trx/.docx/.pdf 分发）
 │       ├── trxparser.*         # .trx 格式读写（显示层往返）
 │       ├── configservice.*     # 配置（schema 驱动，ui.json/translation*.json）
 │       ├── securestorage.*     # 敏感设置加密存储（API Key 等）
@@ -33,7 +33,7 @@ Translex/
 │   ├── ARCHITECTURE.md       # 本文件
 │   ├── services/             # 服务层设计（见 §3 清单）
 │   └── ui/                   # UI 设计（ribbon-toolbar.md、translate-panel.md）
-├── tests/                    # 单元测试 + 性能基准（11 个目标，见 §4）
+├── tests/                    # 单元测试 + 性能基准（13 个目标，见 §4）
 │   ├── CMakeLists.txt        # 共享服务抽为 translex_services 静态库
 │   └── tst_*.cpp
 ├── samples/demo.trx          # .trx 示例文档（含富文本/图片显示层）
@@ -76,7 +76,7 @@ Translex/
 | `CommentService` | 批注单一数据源（provider 委托） | `comment-service.md` |
 | `ChapterService` | 章节识别与跳转 | `chapter-service.md` |
 | `FindService` | 查找替换（大小写/整词/模糊） | `find-service.md` |
-| `DocumentManager` | 打开/保存/最近文件（.txt/.trx） | `document-manager.md` |
+| `DocumentManager` | 打开/保存/最近文件（.txt/.trx/.docx/.pdf） | `document-manager.md` |
 | `TrxParser` | .trx 读写（显示层往返） | `file-service.md` |
 | `ConfigService` | schema 驱动配置（JSON 声明/读写/加密） | `config-service.md` |
 | `SecureStorage` | 敏感设置加密存储 | `securestorage.md` |
@@ -101,7 +101,7 @@ Translex/
 
 ## 4. 测试策略
 
-测试共享源码抽为 `translex_services` 静态库（`tests/CMakeLists.txt`），避免 11 个目标重复编译 15 个服务源。
+测试共享源码抽为 `translex_services` 静态库（`tests/CMakeLists.txt`），避免 13 个目标重复编译 15 个服务源。
 
 ```powershell
 # 构建 + 运行全部测试（需 Qt bin 在 PATH）
@@ -126,21 +126,26 @@ ctest --test-dir build-vs2026-x64 -C Debug -L perf
 | `tst_chapter` | 章节索引 |
 | `tst_find` | 查找/替换/模糊 |
 | `tst_trx` | .trx 往返/降级/损坏处理 |
+| `tst_docx` | docx 解析/图文混排/往返 |
+| `tst_pdf` | PDF 导入/每行一页导出/完整往返/加密拒读 |
 
 ## 5. 路线与扩展方式
 
-### 已完成（2026-08-13）
+### 已完成（2026-08-13 至 2026-08-17）
 - A1/A2：文档打开/保存/最近文件（.txt）
 - A3：.trx 格式闭环（显示层：富文本/图片往返，编辑即降级）
 - 浮窗：真独立 Window + 位置记忆 + 启动显示
 - 查找：大小写/整词/模糊
+- B：docx 导入（QuaZip + 内嵌图片 base64，图文混排）
+- C：pdf 导入/导出（每行一页 + ToUnicode CMap 重建，完整往返）
+- D：大文件降级（5 万行 / 200MB 受限模式）
 
 ### 待办
 | 项 | 说明 |
 | --- | --- |
-| B | docx 导入（需先决策依赖库，见 AGENTS.md） |
-| C | pdf 导入/导出 |
-| D | 大文件降级（5 万行 / 200MB 上限策略） |
+| E | 术语表 UI（C++ 层已就绪） |
+| F | docx 导出 |
+| G | .trx 图片 external 降级 |
 
 ### 新增服务的方式
 1. 在 `src/services/` 新建 `XxxService`（QObject，Q_INVOKABLE）

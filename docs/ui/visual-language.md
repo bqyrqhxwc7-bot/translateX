@@ -15,14 +15,17 @@
 | 状态色 | 语义色：成功绿 / 错误红 / 警告黄（浅色底+深色字） | 现有 `Qt.rgba(0.10,0.55,0.34)` 等硬编码迁移到 token |
 | 选中态 | 主题色 3px 左侧指示条 + 极浅主题色底 | 行内强调条已实现（radius 1.5），色值入 token |
 
-## 2. 设计 Token（全部集中在 `qml/DesignTokens.qml` 单例）
+## 2. 设计 Token（全部集中在 `qml/DesignTokens.qml`）
+
+> **实现方式**：不用 `pragma Singleton`——Qt 6.5 的 QML 单例在本应用内绑定不生效（属性全部 undefined，Qt 缺陷，详见 HANDOVER.md §6）。改为**普通组件**：页面内 `DesignTokens { id: tokens }` 实例化；delegate/内联组件（如浮窗 Window）内经页面属性中转（`page.rowRadius`/`page.cardRadius`/`page.bgFloatWindow`）。
 
 ### 2.1 颜色
 
 | Token | Light | Dark | 用途 |
 | --- | --- | --- | --- |
 | `bgApp` | `#F6F6F6` | `#1B1B1B` | 应用/导航背景（Outlook 主背景） |
-| `bgCard` | `#FFFFFF` | `#292929` | 编辑器卡片、面板、浮窗 |
+| `bgCard` | `#FFFFFF` | `#292929` | 编辑器卡片、面板 |
+| `bgFloatWindow` | `rgba(255,255,255,0.98)` | `rgba(13,13,13,0.98)` | 浮窗背景（半透明） |
 | `bgCardAlt` | `rgba(0,0,0,0.03)` | `rgba(255,255,255,0.05)` | 次级卡片/分区底 |
 | `divider` | `rgba(0,0,0,0.06)` | `rgba(255,255,255,0.08)` | 分隔线（与 FluTheme 一致即可） |
 | `textPrimary` | `rgba(0,0,0,0.90)` | `rgba(255,255,255,0.90)` | 正文 |
@@ -48,7 +51,7 @@
 
 ## 3. 实现方式
 
-1. 新增 `qml/DesignTokens.qml`（`pragma Singleton`，随 `qt_add_qml_module` 自动注册为 `Translex` 模块单例）。
+1. 新增 `qml/DesignTokens.qml`（普通组件，随 `qt_add_qml_module` 注册为 `Translex` 模块类型；页面内实例化，非单例）。
 2. 页面里**自定义**的硬编码值全部改为引用 token：`TranslateHomePage.qml` 的状态色（成功/错误）、查找琥珀、层底色、`radius` 6→`radiusCard` 8、4→`radiusControl`、编辑器卡片/浮窗背景。
 3. FluentUI 控件（FluFrame/FluButton 等）继续走 `FluTheme` 默认，不改第三方源码——升级 FluentUI 时零成本。
 4. 颜色尽量动态取 `FluTheme.dark` 分支（深浅色模式跟随现有机制）。
@@ -57,7 +60,7 @@
 
 | 文件 | 改动 |
 | --- | --- |
-| `qml/DesignTokens.qml` | 新增 token 单例 |
+| `qml/DesignTokens.qml` | 新增 token 组件（非单例，页面内实例化） |
 | `CMakeLists.txt` | QML_FILES 注册 DesignTokens.qml |
 | `qml/TranslateHomePage.qml` | 状态色/层底/radius/查找色 迁移到 token |
 | `docs/ui/visual-language.md` | 本文档 |

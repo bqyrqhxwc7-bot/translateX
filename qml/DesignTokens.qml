@@ -16,6 +16,8 @@ QtObject {
     readonly property color bgFloatWindow: FluTheme.dark
                                             ? Qt.rgba(0.13, 0.13, 0.13, 0.98)
                                             : Qt.rgba(1, 1, 1, 0.98)
+    // 模态遮罩（页面内浮层/弹窗）
+    readonly property color overlayMask: Qt.rgba(0, 0, 0, 0.35)
     // 次级卡片/分区底
     readonly property color bgCardAlt: FluTheme.dark
                                         ? Qt.rgba(1, 1, 1, 0.05)

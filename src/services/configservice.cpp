@@ -11,6 +11,8 @@
 #include "securestorage.h"
 
 // 静态库场景：qrc 资源需显式初始化（qt_add_library 静态链接时资源不自动注册）
+// 注：匿名命名空间 + 文件作用域 static const 语义等价（均为内部链接）；
+// 保留 static 形式便于 grep 定位初始化点
 struct ConfigResourceInit {
     ConfigResourceInit() { Q_INIT_RESOURCE(config); }
 };

@@ -17,7 +17,7 @@ Translex 是一个基于 Qt 6 的桌面翻译写作工具。它提供了一个�
 - **章节导航**：自动识别标题行（中文"第X章"、Markdown `#`）、上一章/下一章、重新检测
 - **查找替换**：全文查找/替换、大小写/整词/模糊查找开关、匹配计数
 - **设置页**：schema 驱动渲染（`ConfigSectionCard`），翻译/界面/显示/查找多组配置
-- **.trx 格式**：显示层（富文本/图片）随文档往返保存（`samples/demo.trx`），另存为支持 .txt/.trx
+- **.trx / .docx / .pdf 格式**：.trx 显示层（富文本/图片）随文档往返保存；docx 导入（图文混排）；PDF 每行一页导出、导入完整往返（`samples/demo.docx`/`samples/demo.pdf`）
 - **大文件性能**：ListView 虚拟化 + 懒加载模型，50 万行加载 < 100ms
 - **安全存储**：API Key 经 `SecureStorage` 加密落盘，无明文
 
@@ -49,7 +49,7 @@ Translex 是一个基于 Qt 6 的桌面翻译写作工具。它提供了一个�
 │       ├── qualitygate.*       # 质量自检（回显拦截）
 │       ├── translationcache.*  # 翻译缓存
 │       └── appguard.*          # 稳定性：日志 / 崩溃诊断
-├── tests/                      # 单元测试 + 性能基准（11 个目标）
+├── tests/                      # 单元测试 + 性能基准（13 个目标）
 ├── docs/                       # 架构与服务设计文档
 ├── third_party/FluentUI/       # FluentUI 1.7.7（BSD-3-Clause，git 子模块）
 └── .vscode/                    # VS Code 构建/调试/运行配置
@@ -90,7 +90,7 @@ cmake --build build-vs2026-x64 --config Debug
 ## 测试
 
 ```powershell
-# 运行全部 11 个测试目标（需将 Qt bin 目录加入 PATH）
+# 运行全部 13 个测试目标（需将 Qt bin 目录加入 PATH）
 $env:PATH = "D:/Software/Qt/6.5.3/msvc2019_64/bin;" + $env:PATH
 ctest --test-dir build-vs2026-x64 -C Debug --output-on-failure
 
@@ -98,7 +98,7 @@ ctest --test-dir build-vs2026-x64 -C Debug --output-on-failure
 ctest --test-dir build-vs2026-x64 -C Debug -L perf
 ```
 
-测试覆盖：文档模型、安全存储（加密/防篡改/明文检测）、翻译（后端/回显拦截/缓存）、质量自检、配置服务、批注、文档管理、章节、查找、.trx 格式往返、大文件性能基准（50 万行加载 < 100ms）。
+测试覆盖：文档模型、安全存储（加密/防篡改/明文检测）、翻译（后端/回显拦截/缓存）、质量自检、配置服务、批注、文档管理、章节、查找、.trx/.docx/.pdf 格式往返、大文件性能基准（50 万行加载 < 100ms）。
 
 ## NSIS 安装程序打包
 
@@ -125,7 +125,7 @@ cmake --build build-vs2026-x64 --config Release --target package
 - **源/目标语言**：自动 / 中 / 英 / 日 / 韩 / 法 / 德 / 西 / 俄
 - **上下文行数**：目标行前后各参考多少行（0 表示只翻译目标行）
 - **严格输出 / 缓存复用 / 失败降级 / 智能分块 / 质量自检**：开关
-- **网络大模型**：OpenAI 风格 API 地址 + Key（DeepSeek 预设：`https://api.deepseek.com`，模型 `deepseek-v4-flash`，thinking 已禁用）
+- **网络大模型**：OpenAI 风格 API 地址 + Key（DeepSeek 预设：`https://api.deepseek.com`，模型 `deepseek-v4-flash`，thinking 已禁用；也可用其他 OpenAI 兼容端点）
 - **自定义提示词**：普通翻译 / 上下文翻译各一套模板（`%1` 原文，`%2` 上下文）
 
 ## 快捷键
