@@ -9,6 +9,7 @@
 #include <quazip/quazipfile.h>
 
 #include "documentmodel.h"
+#include "commentservice.h"
 #include "docxparser.h"
 
 namespace {
@@ -209,6 +210,118 @@ private slots:
         QString error;
         QVERIFY(!DocxParser::read(path, &model, nullptr, meta, &error));
         QVERIFY(!error.isEmpty());
+    }
+
+    // ---- 导出（迭代2：docx 导出批注，设计见 docs/services/docx-comment-export.md）----
+
+    // 读 zip 条目（测试辅助）
+    static QByteArray zipEntry(const QString &path, const QString &name)
+    {
+        QuaZip zip(path);
+        if (!zip.open(QuaZip::mdUnzip) || !zip.setCurrentFile(name)) {
+            return QByteArray();
+        }
+        QuaZipFile f(&zip);
+        if (!f.open(QIODevice::ReadOnly)) {
+            return QByteArray();
+        }
+        const QByteArray out = f.readAll();
+        f.close();
+        zip.close();
+        return out;
+    }
+
+    // inline：译文内联黄色高亮；无批注行仅原文
+    void writeInline()
+    {
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("inline.docx"));
+        DocumentModel model;
+        model.setLines({QStringLiteral("Hello world"), QStringLiteral("Second line"),
+                        QStringLiteral("Third")});
+        CommentService comments;
+        comments.setComment(0, QStringLiteral("你好世界"));
+        comments.setComment(2, QStringLiteral("第三行译文"));
+        QString error;
+        QVERIFY2(DocxParser::write(path, &model, &comments, QStringLiteral("inline"), nullptr,
+                                   &error),
+                 qPrintable(error));
+
+        const QByteArray docXml = zipEntry(path, QStringLiteral("word/document.xml"));
+        QVERIFY(!docXml.isEmpty());
+        QVERIFY(docXml.contains("你好世界"));
+        QVERIFY(docXml.contains("w:highlight w:val=\"yellow\""));
+        QVERIFY(docXml.contains("Hello world"));
+        QVERIFY(!docXml.contains("w:commentRangeStart")); // inline 无原生批注
+        // 无批注行（Second line）段落直接结束，无 br/高亮译文
+        const QRegularExpression noCommentPar(
+            QStringLiteral(R"(Second line</w:t>\s*</w:r>\s*</w:p>)"));
+        QVERIFY(noCommentPar.match(QString::fromUtf8(docXml)).hasMatch());
+        // 无 comments.xml / 无 comments Override
+        QVERIFY(zipEntry(path, QStringLiteral("word/comments.xml")).isEmpty());
+        const QByteArray ct = zipEntry(path, QStringLiteral("[Content_Types].xml"));
+        QVERIFY(!ct.contains("comments.xml"));
+    }
+
+    // native：Word 原生批注（comments.xml + commentRangeStart/End/Reference）
+    void writeNative()
+    {
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("native.docx"));
+        DocumentModel model;
+        model.setLines({QStringLiteral("Hello world"), QStringLiteral("Second line")});
+        CommentService comments;
+        comments.setComment(0, QStringLiteral("你好世界"));
+        QString error;
+        QVERIFY2(DocxParser::write(path, &model, &comments, QStringLiteral("native"), nullptr,
+                                   &error),
+                 qPrintable(error));
+
+        const QByteArray docXml = zipEntry(path, QStringLiteral("word/document.xml"));
+        QVERIFY(docXml.contains("w:commentRangeStart"));
+        QVERIFY(docXml.contains("w:commentRangeEnd"));
+        QVERIFY(docXml.contains("w:commentReference"));
+        QVERIFY(docXml.contains("Hello world"));
+        QVERIFY(!docXml.contains("你好世界")); // 译文不在正文
+
+        const QByteArray commentsXml = zipEntry(path, QStringLiteral("word/comments.xml"));
+        QVERIFY(!commentsXml.isEmpty());
+        QVERIFY(commentsXml.contains("你好世界"));
+        QVERIFY(commentsXml.contains("w:author=\"Translex\""));
+
+        const QByteArray ct = zipEntry(path, QStringLiteral("[Content_Types].xml"));
+        QVERIFY(ct.contains("comments.xml"));
+        const QByteArray rels = zipEntry(path, QStringLiteral("word/_rels/document.xml.rels"));
+        QVERIFY(rels.contains("comments.xml"));
+    }
+
+    // 往返：write(inline) → read → 原文/译文一致（native 批注同样可读回）
+    void roundTrip()
+    {
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("rt.docx"));
+        DocumentModel model;
+        model.setLines({QStringLiteral("Hello world"), QStringLiteral("Second line"),
+                        QStringLiteral("Third")});
+        CommentService comments;
+        comments.setComment(0, QStringLiteral("你好世界"));
+        comments.setComment(2, QStringLiteral("第三行译文"));
+        QString error;
+        QVERIFY2(DocxParser::write(path, &model, &comments, QStringLiteral("native"), nullptr,
+                                   &error),
+                 qPrintable(error));
+
+        DocumentModel model2;
+        CommentService comments2;
+        QVariantMap meta;
+        QVERIFY2(DocxParser::read(path, &model2, &comments2, meta, &error), qPrintable(error));
+        QCOMPARE(model2.lineCount(), 3);
+        QCOMPARE(model2.lineText(0), QStringLiteral("Hello world"));
+        QCOMPARE(model2.lineText(1), QStringLiteral("Second line"));
+        QCOMPARE(model2.lineText(2), QStringLiteral("Third"));
+        QCOMPARE(comments2.commentAt(0), QStringLiteral("你好世界"));
+        QCOMPARE(comments2.commentAt(2), QStringLiteral("第三行译文"));
+        QVERIFY(!comments2.hasCommentAt(1));
     }
 
     // 仓库自带示例 samples/demo.docx（生成脚本 samples/gen_docx.py）：

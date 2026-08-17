@@ -8,6 +8,7 @@
 
 #include "documentmodel.h"
 #include "commentservice.h"
+#include "configservice.h"
 #include "trxparser.h"
 #include "docxparser.h"
 #include "pdfparser.h"
@@ -291,6 +292,21 @@ bool DocumentManager::writeDocument(const QString &path)
         QString error;
         if (!TrxParser::write(path, m_model, m_comments, m_meta, &error)) {
             emit operationFailed(error.isEmpty() ? QStringLiteral("保存 .trx 文件失败") : error);
+            return false;
+        }
+        m_path = path;
+        setDirty(false);
+        emit documentChanged(m_path);
+        return true;
+    }
+
+    // .docx：DocxParser 导出（原文 + 译文批注，样式 docxCommentStyle: inline/native）
+    if (isDocx(path)) {
+        QString error;
+        const QString style = ConfigService::instance()->get(
+            QStringLiteral("translation"), QStringLiteral("docxCommentStyle")).toString();
+        if (!DocxParser::write(path, m_model, m_comments, style, &m_meta, &error)) {
+            emit operationFailed(error.isEmpty() ? QStringLiteral("保存 .docx 文件失败") : error);
             return false;
         }
         m_path = path;

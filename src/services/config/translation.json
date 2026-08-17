@@ -129,6 +129,15 @@
       "type": "multiline",
       "default": "",
       "group": "质量"
+    },
+    {
+      "key": "docxCommentStyle",
+      "displayName": "docx 导出批注样式",
+      "description": "inline=译文内联黄色高亮（便于直接阅读）；native=Word 原生批注（原文干净，可审阅）",
+      "type": "enum",
+      "options": ["inline", "native"],
+      "default": "inline",
+      "group": "导出"
     }
   ]
 }

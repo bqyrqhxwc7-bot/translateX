@@ -161,7 +161,7 @@ public:
 
 - `.txt`：纯文本，图片输出 `[图片]` 占位
 - `.pdf`：QPdfWriter 文本+图片，批注作段落尾部附注
-- `.docx`：第三方写库（阶段 B 选型）
+- `.docx`：✅ **已实现（2026-08-17）**——`DocxParser::write` 原文+译文批注，`docxCommentStyle: inline`（黄色高亮）/`native`（Word 原生批注，导入可读回）；详见 `docs/services/docx-comment-export.md`
 - `.trx`：完整往返
 
 ---
@@ -262,6 +262,6 @@ public:
 
 ### 11.7 限制（明示）
 
-- 仅导入不导出（导出为阶段 C）
+- 导出已实现（阶段 C，2026-08-17）：原文+译文批注，`inline/native` 两种样式（见 `docs/services/docx-comment-export.md`）
 - 版式近似（无页边距/分页概念）
 - 超大 docx（>5 万行/200MB）走阶段 D 受限模式

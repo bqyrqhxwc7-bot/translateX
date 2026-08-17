@@ -55,19 +55,22 @@ git push origin main
 | 设置页 | schema 驱动（`ui.json`），字号滑条、查找开关、浮窗开关 | `services/config-service.md` |
 | **A3 .trx** | 显示层（富文本/图片）完整往返、编辑即降级 | `services/file-service.md` |
 | **B docx 导入** | DocxParser：段落→行 + 粗/斜/颜色/字号/字体 + 图片(data URI) | `services/file-service.md` |
+| **B2 docx 导出批注** | DocxParser::write：原文 + 译文批注，`docxCommentStyle: inline`（黄色高亮）/`native`（Word 原生批注，可读回） | `services/docx-comment-export.md` |
 | **C pdf 导入/导出** | PdfParser：每页一行导入（QPdfDocument）+ 文本页导出（QPdfWriter）；**导出文本层不可提取**（Qt 6.5.3 缺陷，视觉正确） | `services/pdf-service.md` |
 | **D 大文件降级** | 超 5 万行 / 200MB 进受限模式：显示层回退纯文本 + 禁批注编辑/翻译，编辑/查找/章节保留；顶部提示条 | `services/large-file.md` |
 
-**测试**：13 目标全绿（`tst_docx` 7 用例含 `sampleFile` 回归 `samples/demo.docx`；`tst_pdf` 9 用例，样本 `samples/demo.pdf` 为手写干净文本层 PDF；`tst_documentmanager` 含 4 个受限模式用例）。
+**测试**：13 目标全绿（`tst_docx` 10 用例：7 导入 + 3 导出（writeInline/writeNative/roundTrip，批注=译文往返保真）；`tst_pdf` 9 用例；`tst_documentmanager` 含 4 个受限模式用例）。
 
 ## 3. 路线图（下一步从这里开始）
 
 | 优先级 | 任务 | 状态/要求 |
 | --- | --- | --- |
-| 迭代2 | docx 导出批注（①译文内联高亮 ②Word 原生批注，做成选项 `docxCommentStyle: inline/native`） | 用户已拍板两种都做 |
+| ~~迭代2~~ | ~~docx 导出批注（①译文内联高亮 ②Word 原生批注，做成选项 `docxCommentStyle: inline/native`）~~ | ✅ 完成（2026-08-17，见 `services/docx-comment-export.md`） |
 | 迭代3 | TTS 朗读（Qt6TextToSpeech 已装，Windows SAPI 系统语音） | 无版权/金钱问题 |
 | 迭代4 | 翻译历史面板、文档统计、Markdown 导出、术语自动提取、首启向导、自动保存 | 非阻塞 |
-| 候选 | pdf 导出文本层修复（Qt 升级后复查）、.trx 图片 external 降级（>1MB 转外置） | 非阻塞 |
+| 候选 | pdf 导出文本层修复（Qt 升级后复查）、.trx 图片 external 降级（>1MB 转外置）、docx 导出 `Original` 纯原文模式 | 非阻塞 |
+
+> 迭代2（2026-08-17 完成）：docx 导出批注（`DocxParser::write` + `docxCommentStyle` 配置 + tst_docx 3 个新用例）。
 
 > 迭代1（2026-08-17 完成）：P0 回归修复（backendCombo 残留引用）、A2 句边界分块（`sentenceAwareChunking`）、B1 后端连接测试（`testBackendConnection`）、B2 拖放打开、B3 快捷键总览（`?`）、A1 质量自检复核面板（qualityWarning 汇总+跳转）、设置页语言选择 Flow 换行修复。
 > 每项任务实施蓝图见 §8；**开工前先读对应 `docs/services/` 文档，遵循 AGENTS.md**。
