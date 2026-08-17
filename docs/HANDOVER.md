@@ -76,7 +76,7 @@ git push origin main
 
 1. **NoStack 页面模式**：FluNavigationView `pageMode: NoStack` → 每次导航**重建页面**。
    - 状态必须放**应用级**（`main_qml.cpp` 的 `setContextProperty` 单例），不能放页面属性
-   - **Popup 控件不可用**（FluMenu/FluComboBox 会错位/失效）→ 用页面内覆盖层 `Item { z:8000/9000 }`
+   - **Popup 控件按场景判定**：`FluMenu` 在主页 delegate 内错位/失效（已踩），但 `FluComboBox` 在**设置页卡片内实测可用**（语言选择即用它，2026-08-17 回退自 RadioButton 组）；结论：不可一票否决 Popup，新场景先小步实测，可用则用（按"已知可用姿势"记录）
    - **`Qt.callLater` 不可靠** → 一律用 `Timer`
 2. **QML id 作用域**：子对象 `id` 不是父的属性。delegate 里直接引用顶层 `id`（如 `lineMenu`），**不能**写 `page.lineMenu`。
 3. **DocumentModel 是应用级单例**：页面 `onCompleted` **仅当 `lineCount()==0`** 才 `loadDemoDocument()`，否则覆盖用户内容。
@@ -109,7 +109,7 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 ## 6. 踩坑清单（按子系统）
 
 ### QML / NoStack
-- Popup 错位、FluMenu 按钮点不到、浮窗被页面边界裁剪 → 全部改独立 Window 或页面内覆盖层
+- Popup 错位、FluMenu 按钮点不到、浮窗被页面边界裁剪 → 改独立 Window 或页面内覆盖层；**但 FluComboBox 在设置页卡片内可用**（2026-08-17 实测，语言选择已回退），不可一票否决
 - `FluMenuItem: Created graphical object was not placed in the graphics scene` → 不要在不可见 Menu 内创建 item；菜单在 `onAboutToShow` 重建（`recentMenu` 已修复）
 - 页面重建丢编辑（DocumentModel 曾页面内创建）→ 已提升应用级单例
 
@@ -123,6 +123,11 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 - `.trx` 显示层（`display/rich/imageIds`）不参与 undo
 - **docx `w:color/sz/rFonts` 属性带 `w:` 前缀**：`QXmlStreamAttributes::value("val")` 按 qualifiedName 匹配返回空 → 必须 `value(kWordNs, "val")`
 - docx 图片：`w:drawing > a:blip r:embed`；rels 里 `Target` 相对 `word/` 需补前缀
+
+### 翻译后端 / 配置
+- **`ITranslationBackend::updateConfig` 默认空实现**：NetworkModelBackend 未重写 → 后端参数必须经 `TranslationOptions.extra` 传递（`apiEndpoint/apiKey/model`）。`testBackendConnection` 曾只 updateConfig → 永远"未配置网络大模型 API 地址"（2026-08-17 修复：探测时 `opts.extra = cfg`，与 `currentBackend()` 合并逻辑一致）
+- `ConfigService::values()` 非 Q_INVOKABLE：QML 不可直接调用（UiDriverActions.getConfig 用 `sectionItems`+`get` 组合）
+- 后端 section id（如 `translation.network_model`）即 ConfigService section 名，用户配置存 `%APPDATA%/sr291/Translex/config.ini`
 
 ### zlib / QuaZip（docx 依赖，静态）
 - **zlib 默认构建 DLL（libzd.dll）** → 测试 0xc0000135。必须 `ZLIB_BUILD_SHARED=OFF` + `ZLIB_BUILD_STATIC=ON`
@@ -174,8 +179,8 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 - 用途：review agent 模拟用户操作（打开文件/切主题/翻译/查状态），配合截图做 UI 自动化验证
 - 架构：TRANSLEX_UI_DRIVER=1 启动 -> src/driver_service.cpp（QLocalServer named pipe translex-ui-driver，JSON 行协议）-> QML UiDriverActions（业务动作，onCompleted 注册 sink）
 - 客户端：.opencode/scripts/ui-driver.mjs（Node net.connect 到 pipe；应用未运行自动以驱动模式启动）
-- 命令：openFile / setDark / getState / translateLine / translateAll
-- 踩坑：QML 函数参数在 meta 系统暴露为 QVariant（invokeMethod 须 Q_ARG(QVariant)）；客户端需自行 end() 连接（服务端不主动断开）；ui_ 前缀文件名会被 AUTOUIC 误判（命名 driver_service 规避）
+- 命令：openFile / setDark / getState / translateLine / translateAll / navigate（--index，0=编辑 1=设置）/ testConnection / getConfig（--section）/ setConfig（--set section=key=value）
+- 踩坑：QML 函数参数在 meta 系统暴露为 QVariant（invokeMethod 须 Q_ARG(QVariant)）；客户端需自行 end() 连接（服务端不主动断开）；ui_ 前缀文件名会被 AUTOUIC 误判（命名 driver_service 规避）；**鼠标点击类 UI 验证不可靠**（SendMessage/真实点击对 QML 窗口常无效，且多实例会串窗口）→ 优先用驱动命令直达服务层
 - review 流程：.opencode/prompts/review.md §0（驱动操作 -> 截图 -> vision 断言 -> Stop-Process 清理）
 
 ### Review 权限语义与导出往返（2026-08-17）

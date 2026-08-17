@@ -21,9 +21,8 @@ FluScrollablePage {
     property var glossaryMap: ({})          // 术语表（原文 → 标准译文）
     property var backendModel: []           // [{ id, name }]
     property string backendSection: ""      // 当前后端对应的配置 section（schema 渲染用）
-    // 单选组重算驱动（函数调用绑定不会自动重算，参照 ConfigSectionCard.configVersion）
+    // 后端单选组重算驱动（函数调用绑定不会自动重算，参照 ConfigSectionCard.configVersion）
     property int backendVersion: 0
-    property int configVersion: 0
     // 连接测试状态
     property bool backendTesting: false
     property bool backendTestOk: false
@@ -258,67 +257,37 @@ FluScrollablePage {
                 FluText { text: qsTr("翻译选项"); font.pixelSize: 16; font.bold: true }
             }
 
-            // 语言选择（手动渲染，保证可用；含 auto；源/目标各占一行 Flow 防溢出）
-            ColumnLayout {
+            // 语言选择（FluComboBox：设置页内 Popup 实测可用，回退自 RadioButton 组）
+            RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    FluText {
-                        text: qsTr("源语言")
-                        Layout.alignment: Qt.AlignTop
-                        Layout.topMargin: 4
-                        Layout.preferredWidth: 64
-                    }
-                    Flow {
-                        Layout.fillWidth: true
-                        spacing: 6
-                        Repeater {
-                            model: ["auto", "en", "zh-CN", "ja", "ko", "fr", "de", "es", "ru"]
-                            FluRadioButton {
-                                property string opt: modelData
-                                text: opt
-                                checked: {
-                                    configVersion
-                                    return configService.get("translation", "sourceLang") === opt
-                                }
-                                clickListener: () => {
-                                    configService.set("translation", "sourceLang", opt)
-                                    configVersion++
-                                }
-                            }
-                        }
-                    }
+                spacing: 12
+                FluText {
+                    text: qsTr("源语言")
+                    Layout.alignment: Qt.AlignVCenter
                 }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-                    FluText {
-                        text: qsTr("目标语言")
-                        Layout.alignment: Qt.AlignTop
-                        Layout.topMargin: 4
-                        Layout.preferredWidth: 64
+                FluComboBox {
+                    id: sourceLangCombo
+                    Layout.preferredWidth: 140
+                    model: ["auto", "en", "zh-CN", "ja", "ko", "fr", "de", "es", "ru"]
+                    Component.onCompleted: {
+                        const v = configService.get("translation", "sourceLang")
+                        currentIndex = model.indexOf(v)
                     }
-                    Flow {
-                        Layout.fillWidth: true
-                        spacing: 6
-                        Repeater {
-                            model: ["zh-CN", "en", "ja", "ko", "fr", "de", "es", "ru"]
-                            FluRadioButton {
-                                property string opt: modelData
-                                text: opt
-                                checked: {
-                                    configVersion
-                                    return configService.get("translation", "targetLang") === opt
-                                }
-                                clickListener: () => {
-                                    configService.set("translation", "targetLang", opt)
-                                    configVersion++
-                                }
-                            }
-                        }
+                    onActivated: configService.set("translation", "sourceLang", currentText)
+                }
+                FluText {
+                    text: qsTr("目标语言")
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                FluComboBox {
+                    id: targetLangCombo
+                    Layout.preferredWidth: 140
+                    model: ["zh-CN", "en", "ja", "ko", "fr", "de", "es", "ru"]
+                    Component.onCompleted: {
+                        const v = configService.get("translation", "targetLang")
+                        currentIndex = model.indexOf(v)
                     }
+                    onActivated: configService.set("translation", "targetLang", currentText)
                 }
             }
 

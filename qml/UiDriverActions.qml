@@ -112,6 +112,30 @@ QtObject {
         return JSON.stringify({ ok: true })
     }
 
+    // ---- 写配置（调试：验证 QSettings 往返）----
+    function setConfig(args) {
+        configService.set(args.section, args.key, args.value)
+        return JSON.stringify({ readBack: configService.get(args.section, args.key) })
+    }
+
+    // ---- 读配置（调试：验证 ConfigService 读到的值）----
+    function getConfig(section) {
+        const items = configService.sectionItems(section)
+        const out = []
+        for (let i = 0; i < items.length; ++i) {
+            const it = items[i]
+            out.push({ key: it.key, value: configService.get(section, it.key) })
+        }
+        return JSON.stringify(out)
+    }
+
+    // ---- 后端连接测试（异步：结果经 translationService.connectionTested 信号）----
+    function testConnection() {
+        const backendId = translationService.backend()
+        translationService.testBackendConnection(backendId)
+        return JSON.stringify({ ok: true, backend: backendId })
+    }
+
     // ---- 导航（main.qml 注入 navView 引用；index 0=编辑 1=设置）----
     property var navViewRef: null
     function navigate(index) {

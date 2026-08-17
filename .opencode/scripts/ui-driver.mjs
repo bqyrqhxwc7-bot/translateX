@@ -44,6 +44,11 @@ for (let i = 0; i < argv.length; ++i) {
   else if (argv[i] === '--text') opts.text = argv[++i];
   else if (argv[i] === '--path') opts.path = argv[++i];
   else if (argv[i] === '--index') opts.index = parseInt(argv[++i], 10);
+  else if (argv[i] === '--section') opts.section = argv[++i];
+  else if (argv[i] === '--set') {
+    const parts = argv[++i].split('=');
+    opts.setArgs = { section: parts[0], key: parts[1], value: parts[2] };
+  }
   else if (argv[i] === '--wait') opts.wait = parseInt(argv[++i], 10);
 }
 
@@ -56,6 +61,9 @@ const commandArgs = {
   getLineText: opts.line,
   setLineText: [opts.line, opts.text],
   navigate: opts.index,
+  testConnection: undefined,
+  getConfig: opts.section,
+  setConfig: opts.setArgs,
 };
 
 function send(cmd, args, id) {

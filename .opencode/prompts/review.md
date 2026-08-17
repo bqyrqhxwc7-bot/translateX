@@ -75,7 +75,7 @@
 
 ### 2.1 架构铁律（HANDOVER.md §4 / AGENTS.md §2 —— 违反即必须修）
 - NoStack 页面模式：状态必须放应用级 context property 单例，禁止放页面属性（页面重建会丢）
-- **Popup 控件不可用**（FluMenu/FluComboBox 错位/失效）→ 应用页面内覆盖层
+- **Popup 控件按场景判定**（FluMenu 主页 delegate 内错位/失效；FluComboBox 设置页卡片内可用，语言选择已回退）→ 不可一票否决，先小步实测；错位/失效则改页面内覆盖层
 - `Qt.callLater` 不可靠 → 必须用 `Timer`
 - DocumentModel 是应用级单例：页面 onCompleted 仅当 lineCount()==0 才 loadDemoDocument
 - 显示层（rich/image）编辑即降级：onTextChanged 无条件 setLineRich("")/setLineImages([])/setLineDisplay("plain")

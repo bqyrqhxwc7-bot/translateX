@@ -17,14 +17,20 @@ public:
     QString backendId() const override { return QStringLiteral("test.mock"); }
     QString displayName() const override { return QStringLiteral("Mock"); }
 
+    void updateConfig(const QVariantMap &config) override { lastConfig = config; }
+    QString healthCheck() const override { return QString(); }
+
+    QVariantMap lastConfig; // 最近一次 updateConfig 收到的参数（验证配置合并）
+    TranslationOptions lastOptions; // 最近一次 translate 收到的选项（验证 extra 传递）
+
     TranslationResult translate(
         const QString &text,
         const TranslationOptions &options,
         const std::shared_ptr<std::atomic_bool> &cancelFlag) override
     {
-        Q_UNUSED(options);
         Q_UNUSED(cancelFlag);
         ++singleCalls;
+        lastOptions = options;
         TranslationResult r;
         r.success = true;
         r.text = QStringLiteral("译:") + text;
@@ -62,6 +68,7 @@ private slots:
     void initTestCase();
     void cleanupTestCase();
     void glossaryRoundTrip();
+    void connectionTestUsesConfigServiceSection();
     void glossaryConstraintPrompt();
     void glossaryVerify();
     void qualityGateEcho();
@@ -85,6 +92,33 @@ void TestQuality::initTestCase()
 void TestQuality::cleanupTestCase()
 {
     QDir(QDir::tempPath() + QStringLiteral("/tst_quality_config")).removeRecursively();
+}
+
+void TestQuality::connectionTestUsesConfigServiceSection()
+{
+    // 回归：testBackendConnection 必须合并 ConfigService 中后端 section 的用户配置
+    //（apiEndpoint/apiKey/model），仅用 m_backendConfig（运行时覆盖）会导致永远"未配置"。
+    ConfigService::instance()->set(
+        QStringLiteral("translation.network_model"),
+        QStringLiteral("apiEndpoint"), QStringLiteral("http://127.0.0.1:9999/v1"));
+
+    // 注意：TranslationService 构造时会重注册内置后端（覆盖同 id），
+    // 因此 mock 必须在 service 构造之后注册
+    TranslationService service;
+    auto mock = std::make_shared<MockBackend>();
+    ServiceRegistry::instance()->registerBackend(
+        QStringLiteral("translation.network_model"),
+        [mock]() { return mock; }, QStringLiteral("Mock"));
+
+    QSignalSpy spy(&service, &TranslationService::connectionTested);
+    service.testBackendConnection(QStringLiteral("translation.network_model"));
+    QVERIFY(spy.wait(3000));
+    QCOMPARE(spy.takeFirst().at(1).toBool(), true);      // 探测成功
+    QCOMPARE(mock->lastConfig.value(QStringLiteral("apiEndpoint")).toString(),
+             QStringLiteral("http://127.0.0.1:9999/v1")); // 配置已合并传入后端
+    // NetworkModelBackend 不重写 updateConfig（基类空实现），配置必须经 options.extra 传递
+    QCOMPARE(mock->lastOptions.extra.value(QStringLiteral("apiEndpoint")).toString(),
+             QStringLiteral("http://127.0.0.1:9999/v1"));
 }
 
 void TestQuality::glossaryRoundTrip()

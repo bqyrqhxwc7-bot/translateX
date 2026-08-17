@@ -674,7 +674,13 @@ void TranslationService::testBackendConnection(const QString &backendId)
             out.second = QStringLiteral("后端未注册");
             return out;
         }
-        backend->updateConfig(config);
+        // 与 currentBackend() 相同的配置合并：ConfigService 中该后端 section
+        //（apiEndpoint/apiKey/model 用户配置）为基准，m_backendConfig 仅作运行时覆盖
+        QVariantMap cfg = ConfigService::instance()->values(backendId);
+        for (auto it = config.constBegin(); it != config.constEnd(); ++it) {
+            cfg.insert(it.key(), it.value());
+        }
+        backend->updateConfig(cfg);
         // 优先用后端自带 healthCheck；空实现（如 Ollama）走最小翻译探测
         const QString health = backend->healthCheck();
         if (!health.isEmpty()) {
@@ -687,6 +693,9 @@ void TranslationService::testBackendConnection(const QString &backendId)
         opts.targetLang = m_targetLang;
         opts.strictOutput = true;
         opts.timeoutMs = 8000;
+        // 关键：NetworkModelBackend 不重写 updateConfig（基类空实现），
+        // 配置必须经 options.extra 传入（apiEndpoint/apiKey/model）
+        opts.extra = cfg;
         const TranslationResult r = backend->translate(QStringLiteral("hello"), opts, nullptr);
         if (r.success) {
             out.first = true;

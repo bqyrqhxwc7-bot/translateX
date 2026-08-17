@@ -89,6 +89,7 @@
 ### 4.6 后端连接测试 ✅ 已实现（2026-08-17）
 - `testBackendConnection(backendId)`：异步（QtConcurrent + QFutureWatcher）创建后端实例，`healthCheck()` 非空即成功；否则最小翻译探测（`translate("hello")`，8s 超时）
 - 结果经 `connectionTested(backendId, ok, message)` 信号回传；设置页「测试连接」按钮展示（成功绿/失败红）
+- **踩坑（2026-08-17 修复）**：①探测必须合并 `ConfigService::values(backendId)` 用户配置（`m_backendConfig` 仅为运行时覆盖，正常为空）；②`NetworkModelBackend` 未重写 `updateConfig`（基类默认空实现）→ 合并结果必须放 `TranslationOptions.extra`（`apiEndpoint/apiKey/model` 从 extra 读）——修复后 `connectionTestUsesConfigServiceSection` 回归测试覆盖
 
 ## 5. 接口（对齐 SERVICE-ARCHITECTURE.md）
 

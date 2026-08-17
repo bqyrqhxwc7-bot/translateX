@@ -16,7 +16,7 @@
   - Clang-cl cross-compiler check: `cmake --preset clang-cl && cmake --build --preset clang-cl && ctest --test-dir build-clang -C Debug` (run inside a VS dev shell, e.g. `vcvars64.bat`)
   - Single test: `ctest --test-dir build-vs2026-x64 -C Debug -R tst_pdf --output-on-failure`
 - **Must-read docs**: `docs/HANDOVER.md` (authoritative status/roadmap/iron rules), `docs/ARCHITECTURE.md`, `docs/services/*.md`.
-- **Iron rules** (violations cause regressions): state must live in app-level singletons (NoStack pages are rebuilt on every navigation); `Popup`-based controls are unusable; `Qt.callLater` is unreliable (use `Timer`); display-layer (rich/image) rows degrade to plain text on edit; new config keys must be added to `src/services/config/ui.json` schema.
+- **Iron rules** (violations cause regressions): state must live in app-level singletons (NoStack pages are rebuilt on every navigation); Popup-based controls are case-dependent (FluMenu in page delegates is broken, but FluComboBox in settings cards works — test small first); `Qt.callLater` is unreliable (use `Timer`); display-layer (rich/image) rows degrade to plain text on edit; new config keys must be added to `src/services/config/ui.json` schema.
 - **Environment gotchas**: tests need Qt bin in `PATH` (or use self-contained `build-*/tests` dirs which carry the needed Qt DLLs); never run `git submodule update` (`third_party/*` carries intentional local patches); a Chinese AV (Huorong) may suspend freshly built test exes (add the build dirs to its trust zone).
 
 ---
@@ -40,7 +40,7 @@
 - **可插拔**：新能力优先实现为 service（见 `docs/services/SERVICE-ARCHITECTURE.md`），不往 mainwindow/主页堆代码。
 - **接口稳定**：`IService` / `ITranslationBackend` 等公共接口定稿后不轻易改；扩展用新增方法（带默认实现）。
 - **翻译服务定位（不可偏离）**：更好的质量（上下文感知/术语一致/质量自检）+ 为用户减成本（缓存/模型分级/智能分块/失败降级）；改动必须对照 `docs/services/translation-service.md` 的度量指标做验收（质量提升/成本下降要可测量，不能只凭感觉）。
-- **NoStack 页面模式**（`FluNavigationView pageMode: NoStack`）：每次导航重建页面 → 状态必须放应用级 context property 单例，禁止放页面属性；**Popup 控件不可用**（错位/失效）；`Qt.callLater` 不可靠，用 `Timer`。详见 HANDOVER.md §4。
+- **NoStack 页面模式**（`FluNavigationView pageMode: NoStack`）：每次导航重建页面 → 状态必须放应用级 context property 单例，禁止放页面属性；**Popup 控件按场景判定**（FluMenu 主页 delegate 内不可用，FluComboBox 设置页卡片内可用——先小步实测）；`Qt.callLater` 不可靠，用 `Timer`。详见 HANDOVER.md §4。
 - **大文件性能**：虚拟化渲染（ListView + 懒加载模型），禁止全量刷新；超 5 万行/200MB 自动进**受限模式**（显示层回退纯文本、禁批注编辑/翻译，详见 `docs/services/large-file.md`）。
 - **敏感信息**：一律走 `SecureStorage`（`%APPDATA%/Translex/secure.ini`），禁止明文落盘。
 - **新配置 key** 必须加进 `src/services/config/ui.json` schema（ConfigService 只认 schema 内 key）。
