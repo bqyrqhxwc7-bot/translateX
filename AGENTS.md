@@ -79,7 +79,7 @@ ctest --test-dir build-vs2026-x64 -C Debug -L perf
 ## 5. AI 工具环境
 
 - 本仓库带 Qt 官方 skills（`.agents/skills/`：QML/C++ 审查、Qt Quick Test、CMake、UI 设计等）与 Qt 文档 MCP（`.mcp.json`）。
-- opencode 多模型分工已配置在 `opencode.json`（build=deepseek-v4-flash，plan/review=deepseek-v4-pro），改动前先读该文件。
+- opencode 多模型分工已配置在 `opencode.json`（build=deepseek-v4-flash，plan=gpt-5.6-luna，review=minimax-m3——原生支持视觉，UI 审查可直接读图），改动前先读该文件。
 - **国内网络环境**：`git push` 可能失败（网络不稳），失败直接重试；winget/gh 安装类命令易卡死（曾超时），不要主动执行系统级安装；Qt 文档 MCP（`qt-docs-mcp.qt.io`，海外）可能超时——超时则改查本地 Qt 头文件/`D:/Software/Qt/6.5.3/` 文档，勿反复重试。
 - **火绒安全会挂起新 exe**：行为分析以调试方式创建进程（症状：测试进程停在 DbgBreakPoint、cdb 附加被拒、`tst_docx`/`tst_pdf` 等新测试 exe 无法启动）；已把项目目录加入信任区，若测试突然卡死先怀疑它（详见 HANDOVER.md §6）。
 - **终端编码**：控制台中文乱码是 GBK/UTF-8 不匹配（临时：`chcp 65001` 或 `[Console]::OutputEncoding`；永久：pwsh `$PROFILE` 已加 UTF-8 三行设置，推荐用 Windows Terminal）；用 `Read`/`Edit` 工具读写源码，勿经控制台管道改写（会破坏中文注释编码）。

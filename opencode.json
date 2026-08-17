@@ -11,7 +11,7 @@
       }
     },
     "plan": {
-      "model": "opencode-go/deepseek-v4-pro",
+      "model": "opencode-go/gpt-5.6-luna",
       "temperature": 0.1,
       "permission": {
         "edit": "deny",
@@ -27,7 +27,7 @@
     "review": {
       "description": "Qt/QML 代码审查：不修改项目文件与数据（可运行程序/导出到临时目录/检查产物/清理自己产生的临时文件），不负责修改；给出结构化问题清单与修复建议（方法论见 .opencode/prompts/review.md）",
       "mode": "all",
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode-go/minimax-m3",
       "temperature": 0.1,
       "prompt": "{file:./.opencode/prompts/review.md}",
       "permission": {
