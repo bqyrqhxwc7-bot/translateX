@@ -126,16 +126,22 @@ static int editDistance(const QString &a, const QString &b)
     return prev[m];
 }
 
-bool QualityGate::notJustEcho(const QString &source, const QString &translated)
+bool QualityGate::notJustEcho(const QString &source, const QString &translated,
+                              bool sameLanguage)
 {
     const QString src = source.trimmed();
     const QString tgt = translated.trimmed();
     if (src.isEmpty()) {
         return true;
     }
-    // 完全一致视为未翻译
+    // 完全一致视为未翻译（任何场景）
     if (src == tgt) {
         return false;
+    }
+    // 跨语言场景（中→日等共享汉字/字符时相似度天然高）：不做近似检测，
+    // 否则真实译文被误判为“疑似未翻译”（qualitygate 的经典误杀，见 translation-service.md）
+    if (!sameLanguage) {
+        return true;
     }
     // 近似回显：编辑距离归一化相似度 > 0.85 视为未翻译
     // （覆盖回显时仅空格/标点等细微差异，如后端对非源语言文本原样返回）

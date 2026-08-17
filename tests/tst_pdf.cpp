@@ -143,9 +143,8 @@ private slots:
         QCOMPARE(model.lineText(2), QString());
     }
 
-    // 导出：生成有效 PDF（可加载、页数正确、渲染出字形）。
-    // 文本层不可断言：Qt 6.5.3 QPdfWriter 的 ToUnicode/子集化有缺陷，
-    // 提取会乱码（含 ASCII），但渲染视觉正确——见 pdf-service.md §7。
+    // 导出：生成有效 PDF（可加载、每行一页、渲染出字形）。
+    // 文本层内容断言见 writeFullRoundTrip（CMap 修复后完整往返）。
     void exportProducesValidPdf()
     {
         DocumentModel model;
@@ -162,7 +161,8 @@ private slots:
 
         QPdfDocument doc;
         QCOMPARE(doc.load(outPath), QPdfDocument::Error::None);
-        QCOMPARE(doc.pageCount(), 1);
+        // 每行一页（行结构保真）
+        QCOMPARE(doc.pageCount(), 2);
         // 渲染冒烟：中英文都被绘制（暗像素充足）
         QVERIFY(darkPixelCount(outPath, 0) > 500);
     }
@@ -186,6 +186,33 @@ private slots:
         f.close();
         QVERIFY(!PdfParser::read(junk, &model, nullptr, meta, &error));
         QVERIFY(!error.isEmpty());
+    }
+
+    // 完整往返（v2）：导出（每行一页 + CMap 修复）→ 再导入：
+    // 行结构 + 中英文内容 + 批注尾注全部保真
+    void writeFullRoundTrip()
+    {
+        DocumentModel model;
+        model.setLines({QStringLiteral("第一行中文内容"), QStringLiteral("Second line English"),
+                        QStringLiteral("第三行"), QString()});
+        CommentService comments;
+        comments.setComment(1, QStringLiteral("译文批注TL"));
+
+        QVariantMap meta;
+        QString error;
+        const QString outPath = m_tempDir.path() + QStringLiteral("/full.pdf");
+        QVERIFY2(PdfParser::write(outPath, &model, &comments, meta, &error),
+                 qPrintable(error));
+
+        DocumentModel back;
+        QVariantMap meta2;
+        QVERIFY2(PdfParser::read(outPath, &back, nullptr, meta2, &error),
+                 qPrintable(error));
+        QCOMPARE(back.lineCount(), 4);
+        QCOMPARE(back.lineText(0), QStringLiteral("第一行中文内容"));
+        QCOMPARE(back.lineText(1), QStringLiteral("Second line English（批注：译文批注TL）"));
+        QCOMPARE(back.lineText(2), QStringLiteral("第三行"));
+        QCOMPARE(back.lineText(3), QString());
     }
 
     // 空文档导出（0 行）不崩溃且产出可加载的合法 PDF

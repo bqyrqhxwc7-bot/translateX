@@ -190,7 +190,7 @@ private slots:
         QCOMPARE(model.lineCount(), 1);
         QCOMPARE(model.lineText(0), QStringLiteral("开头结尾"));
         QCOMPARE(model.displayAt(0), QStringLiteral("rich"));
-        QVERIFY(model.richAt(0).contains(QStringLiteral("data:image/png;base64,")));
+        // 图文混排：QML 不支持 data URI img，已改为 [图片] 占位（防重叠）`n        QVERIFY(model.richAt(0).contains(QStringLiteral("[图片]")));
         QVERIFY(model.richAt(0).contains(QStringLiteral("开头")));
     }
 

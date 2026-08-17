@@ -36,32 +36,56 @@
 
 ## 3. 导出设计（QPdfWriter + QPainter）
 
-### 3.0 ⚠️ Qt 6.5.3 文本层缺陷（实测确认）
+### 3.0 ⚠️ Qt 6.5.3 文本层缺陷（已修复，v2）
 
-QPdfWriter 导出的 PDF **渲染视觉正确，但文本层不可提取**（QPdfDocument 读回时 ASCII 字符重复、CJK 变 `?`；内嵌字体 FontFile2 + ToUnicode + Identity-H 均存在，但映射错误——Qt 已知缺陷族，6.5.3 未修）。**任何阅读器提取该文本层都不可靠**。
+**缺陷详情（2026-08-16 深挖确认）**：QPdfWriter 导出 PDF 的文本层：
+- ToUnicode CMap 结构存在且 ASCII 映射完全正确（"Second" 可完整还原）
+- **中文被映射到康熙部首区（U+2F00 系列）而非 CJK 汉字区（U+4E00）**——字体子集化时 cmap 取错子表（Qt 缺陷），**所有阅读器**提取中文都错（非 QPdfDocument 读取 bug）
+- 内容流文字操作符为 CID（Identity-H，2 字节），**CID 按"文本字符首次出现顺序"分配且复用**；**空格也有 CID**（U+0020 映射）
+- 内嵌子集字体**无 cmap 表**（OS/2,glyf,head,hhea,hmtx,loca,maxp,name——子集化时被剔除），无法从字体侧恢复映射
+- 一页多行文本提取后天然合并为一行（行结构丢失，独立于乱码问题）
 
-影响与对策：
-- **导出 → 再导入 的往返流程不可行**（v1 明示）；文本以字形绘制，人眼阅读/打印正常
-- 导入侧不受影响：QPdfDocument 读取**真实 PDF 的文本层**正常（测试用手写干净文本层 PDF 验证）
-- 测试策略：导出只断言「有效 PDF + 渲染出字形（暗像素统计）」，不断言文本提取
-- 升级 Qt（≥6.8 候选）后可复查此缺陷；届时恢复往返断言
+**v2 修复（2026-08-16 已实现，用户确认完整修复往返）**：
 
-### 3.1 流程
+| 缺陷 | 修复 |
+| --- | --- |
+| 中文映射错（康熙部首区） | 导出后处理：解析内容流 CID 序列（Tj 顺序含重复）↔ 与导出文本序列对齐（CID 首次出现分配、重复复用、空格有 CID 的实测规律），重建正确 ToUnicode CMap，重写 PDF（%PDF 头 + 对象按编号重序列化 + 重建 xref；xref 权威定位对象、/Length 支持间接引用） |
+| 一页多行合并 | **每行一页**：每行（含空行）后 `newPage()`，再导入时每页=一行，行结构保真 |
+
+对齐算法（`buildCMapFromText`）：逐字符推进 CID 与文本，新 CID 映射当前字符、旧 CID 必须匹配已映射字符（不匹配时跳过文本字符防御）；**对齐失败 → 放弃修复**（保留原始输出，不破坏文件）。
+
+限制：
+- 对齐依赖 QPdfWriter 的 CID 分配规律（实测稳定）；多字体 fallback 场景对齐失败时跳过修复
+- 修复后文本层对**所有阅读器**可提取；再导入 = 行结构 + 内容完整往返（含中文/英文/批注尾注/空行）
+
+### 3.1 流程（v2：每行一页 + CMap 后处理）
 
 1. `QPdfWriter writer(path)`：A4 + 边距 20mm（`setPageSize(QPageSize(QPageSize::A4))`、`setPageMargins(QMarginsF(20,20,20,20), QPageLayout::Millimeter)`）、`setTitle/setCreator("Translex")`
 2. `QPainter painter(&writer)`；字体 **DengXian 12pt**（须为可嵌入 TTF，见 §3.2）
-3. 逐行绘制：`QFontMetrics::boundingRect(0,0,width,INT_MAX, Qt::TextWordWrap, line)` 求折行高度 `h`
-   - `y + h > writer.height()` → `writer.newPage()`，y 归零
-   - `painter.drawText(QRect(0, y, width, h), Qt::TextWordWrap, line)`；`y += h + 4`
-   - 空行 → `y += lineHeight`（保持空行）
-   - 行有批注 → 行文本追加 `（批注：{批注文本}）`
-4. `painter.end()`（QPdfWriter 析构时写文件）
+3. 逐行绘制，**每行一页**（保证再导入行结构保真）：
+   - 行文本（含批注尾注）→ 折行绘制 → `writer.newPage()`
+   - 空行 → 直接 `newPage()`（空白页，再导入为空行）
+   - 绘制同时**收集文本字符序列**（去空格）供 CMap 重建
+4. `painter.end()` 后调用 **文本层修复**（见 §3.3）：重建 ToUnicode CMap + 重写 PDF
 
 ### 3.2 说明
 
 - `writer.width()/height()` 返回**可用区像素**（页尺寸 - 边距），直接用
 - 字体：**DengXian（等线）TTF**——不能用 TTC 集合字体（微软雅黑/宋体），TTC 嵌入退化为字形路径更糟；DengXian 是 Windows 10+ 自带 TTF，视觉现代
 - 导出内容是**编辑层文本**（用户编辑后的结果），与导入页映射无关（行数可能已变）
+
+### 3.3 文本层修复（ToUnicode CMap 重建）
+
+导出后处理（`PdfParser` 内实现，约 150 行 + zlib 解压）：
+
+1. **解析 PDF 对象**：`N M obj <<dict>> stream...endstream endobj` 模式扫描（QuaZip 自带 zlib 可解压 FlateDecode 流）
+2. **定位 ToUnicode 对象**：从字体字典 `/ToUnicode N 0 R` 引用找到目标对象
+3. **生成正确 CMap**：`<0001> <0014> [<7B2C> ...]` 形式 bfrange——
+   - CID 序列 = 内容流中按序出现的 CID（严格递增且复用）
+   - 字符序列 = 导出时收集的文本字符（**去空格**，与内容流对齐；已实测空格无 CID）
+   - 逐字符建立 CID→Unicode，同 CID 复用同一字符
+4. **重写 PDF**：替换 ToUnicode 对象内容 → 所有对象重新序列化 → 重建 xref 表 + trailer
+5. **防御**：CID 数与字符序列数不一致（多字体 fallback/缺字）→ 放弃修复（保留原始 CMap），写日志警告，不破坏 PDF
 
 ## 4. 接口（与 TrxParser/DocxParser 同构）
 
@@ -100,9 +124,9 @@ public:
 ## 7. 限制（明示）
 
 - 无 OCR（扫描版仅空行）；无密码 PDF（v1 报错提示）
-- **导出文本层不可提取**（Qt 6.5.3 QPdfWriter 缺陷，§3.0）：视觉正确，但不可复制/搜索/再导入；往返流程不可行
+- ~~导出文本层不可提取~~ **已修复（v2）**：导出后自动重建 ToUnicode CMap（§3.0/§3.3），文本可提取、可再导入，往返完整
 - 版式近似：无原字体/字号/颜色/分栏还原，统一 DengXian 12pt 导出
-- 导出不含原图（仅文本层 + 批注尾注；批注尾注随文本层受 §3.0 限制）
+- 导出不含原图（仅文本层 + 批注尾注；批注尾注随文本层修复后可提取）
 - 超大 PDF（页数巨多）走阶段 D 大文件降级策略（打开时行数探测复用）
 
 ## 8. 验证清单

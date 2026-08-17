@@ -29,7 +29,10 @@ public:
     // 规则：数字/代码/占位符应保留
     static bool preservesTokens(const QString &source, const QString &translated);
     // 规则：纯原文回显（模型未翻译直接复制原文）
-    static bool notJustEcho(const QString &source, const QString &translated);
+    // sameLanguage=true 时启用近似相似度检测（同语言回显嫌疑）；
+    // 跨语言（中→日等共享汉字场景）只做完全一致拦截，避免误杀真实译文
+    static bool notJustEcho(const QString &source, const QString &translated,
+                            bool sameLanguage = false);
 
 private:
     // 提取数字、代码片段等需要保留的 token

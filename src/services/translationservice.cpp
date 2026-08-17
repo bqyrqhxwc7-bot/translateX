@@ -311,8 +311,13 @@ TranslationResult TranslationService::postProcess(
         return result;
     }
 
-    // 回显检测：始终执行（不输出原文是硬性质量要求，不受质量自检开关影响）
-    if (!QualityGate::notJustEcho(source, result.text)) {
+    // 回显检测：始终执行（不输出原文是硬性质量要求，不受质量自检开关影响）。
+    // sameLanguage：仅「明确同语言」或「auto 且原文已疑似目标语言」时启用近似检测；
+    // 跨语言（auto→ja 等共享汉字场景）只做完全一致拦截，防误杀真实译文。
+    const bool sourceLangKnown = !m_sourceLang.isEmpty() && m_sourceLang != QStringLiteral("auto");
+    const bool sameLanguage = (sourceLangKnown && m_sourceLang == m_targetLang)
+                              || (!sourceLangKnown && isTargetLanguageText(source));
+    if (!QualityGate::notJustEcho(source, result.text, sameLanguage)) {
         result.success = false;
         result.errorMessage = QStringLiteral("疑似未翻译（译文与原文相同），请检查后端或模型配置后重试");
         emit qualityWarning(lineNumber, result.errorMessage);

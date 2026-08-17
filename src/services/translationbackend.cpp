@@ -175,6 +175,28 @@ QString stripTags(const QString &text)
     return t.trimmed();
 }
 
+// MyMemory 不支持 auto 源语言：按文本启发式猜测（CJK 占比 ≥30% → zh-CN，否则 en）。
+// 回退固定 en 会导致中文文档按 en|xx 请求、云端返回原文 → 回显误判全行失败。
+QString guessSourceLang(const QString &text)
+{
+    int cjk = 0;
+    int nonSpace = 0;
+    for (const QChar &c : text) {
+        if (c.isSpace()) {
+            continue;
+        }
+        ++nonSpace;
+        const ushort u = c.unicode();
+        if ((u >= 0x4E00 && u <= 0x9FFF) || (u >= 0x3400 && u <= 0x4DBF)) {
+            ++cjk;
+        }
+    }
+    if (nonSpace > 0 && static_cast<double>(cjk) / nonSpace >= 0.3) {
+        return QStringLiteral("zh-CN");
+    }
+    return QStringLiteral("en");
+}
+
 } // namespace
 
 // ==================== OllamaBackend ====================
@@ -404,11 +426,10 @@ TranslationResult OnlineBackend::translate(
     QUrl url(QStringLiteral("https://api.mymemory.translated.net/get"));
     QUrlQuery query;
     query.addQueryItem(QStringLiteral("q"), text);
-    // MyMemory 不支持 auto 源语言；按选项指定（默认 en → zh-CN）
+    // MyMemory 不支持 auto 源语言；按文本启发式猜测（CJK→zh-CN，否则 en）
     QString sourceLang = options.sourceLang;
     if (sourceLang.isEmpty() || sourceLang == QStringLiteral("auto")) {
-        // MyMemory 不支持 auto 源语言，回退英文
-        sourceLang = QStringLiteral("en");
+        sourceLang = guessSourceLang(text);
     }
     QString targetLang = options.targetLang.isEmpty() ? QStringLiteral("zh-CN") : options.targetLang;
     query.addQueryItem(QStringLiteral("langpair"), QStringLiteral("%1|%2").arg(sourceLang, targetLang));

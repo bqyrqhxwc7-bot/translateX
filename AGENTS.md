@@ -2,13 +2,32 @@
 
 > **接手必读**：`docs/HANDOVER.md`（功能状态 / 路线图 / 架构铁律 / 踩坑总纲——任何新会话先读它）→ 本文 → `docs/ARCHITECTURE.md`。
 
+---
+
+## English Overview (for non-Chinese contributors)
+
+**Translex** (formerly translateX) is a Qt 6 desktop translation/writing tool: a text editor with per-line annotations and three translation backends (local Ollama / cloud service / OpenAI-style API). Supports `.txt` / `.trx` / `.docx` (PDF round-trip added 2026-08). UI is QML + FluentUI; business logic lives in the C++ service layer (`src/services/`, exposed to QML via `setContextProperty`).
+
+- **Language policy**: The maintainer is a Chinese speaker, so docs/comments/replies are **Chinese-first**. English contributors are welcome — write code and commit messages in English if you prefer; for docs, at minimum keep the top of this file in sync with the English Overview above.
+- **Key commands** (Windows PowerShell, repo root):
+  - Build (MSVC): `cmake --build build-vs2026-x64 --config Debug`
+  - Configure: `cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.5.3/msvc2019_64" -DBUILD_TESTING=ON`
+  - Test: `$env:PATH = "D:/Software/Qt/6.5.3/msvc2019_64/bin;" + $env:PATH; ctest --test-dir build-vs2026-x64 -C Debug --output-on-failure`
+  - Clang-cl cross-compiler check: `cmake --preset clang-cl && cmake --build --preset clang-cl && ctest --test-dir build-clang -C Debug` (run inside a VS dev shell, e.g. `vcvars64.bat`)
+  - Single test: `ctest --test-dir build-vs2026-x64 -C Debug -R tst_pdf --output-on-failure`
+- **Must-read docs**: `docs/HANDOVER.md` (authoritative status/roadmap/iron rules), `docs/ARCHITECTURE.md`, `docs/services/*.md`.
+- **Iron rules** (violations cause regressions): state must live in app-level singletons (NoStack pages are rebuilt on every navigation); `Popup`-based controls are unusable; `Qt.callLater` is unreliable (use `Timer`); display-layer (rich/image) rows degrade to plain text on edit; new config keys must be added to `src/services/config/ui.json` schema.
+- **Environment gotchas**: tests need Qt bin in `PATH` (or use self-contained `build-*/tests` dirs which carry the needed Qt DLLs); never run `git submodule update` (`third_party/*` carries intentional local patches); a Chinese AV (Huorong) may suspend freshly built test exes (add the build dirs to its trust zone).
+
+---
+
 ## 0. 项目是什么
 
 **Translex**（曾用名 translateX）：Qt 6 桌面翻译写作工具。编辑器 + 批注 + 三翻译后端（Ollama/云端/OpenAI 风格 API），`.txt`/`.trx`/`.docx` 三格式。UI 为 QML + FluentUI，业务逻辑在 `src/services/` 的 C++ 服务层。
 
 ## 1. 核心原则（按优先级）
 
-0. **全程用中文交流**（用户为中文母语，国内网络环境）；文档、注释、回复一律中文，代码标识符用英文。
+0. **全程用中文交流**（用户为中文母语，国内网络环境）；文档、注释、回复一律中文，代码标识符用英文。**外国贡献者**：可用英文交流，代码/提交信息用英文即可；文档保持中文（顶部英文概要与本文同步即可，勿整篇翻译）。
 1. **文档先行**：设计/重构/新功能先写 `docs/` 设计文档，确认后再写代码；代码与文档必须同步更新。
 2. **重大决策先问用户**：架构方向、接口变更、破坏性重构、依赖引入、许可协议选择——先 Ask 再动手。
 3. **多用 Todo 跟踪**：多步骤任务建 Todo 清单，每完成一项立即更新。

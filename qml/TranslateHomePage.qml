@@ -40,6 +40,28 @@ FluContentPage {
         id: tokens
     }
 
+    // 图片行渲染：从文档 meta.images 取 base64 → data URI（docx 纯图段显示）
+    // 结果缓存，避免每次委托创建都遍历 meta
+    property var _imageUriCache: ({})
+    property var _imageUriMetaVersion: 0
+    function imageSource(imageId) {
+        if (!imageId) return ""
+        if (page._imageUriCache[imageId] !== undefined) return page._imageUriCache[imageId]
+        const meta = documentManager.documentMeta()
+        const images = meta && meta.images ? meta.images : []
+        for (const img of images) {
+            if (img.id === imageId && img.dataBase64) {
+                const mime = img.format === "png" ? "image/png"
+                           : img.format === "jpg" || img.format === "jpeg" ? "image/jpeg"
+                           : img.format === "gif" ? "image/gif" : "image/png"
+                const uri = "data:" + mime + ";base64," + img.dataBase64
+                page._imageUriCache[imageId] = uri
+                return uri
+            }
+        }
+        return ""
+    }
+
     // 状态栏图标（0=无图标）
     property int statusIconSource: 0
     property color statusIconColor: FluTheme.fontSecondaryColor
@@ -1051,9 +1073,11 @@ FluContentPage {
                     required property var model
                     required property int index
                     width: lineView.width
-                    // 原文 36 + 批注区（自动换行，随内容增高）
-                    height: 36 + (row.model.hasComment || page.commentDraftLine === index
-                                  ? Math.max(20, commentMeasurer.contentHeight) + 6 : 0)
+                    // 图片行：行号 36 + 图片区 180 + 边距；其余：原文 36 + 批注区（自动换行）
+                    height: row.model.display === "image"
+                            ? 224
+                            : 36 + (row.model.hasComment || page.commentDraftLine === index
+                                    ? Math.max(20, commentMeasurer.contentHeight) + 6 : 0)
                     radius: page.rowRadius   // 经页面属性中转（delegate 内单例访问缺陷，见上）
                     // 当前行 → 主题色浅背景；多选行 → 主题色更浅；批注行 → 主题色最浅；hover → itemHoverColor；否则透明
                     color: {
@@ -1248,9 +1272,26 @@ FluContentPage {
                                 anchors.centerIn: parent
                                 iconSource: FluentIcons.Message
                                 iconSize: 15
-                                color: FluTheme.accentColor
+                                color: FluTheme.primaryColor   // 批注色：dark 下 accentColor 是深蓝看不清，primaryColor 自动变亮
                             }
                         }
+                    }
+
+                    // ---------- 图片行显示（display=image：docx 纯图段；点击/编辑即降级） ----------
+                    Image {
+                        visible: row.model.display === "image" && page.currentLine !== index
+                        anchors.left: parent.left
+                        anchors.leftMargin: 12 + 44 + 10   // 对齐原文文本（行号宽 + 间距）
+                        anchors.right: parent.right
+                        anchors.rightMargin: 12
+                        anchors.top: parent.top
+                        anchors.topMargin: 40
+                        height: 180
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                        source: row.model.imageIds && row.model.imageIds.length > 0
+                                ? page.imageSource(row.model.imageIds[0]) : ""
+                        clip: true
                     }
 
                     // ---------- 批注（译文）行内直编：与原文一样可编辑，超宽自动换行 ----------
@@ -1289,7 +1330,7 @@ FluContentPage {
                             height: commentMeasurer.contentHeight
                             text: row.model.commentText
                             font.pixelSize: page.commentFontSize
-                            color: FluTheme.accentColor
+                            color: FluTheme.primaryColor   // 批注色：dark 下 accentColor 是深蓝看不清，primaryColor 自动变亮
                             wrapMode: Text.Wrap
                         }
                         // 当前行：可编辑（与原文一致；清空=删除，draft 会话保持编辑框不塌缩）
@@ -1302,7 +1343,7 @@ FluContentPage {
                             height: commentMeasurer.contentHeight
                             text: row.model.commentText
                             font.pixelSize: page.commentFontSize
-                            color: FluTheme.accentColor
+                            color: FluTheme.primaryColor   // 批注色：dark 下 accentColor 是深蓝看不清，primaryColor 自动变亮
                             wrapMode: Text.Wrap
                             selectByMouse: true
                             // 受限模式兜底只读（commentEditing 已挡编辑态，双保险）

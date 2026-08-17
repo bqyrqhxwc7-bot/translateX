@@ -1,0 +1,64 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "msvc",
+      "displayName": "MSVC x64 (VS 2026, 默认)",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
+      "binaryDir": "build-vs2026-x64",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "D:/Software/Qt/6.5.3/msvc2019_64",
+        "BUILD_TESTING": "ON"
+      }
+    },
+    {
+      "name": "clang-cl",
+      "displayName": "Clang-cl x64 + Ninja (Windows, MSVC ABI)",
+      "generator": "Ninja",
+      "binaryDir": "build-clang",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl",
+        "CMAKE_PREFIX_PATH": "D:/Software/Qt/6.5.3/msvc2019_64",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": "ON"
+      }
+    },
+    {
+      "name": "mingw",
+      "displayName": "MinGW g++ + Ninja (跨平台验证)",
+      "generator": "Ninja",
+      "binaryDir": "build-mingw",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_PREFIX_PATH": "D:/Software/Qt/6.5.3/mingw_64",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "msvc", "configurePreset": "msvc" },
+    { "name": "clang-cl", "configurePreset": "clang-cl" },
+    { "name": "mingw", "configurePreset": "mingw" }
+  ],
+  "testPresets": [
+    {
+      "name": "msvc",
+      "configurePreset": "msvc",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "clang-cl",
+      "configurePreset": "clang-cl",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "mingw",
+      "configurePreset": "mingw",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

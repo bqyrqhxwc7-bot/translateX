@@ -322,8 +322,9 @@ bool DocxParser::read(const QString &path, DocumentModel *model,
             QString html;
             for (const RunPiece &pc : par) {
                 if (pc.hasImage && imageData.contains(pc.imageId)) {
-                    html += QStringLiteral("<img src=\"data:image/%1;base64,%2\" width=\"240\"/>")
-                                .arg(imageMime.value(pc.imageId), QString::fromLatin1(imageData.value(pc.imageId)));
+                    // 图文混排：QML Text 富文本不支持 <img>（data URI 不加载），
+                    // 嵌图会导致布局错乱/重叠 → 用文本占位符（图片本身不显示）
+                    html += QStringLiteral("[图片]");
                 }
                 if (!pc.text.isEmpty()) {
                     QString inner = escapeHtml(pc.text);

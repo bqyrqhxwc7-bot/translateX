@@ -27,7 +27,12 @@ set(FLUENTUI_BUILD_STATIC_LIB ON CACHE BOOL "Build FluentUI as a static library.
 add_subdirectory(third_party/FluentUI)
 
 # ---- zlib (zlib license) : QuaZip 依赖，静态编译（docx 导入） ----
+# 注意：必须显式 ZLIB_BUILD_SHARED=OFF + ZLIB_BUILD_STATIC=ON——zlib 默认构建
+# DLL（libzd.dll），测试会 0xc0000135（HANDOVER §6 踩坑；仅 BUILD_SHARED_LIBS=OFF
+# 不够，zlib 用自己的开关且新构建目录无缓存时恢复默认）。
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
+set(ZLIB_BUILD_SHARED OFF CACHE BOOL "Build zlib as shared library" FORCE)
+set(ZLIB_BUILD_STATIC ON CACHE BOOL "Build zlib as static library" FORCE)
 set(ZLIB_BUILD_TESTING OFF CACHE BOOL "Build zlib tests" FORCE)
 set(ZLIB_INSTALL OFF CACHE BOOL "Install zlib" FORCE)
 set(SKIP_INSTALL_ALL ON CACHE BOOL "Skip zlib install rules" FORCE)
@@ -118,7 +123,9 @@ if(MSVC AND TARGET fluentui)
     target_compile_options(fluentui PRIVATE /Z7)
 endif()
 
-if(WIN32)
+# windeployqt 部署：仅对 MSVC（cl）构建执行——clang-cl/MinGW 构建用于跨平台
+# 编译验证，部署环境依赖 MSVC 工具链检测，跳过部署不影响构建产物
+if(WIN32 AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND NOT MINGW)
     get_target_property(QT_QMAKE_EXECUTABLE Qt6::qmake IMPORTED_LOCATION)
     get_filename_component(QT_BIN_DIR "${QT_QMAKE_EXECUTABLE}" DIRECTORY)
     find_program(QT_WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${QT_BIN_DIR}")

@@ -11,12 +11,10 @@
 #include "securestorage.h"
 
 // 静态库场景：qrc 资源需显式初始化（qt_add_library 静态链接时资源不自动注册）
-namespace {
 struct ConfigResourceInit {
     ConfigResourceInit() { Q_INIT_RESOURCE(config); }
 };
-const ConfigResourceInit g_configResourceInit;
-}
+static const ConfigResourceInit g_configResourceInit;
 
 QString ConfigService::s_dataDirectoryOverride;
 

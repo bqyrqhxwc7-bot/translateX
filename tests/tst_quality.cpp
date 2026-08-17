@@ -119,14 +119,23 @@ void TestQuality::glossaryVerify()
 
 void TestQuality::qualityGateEcho()
 {
-    // 纯回显 = 未翻译
+    // 完全一致 = 未翻译（任何场景）
     const QualityReport report = QualityGate::evaluate("hello world", "hello world", nullptr);
     QVERIFY(!report.passed);
+    QVERIFY(!QualityGate::notJustEcho("hello world", "hello world"));
 
-    // 近似回显（细微差异）也应拦截：后端对非源语言文本原样返回时
-    QVERIFY(!QualityGate::notJustEcho("The quick brown fox", "The quick browm fox"));   // 1 字符差
-    QVERIFY(!QualityGate::notJustEcho("これはテストです", "これはテストです"));          // 非英文原文回显
-    QVERIFY(QualityGate::notJustEcho("The quick brown fox", "敏捷的棕色狐狸"));          // 真译文
+    // 近似回显（同语言场景 sameLanguage=true）：细微差异也拦截
+    QVERIFY(!QualityGate::notJustEcho("The quick brown fox", "The quick browm fox", true));   // 1 字符差
+    QVERIFY(!QualityGate::notJustEcho("私は日本語です", "私は日本語です", true));               // 日文原文回显
+    QVERIFY(QualityGate::notJustEcho("The quick brown fox", "敏捷的棕色狐狸", true));          // 真实翻译通过
+
+    // 跨语言场景（auto→ja 等）：不做近似检测，防共享汉字误杀
+    // 中→日共享汉字译文必须通过
+    QVERIFY(QualityGate::notJustEcho("第一章内容", "第一章の内容"));
+    // 近似但非完全一致也放行（跨语言）
+    QVERIFY(QualityGate::notJustEcho("The quick brown fox", "The quick browm fox"));
+    // 完全一致仍拦截（跨语言）
+    QVERIFY(!QualityGate::notJustEcho("hello world", "hello world"));
 }
 
 void TestQuality::qualityGateLength()
@@ -142,7 +151,7 @@ void TestQuality::qualityGateLength()
     // 明显过长 → 异常
     QVERIFY(!QualityGate::lengthReasonable(
         "hi",
-        QString(30, QLatin1Char('长'))));
+        QString(30, QChar(0x957F))));   // 30 个「长」（不能用 QLatin1Char 多字节字面量，clang 严格）
 }
 
 void TestQuality::qualityGatePreservesTokens()
