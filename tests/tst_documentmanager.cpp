@@ -18,6 +18,7 @@ private slots:
     void openSaveRoundTrip();
     void commentsPersistWithDocument();
     void saveFileAsUpdatesPath();
+void markdownExport();
     void openMissingFileFails();
     void recentFilesPersist();
     void largeFileLimitedModeByLines();
@@ -104,6 +105,30 @@ void TestDocumentManager::saveFileAsUpdatesPath()
     QCOMPARE(m_mgr.currentPath(), path);
     QCOMPARE(m_mgr.documentName(), QStringLiteral("doc3.txt"));
     QVERIFY(!m_mgr.isDirty());
+}
+
+void TestDocumentManager::markdownExport()
+{
+    m_mgr.newDocument({ QStringLiteral("Hello world"), QStringLiteral("第二行"),
+                        QStringLiteral("") });
+    m_comments.setComment(0, QStringLiteral("你好世界"));
+    const QString path = m_temp.filePath(QStringLiteral("export.md"));
+    QVERIFY(m_mgr.saveFileAs(path));
+    QCOMPARE(m_mgr.currentPath(), path);
+
+    QFile f(path);
+    QVERIFY(f.open(QIODevice::ReadOnly));
+    const QString content = QString::fromUtf8(f.readAll());
+    f.close();
+
+    // 标题 + 每行「第 N 行」小节；有批注行带引用块；空行跳过；无批注行仅原文
+    QVERIFY2(content.contains(QStringLiteral("# export")), qPrintable(content));
+    QVERIFY2(content.contains(QStringLiteral("## 第 1 行")), qPrintable(content));
+    QVERIFY2(content.contains(QStringLiteral("Hello world")), qPrintable(content));
+    QVERIFY2(content.contains(QStringLiteral("> 你好世界")), qPrintable(content));
+    QVERIFY2(content.contains(QStringLiteral("## 第 2 行")), qPrintable(content));
+    QVERIFY2(content.contains(QStringLiteral("第二行")), qPrintable(content));
+    QVERIFY2(!content.contains(QStringLiteral("第 3 行")), qPrintable(content));
 }
 
 void TestDocumentManager::openMissingFileFails()

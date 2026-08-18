@@ -236,6 +236,7 @@ FluContentPage {
     Connections {
         target: translationService
         function onLineTranslated(lineNumber, text, success) {
+            translationHistoryService.record(lineNumber, documentModel.lineText(lineNumber), text, success)
             if (success && text) {
                 commentService.setComment(lineNumber, text)
                 statusLabel.text = qsTr("第 %1 行翻译完成").arg(lineNumber + 1)
@@ -520,6 +521,23 @@ FluContentPage {
         if (del) {
             del.startEdit()
         }
+    }
+
+    // 翻译历史弹窗（迭代4b）：打开时从 service 拉取最新条目
+    function openHistoryDialog() {
+        historyModel.clear()
+        const entries = translationHistoryService.entries()
+        for (let i = 0; i < entries.length; i++) {
+            const e = entries[i]
+            historyModel.append({
+                line: e.line,
+                source: e.source,
+                translated: e.translated,
+                success: e.success,
+                time: e.time
+            })
+        }
+        historyDialog.open()
     }
 
     // Enter 换行：在光标处拆分当前行
@@ -1036,6 +1054,11 @@ FluContentPage {
                             text: textToSpeechService.speaking ? qsTr("停止朗读") : qsTr("朗读选中行")
                             enabled: page.selectedLines.length > 0
                             onClicked: page.speakSelectedLines()
+                        }
+                        // 翻译历史（迭代4b）：会话内翻译记录，点击条目跳转行
+                        FluButton {
+                            text: qsTr("翻译历史")
+                            onClicked: page.openHistoryDialog()
                         }
                         FluDivider { orientation: Qt.Vertical; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
                         // 浮窗切换（PPT 式 ↔ 浮窗；唯一模式入口）
@@ -1605,7 +1628,7 @@ FluContentPage {
     FileDialog {
         id: saveAsDialog
         title: qsTr("另存为")
-        nameFilters: [qsTr("翻译文档 (*.trx)"), qsTr("文本文件 (*.txt)"), qsTr("PDF 文档 (*.pdf)"), qsTr("所有文件 (*)")]
+        nameFilters: [qsTr("翻译文档 (*.trx)"), qsTr("文本文件 (*.txt)"), qsTr("Markdown 文档 (*.md)"), qsTr("PDF 文档 (*.pdf)"), qsTr("所有文件 (*)")]
         fileMode: FileDialog.SaveFile
         onAccepted: {
             documentManager.saveFileAs(urlToPath(selectedFile))
@@ -1672,6 +1695,92 @@ FluContentPage {
             }
             refreshDocStatus()
             chapterService.rebuild()
+        }
+    }
+
+    // ---------- 翻译历史（迭代4b） ----------
+    // ListModel 必须声明在页面级（contentDelegate 由 Loader 延迟创建，组件内 id 不可访问）
+    ListModel {
+        id: historyModel
+    }
+
+    // 历史新增/清空 → 弹窗打开时刷新（entryAdded 触发时若弹窗可见也同步）
+    Connections {
+        target: translationHistoryService
+        function onEntryAdded() {
+            if (historyDialog.visible) {
+                page.openHistoryDialog()
+            }
+        }
+    }
+
+    FluContentDialog {
+        id: historyDialog
+        title: qsTr("翻译历史（本会话）")
+        message: ""
+        negativeText: ""
+        positiveText: qsTr("关闭")
+        contentDelegate: Component {
+            Column {
+                width: 380
+                spacing: 8
+                Row {
+                    width: parent.width
+                    spacing: 8
+                    FluText { text: qsTr("共 %1 条").arg(historyModel.count); font.pixelSize: 12; color: FluTheme.fontSecondaryColor }
+                    Item { Layout.fillWidth: true; width: 10 }
+                    FluButton {
+                        text: qsTr("清空")
+                        enabled: historyModel.count > 0
+                        onClicked: translationHistoryService.clear()
+                    }
+                }
+                ListView {
+                    width: parent.width
+                    height: 320
+                    clip: true
+                    model: historyModel
+                    delegate: ItemDelegate {
+                        width: parent.width
+                        height: 56
+                        onClicked: {
+                            page.focusLine(model.line)
+                            historyDialog.close()
+                        }
+                        Column {
+                            anchors.fill: parent
+                            anchors.leftMargin: 8
+                            anchors.rightMargin: 8
+                            anchors.topMargin: 4
+                            spacing: 2
+                            Row {
+                                width: parent.width
+                                spacing: 6
+                                FluText { text: qsTr("第 %1 行").arg(model.line + 1); font.pixelSize: 11; color: FluTheme.fontSecondaryColor }
+                                FluText { text: model.time; font.pixelSize: 11; color: FluTheme.fontSecondaryColor }
+                                FluText {
+                                    text: model.success ? qsTr("成功") : qsTr("失败")
+                                    font.pixelSize: 11
+                                    color: model.success ? "#2ea043" : "#d1242f"
+                                }
+                            }
+                            FluText {
+                                width: parent.width
+                                elide: Text.ElideRight
+                                text: qsTr("原文：%1").arg(model.source)
+                                font.pixelSize: 12
+                            }
+                            FluText {
+                                width: parent.width
+                                elide: Text.ElideRight
+                                text: qsTr("译文：%1").arg(model.translated)
+                                font.pixelSize: 12
+                                color: FluTheme.fontSecondaryColor
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

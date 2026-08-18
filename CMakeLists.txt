@@ -115,6 +115,8 @@ qt_add_executable(translex
     src/services/pdfparser.h
     src/services/texttospeechservice.cpp
     src/services/texttospeechservice.h
+    src/services/translationhistoryservice.cpp
+    src/services/translationhistoryservice.h
 )
 
 qt_add_qml_module(translex

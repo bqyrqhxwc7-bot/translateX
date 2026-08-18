@@ -727,4 +727,72 @@ FluScrollablePage {
             }
         }
     }
+
+    // ---------- 卡片：帮助与引导（迭代4b：不默认首启弹窗，手动打开） ----------
+    Rectangle {
+        Layout.fillWidth: true
+        radius: tokens.radiusCard
+        color: tokens.bgCard
+        border.color: FluTheme.dividerColor
+        implicitHeight: cardGuideCol.implicitHeight + 32
+
+        ColumnLayout {
+            id: cardGuideCol
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 12
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                FluIcon { iconSource: FluentIcons.Info; iconSize: 16; color: FluTheme.primaryColor }
+                FluText { text: qsTr("帮助与引导"); font.pixelSize: 16; font.bold: true }
+            }
+
+            FluText {
+                text: qsTr("快速了解 Translex 的核心功能与快捷键。")
+                font.pixelSize: 12
+                color: FluTheme.fontSecondaryColor
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+            }
+
+            FluButton {
+                text: qsTr("功能引导")
+                onClicked: guideDialog.open()
+            }
+        }
+    }
+
+    // ---------- 功能引导弹窗（静态内容清单） ----------
+    FluContentDialog {
+        id: guideDialog
+        title: qsTr("功能引导")
+        negativeText: ""
+        positiveText: qsTr("知道了")
+        contentDelegate: Component {
+            ColumnLayout {
+                width: 380
+                spacing: 10
+                Repeater {
+                    model: [
+                        qsTr("编辑器：逐行编辑，Enter 拆分 / Backspace 行首合并，右键菜单快速操作"),
+                        qsTr("翻译：选中行或全部待译行，支持 Ollama / 云端 / OpenAI 风格 API 三后端"),
+                        qsTr("批注：译文以批注形式附着在行尾，可导出/导入 JSON"),
+                        qsTr("术语表：设置页维护术语，翻译时注入提示词并做一致性校验，可从文档自动提取"),
+                        qsTr("自动保存：每 60 秒快照未保存更改，崩溃后启动时提示恢复（设置页可关闭）"),
+                        qsTr("朗读：选中行 TTS 朗读（有译文读译文，否则读原文）"),
+                        qsTr("大文件：超过 5 万行 / 200MB 自动进入受限模式（纯文本显示，禁编辑/翻译）"),
+                        qsTr("格式：.trx 完整往返（含批注），.txt / .docx / .pdf / .md 导出")
+                    ]
+                    delegate: FluText {
+                        Layout.fillWidth: true
+                        text: "• " + modelData
+                        font.pixelSize: 13
+                        wrapMode: Text.Wrap
+                    }
+                }
+            }
+        }
+    }
 }

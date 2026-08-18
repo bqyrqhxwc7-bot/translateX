@@ -28,6 +28,7 @@ set(SERVICE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/docxparser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/pdfparser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/texttospeechservice.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/translationhistoryservice.cpp
 )
 
 # 共享服务抽为静态库：11 个测试目标只需编译一次服务源码（避免约 130 次重复编译）。
@@ -149,3 +150,8 @@ add_test(NAME tst_pdf COMMAND tst_pdf)
 qt_add_executable(tst_texttospeech tst_texttospeech.cpp)
 target_link_libraries(tst_texttospeech PRIVATE translex_services Qt6::Test)
 add_test(NAME tst_texttospeech COMMAND tst_texttospeech)
+
+# ---- 翻译历史服务测试（迭代4b：记录/顺序/上限/清空）----
+qt_add_executable(tst_history tst_history.cpp)
+target_link_libraries(tst_history PRIVATE translex_services Qt6::Test)
+add_test(NAME tst_history COMMAND tst_history)

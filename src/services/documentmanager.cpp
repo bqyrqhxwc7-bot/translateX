@@ -29,6 +29,10 @@ bool isPdf(const QString &path)
 {
     return QFileInfo(path).suffix().compare(QLatin1String("pdf"), Qt::CaseInsensitive) == 0;
 }
+bool isMarkdown(const QString &path)
+{
+    return QFileInfo(path).suffix().compare(QLatin1String("md"), Qt::CaseInsensitive) == 0;
+}
 // 自动保存文件标记（避免对 autosave 文件本身再自动保存）
 bool isAutosavePath(const QString &path)
 {
@@ -515,6 +519,41 @@ bool DocumentManager::writeDocument(const QString &path)
         if (isAutosavePath(path)) {
             QFile::remove(path);
         }
+        emit documentChanged(m_path);
+        return true;
+    }
+
+    // .md：Markdown 对照导出（迭代4b：原文 + 译文批注引用块，单向导出）
+    if (isMarkdown(path)) {
+        QStringList md;
+        const QString title = QFileInfo(path).completeBaseName();
+        md << QStringLiteral("# %1").arg(title) << QString();
+        for (int i = 0; i < m_model->lineCount(); ++i) {
+            const QString src = m_model->lineText(i);
+            if (src.trimmed().isEmpty()) {
+                continue;
+            }
+            md << QStringLiteral("## 第 %1 行").arg(i + 1) << src;
+            const QString trans = m_comments ? m_comments->commentAt(i) : QString();
+            if (!trans.trimmed().isEmpty()) {
+                md << QStringLiteral("> %1").arg(trans);
+            }
+            md << QString();
+        }
+        const QString text = md.join(QLatin1Char('\n')) + QLatin1Char('\n');
+
+        QFile file(path);
+        if (!file.open(QIODevice::WriteOnly)) {
+            emit operationFailed(QStringLiteral("无法写入文件：%1").arg(path));
+            return false;
+        }
+        file.write(text.toUtf8());
+        file.close();
+
+        clearAutosaveFor(m_path);
+        m_path = path;
+        clearAutosaveFor(path);
+        setDirty(false);
         emit documentChanged(m_path);
         return true;
     }
