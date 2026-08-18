@@ -28,7 +28,7 @@
 
 ## 4. 存储位置
 
-固定 INI 文件：`%APPDATA%/Translex/secure.ini`
+固定 INI 文件：`%APPDATA%/sr291/Translex/secure.ini`
 
 > 不依赖调用方 QSettings 的 org/app 配置（历史缺陷已修复：旧版用默认 QSettings 导致读写不一致）。
 

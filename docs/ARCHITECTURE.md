@@ -121,7 +121,7 @@ Translex/
 
 ```powershell
 # 构建 + 运行全部测试（需 Qt bin 在 PATH）
-$env:PATH = "D:/Software/Qt/6.5.3/msvc2019_64/bin;" + $env:PATH
+$env:PATH = "D:/Software/Qt/6.11.1/msvc2022_64/bin;" + $env:PATH
 cmake --build build-vs2026-x64 --config Debug
 ctest --test-dir build-vs2026-x64 -C Debug --output-on-failure
 

@@ -37,7 +37,7 @@
 - **键**：`sha256(原文 + 严格输出 + 温度 + 上下文 + 模型/端点 + 术语约束)`（`TranslationCache::key`）
 - **分级**：
   - L1 内存缓存（会话内，`QHash`，LRU 淘汰，上限 5000 条）
-  - L2 磁盘缓存（`%APPDATA%/Translex/cache/<2位前缀>/<key>.json`，跨会话复用）
+  - L2 磁盘缓存（`%APPDATA%/sr291/Translex/cache/<2位前缀>/<key>.json`，跨会话复用）
 - **收益**：重复翻译/回译/重新打开文档时**零成本**
 - **注意**：术语表变化会改变缓存键，避免旧译文复用（已含 `glossaryConstraint` 指纹）
 
@@ -205,9 +205,9 @@ public:
 9. 智能分块（token 预估 + 行合并 + `translateBatch`）✅
 10. 模型分级路由 ❌ 决策：暂不实现，保持手动选后端
 
-### 阶段 D（插件化）
-11. `QPluginLoader` 扫描 + 插件 SDK 头文件
-12. 插件开发指南文档
+### 阶段 D（插件化）✅ 已实现（迭代5）
+11. `QPluginLoader` 扫描 + 插件 SDK 头文件 ✅
+12. 插件开发指南文档 ✅（`docs/services/plugin-development.md`）
 
 ## 8. 度量（验收指标）
 

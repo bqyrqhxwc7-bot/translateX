@@ -11,12 +11,12 @@
 - **Language policy**: The maintainer is a Chinese speaker, so docs/comments/replies are **Chinese-first**. English contributors are welcome — write code and commit messages in English if you prefer; for docs, at minimum keep the top of this file in sync with the English Overview above.
 - **Key commands** (Windows PowerShell, repo root):
   - Build (MSVC): `cmake --build build-vs2026-x64 --config Debug`
-  - Configure: `cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.5.3/msvc2019_64" -DBUILD_TESTING=ON`
-  - Test: `$env:PATH = "D:/Software/Qt/6.5.3/msvc2019_64/bin;" + $env:PATH; ctest --test-dir build-vs2026-x64 -C Debug --output-on-failure`
+  - Configure: `cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.11.1/msvc2022_64" -DBUILD_TESTING=ON`
+  - Test: `$env:PATH = "D:/Software/Qt/6.11.1/msvc2022_64/bin;" + $env:PATH; ctest --test-dir build-vs2026-x64 -C Debug --output-on-failure`
   - Clang-cl cross-compiler check: `cmake --preset clang-cl && cmake --build --preset clang-cl && ctest --test-dir build-clang -C Debug` (run inside a VS dev shell, e.g. `vcvars64.bat`)
   - Single test: `ctest --test-dir build-vs2026-x64 -C Debug -R tst_pdf --output-on-failure`
 - **Must-read docs**: `docs/HANDOVER.md` (authoritative status/roadmap/iron rules), `docs/ARCHITECTURE.md`, `docs/services/*.md`.
-- **Iron rules** (violations cause regressions): state must live in app-level singletons (NoStack pages are rebuilt on every navigation); Popup-based controls are case-dependent (FluMenu in page delegates is broken, but FluComboBox in settings cards works — test small first); `Qt.callLater` is unreliable (use `Timer`); display-layer (rich/image) rows degrade to plain text on edit; new config keys must be added to `src/services/config/ui.json` schema.
+- **Iron rules** (violations cause regressions): state must live in app-level singletons (NoStack pages are rebuilt on every navigation); Popup-based controls are case-dependent (FluMenu in page delegates is broken, but FluComboBox in settings cards works — test small first); `Qt.callLater` is unreliable (use `Timer`); display-layer (rich/image) rows degrade to plain text on edit; new config keys must be added to the matching schema under `src/services/config/` (`ui.json`/`translation.json`/`textToSpeech.json`, etc.).
 - **Environment gotchas**: tests need Qt bin in `PATH` (or use self-contained `build-*/tests` dirs which carry the needed Qt DLLs); never run `git submodule update` (`third_party/*` carries intentional local patches); a Chinese AV (Huorong) may suspend freshly built test exes (add the build dirs to its trust zone).
 
 ---
@@ -40,15 +40,15 @@
 - **可插拔**：新能力优先实现为 service（见 `docs/services/SERVICE-ARCHITECTURE.md`），不往 mainwindow/主页堆代码。
 - **接口稳定**：`IService` / `ITranslationBackend` 等公共接口定稿后不轻易改；扩展用新增方法（带默认实现）。
 - **翻译服务定位（不可偏离）**：更好的质量（上下文感知/术语一致/质量自检）+ 为用户减成本（缓存/模型分级/智能分块/失败降级）；改动必须对照 `docs/services/translation-service.md` 的度量指标做验收（质量提升/成本下降要可测量，不能只凭感觉）。
-- **NoStack 页面模式**（`FluNavigationView pageMode: NoStack`）：每次导航重建页面 → 状态必须放应用级 context property 单例，禁止放页面属性；**Popup 控件按场景判定**（FluMenu 主页 delegate 内不可用，FluComboBox 设置页卡片内可用——先小步实测）；`Qt.callLater` 不可靠，用 `Timer`。详见 HANDOVER.md §4。
+- **NoStack 页面模式**（迭代5 起为主窗口 `Main.qml` 内容区 Loader 切换，早前 FluNavigationView `pageMode: NoStack`，机制已弃用、语义不变）：每次切换**重建页面** → 状态必须放应用级 context property 单例，禁止放页面属性；**Popup 控件按场景判定**（FluMenu 主页 delegate 内不可用，FluComboBox 设置页卡片内可用——先小步实测）；`Qt.callLater` 不可靠，用 `Timer`。详见 HANDOVER.md §4。
 - **appBar 悬浮层必须高于内容层**：FluentUI `FluWindow.qml` 的 `loader_app_bar` 保持 `z: 1`（本地补丁）——否则内容区盖住窗口按钮、点击全被吞（仅最大化可用）；浮窗必须跟随主窗口生命周期（最小化隐藏/关闭放行），详见 HANDOVER.md §4 铁律 9/10。
 - **大文件性能**：虚拟化渲染（ListView + 懒加载模型），禁止全量刷新；超 5 万行/200MB 自动进**受限模式**（显示层回退纯文本、禁批注编辑/翻译，详见 `docs/services/large-file.md`）。
-- **敏感信息**：一律走 `SecureStorage`（`%APPDATA%/Translex/secure.ini`），禁止明文落盘。
-- **新配置 key** 必须加进 `src/services/config/ui.json` schema（ConfigService 只认 schema 内 key）。
+- **敏感信息**：一律走 `SecureStorage`（`%APPDATA%/sr291/Translex/secure.ini`），禁止明文落盘。
+- **新配置 key** 必须加进 `src/services/config/` 对应 schema JSON（`ui.json`/`translation.json`/`translation.ollama.json`/`translation.network_model.json`/`textToSpeech.json`；ConfigService 只认 schema 内 key，非 UI key 如 `docxCommentStyle` 在 translation.json）。
 
 ## 3. 技术约束与构建命令
 
-- Qt 6.5.3（`D:/Software/Qt/6.5.3/msvc2019_64`，CMakeLists 已内置该探测路径），C++17，生成器 VS 2026 x64，构建目录 `build-vs2026-x64/`。
+- Qt 6.11.1（`D:/Software/Qt/6.11.1/msvc2022_64`，CMakeLists 已内置该探测路径），C++17，生成器 VS 2026 x64，构建目录 `build-vs2026-x64/`。
 - FluentUI 1.7.7 + QuaZip + zlib（git 子模块，静态编译；docx 导入依赖）。
 - 应用目标 **`translex`**（exe：`build-vs2026-x64\Debug\translex.exe`）；QML 模块 URI `Translex`，`qrc:/qt/qml/Translex/qml/*.qml`。**改名前的 translateX 仅残留在 .trx 格式的兼容标记**（读旧文档用）。
 
@@ -57,10 +57,10 @@
 cmake --build build-vs2026-x64 --config Debug
 
 # 重新配置（改了 CMakeLists/子模块后）——BUILD_TESTING 可能被缓存成 OFF，务必显式 ON
-cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.5.3/msvc2019_64" -DBUILD_TESTING=ON
+cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.11.1/msvc2022_64" -DBUILD_TESTING=ON
 
 # 测试（必须先加 Qt bin 到 PATH，否则 0xc0000135；测试 exe 在 build-vs2026-x64\tests\Debug\）
-$env:PATH = "D:/Software/Qt/6.5.3/msvc2019_64/bin;" + $env:PATH
+$env:PATH = "D:/Software/Qt/6.11.1/msvc2022_64/bin;" + $env:PATH
 ctest --test-dir build-vs2026-x64 -C Debug --output-on-failure
 
 # 单测 / 性能基准
@@ -80,8 +80,8 @@ ctest --test-dir build-vs2026-x64 -C Debug -L perf
 ## 5. AI 工具环境
 
 - 本仓库带 Qt 官方 skills（`.agents/skills/`：QML/C++ 审查、Qt Quick Test、CMake、UI 设计等）与 Qt 文档 MCP（`.mcp.json`）。
-- opencode 多模型分工已配置在 `opencode.json`（build=deepseek-v4-flash，plan=gpt-5.6-luna，review=minimax-m3——原生支持视觉，UI 审查可直接读图），改动前先读该文件。
-- **国内网络环境**：`git push` 可能失败（网络不稳），失败直接重试；winget/gh 安装类命令易卡死（曾超时），不要主动执行系统级安装；Qt 文档 MCP（`qt-docs-mcp.qt.io`，海外）可能超时——超时则改查本地 Qt 头文件/`D:/Software/Qt/6.5.3/` 文档，勿反复重试。
+- opencode 多模型分工已配置在 `opencode.json`（build=deepseek-v4-flash，plan=gpt-5.6-luna，review=minimax-m3——原生支持视觉，UI 审查可直接读图，explore=mimo-v2.5，doc-writer=minimax-m3），改动前先读该文件。
+- **国内网络环境**：`git push` 可能失败（网络不稳），失败直接重试；winget/gh 安装类命令易卡死（曾超时），不要主动执行系统级安装；Qt 文档 MCP（`qt-docs-mcp.qt.io`，海外）可能超时——超时则改查本地 Qt 头文件/`D:/Software/Qt/6.11.1/` 文档，勿反复重试。
 - **火绒安全会挂起新 exe**：行为分析以调试方式创建进程（症状：测试进程停在 DbgBreakPoint、cdb 附加被拒、`tst_docx`/`tst_pdf` 等新测试 exe 无法启动）；已把项目目录加入信任区，若测试突然卡死先怀疑它（详见 HANDOVER.md §6）。
 - **终端编码**：控制台中文乱码是 GBK/UTF-8 不匹配（临时：`chcp 65001` 或 `[Console]::OutputEncoding`；永久：pwsh `$PROFILE` 已加 UTF-8 三行设置，推荐用 Windows Terminal）；用 `Read`/`Edit` 工具读写源码，勿经控制台管道改写（会破坏中文注释编码）。
 - **opencode 会等待命令启动的 GUI 子进程退出（必踩）**：任何「命令里启动 translex.exe」的操作（`Start-Process`、ui-driver 在应用未运行时代启动）都会让命令挂起直到超时（用户看到「卡死」）。**绝不用命令启动应用**——需要运行时先问用户手动启动（用户启动的实例不在命令进程树里），ui-driver 只连已运行实例；构建/ctest 不受影响（测试 exe 会退出）。ui-driver 挂起时的另类根源见 review.md §0。
@@ -92,6 +92,7 @@ ctest --test-dir build-vs2026-x64 -C Debug -L perf
 - **模型切换**：`Ctrl+X 然后 M` 打开模型列表（Go 套餐内 DeepSeek V4 Flash/Pro、GLM 等）。
 - **个人终端偏好**（tui.json 键位等）放全局 `~/.config/opencode/tui.json`，不入仓库；换机器后需重配（重配内容：`prompt.autocomplete.complete` 改 `ctrl+space`，保 Tab 切换 agent）。
 - **视觉 MCP（vision）**：审查 UI 截图/设计稿时用 `vision describe_image <截图路径>`。提供者默认 **opencode-go 的 minimax-m3**（实测支持视觉，自动读 `~/.local/share/opencode/auth.json`，**零 key 配置**）；备选智谱 GLM（key 放 `.opencode/mcp/vision/keys.local.json`，gitignore）或本地 Ollama（`OLLAMA_VISION_MODEL`）。服务器在 `.opencode/mcp/vision/server.mjs`，改后重启 opencode 生效。
+- **grep/glob/skill 工具报 `Expand-Archive ... CouldNotAutoloadMatchingModule`（必踩，2026-08-18）**：opencode（Bun 编译）内部工具走 ripgrep，系统无 `rg` 时它下载 zip 用 PowerShell 解压，但 Bun 子进程加载不了 `Microsoft.PowerShell.Archive` 模块（anomalyco/opencode#24291，上游未修）。**修复：预装 ripgrep**——本机已装 `C:\home\sr291\.npm-global\rg.exe`（14.1.1，PATH 内）；换机器后若再遇此错，装 rg 并重启 opencode。
 - **review agent**：`Tab` 切到 review 或 `@review`；方法论在 `.opencode/prompts/review.md`。**只读红线**：不能改源码（edit deny + 写命令 deny），但可跑审查类命令——`ctest -R` 单测、`cmake --build`、启动应用（Start-Process）、进程管理、`Select-String`/`git grep` 搜索、只读 git、截图脚本（`.opencode/scripts/screenshot.ps1`）。**UI 审查它会主动截图**；看图方式：模型原生视觉（如切 minimax-m3）直接读图，否则走 vision MCP。给它截图路径最快。
 
 ## 7. 工作流程

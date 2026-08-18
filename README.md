@@ -91,13 +91,13 @@ Translex 是一个基于 Qt 6 的桌面翻译写作工具。它提供了一个�
 CMake 会自动在常见位置查找 Qt；如未找到，请通过 `-DCMAKE_PREFIX_PATH` 显式指定 Qt 路径：
 
 ```powershell
-cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.5.3/msvc2019_64"
+cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.11.1/msvc2022_64"
 cmake --build build-vs2026-x64 --config Debug
 ```
 
 > 测试默认随 `include(CTest)` 开启；若某次构建目录曾以 `BUILD_TESTING=OFF` 配置过，
 > `BUILD_TESTING` 可能被缓存成 OFF，重新配置时请显式加回：
-> `cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.5.3/msvc2019_64" -DBUILD_TESTING=ON`
+> `cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.11.1/msvc2022_64" -DBUILD_TESTING=ON`
 
 构建成功后，可执行文件位于 `build-vs2026-x64\Debug\translex.exe`，Qt 运行时会通过 `windeployqt` 自动部署。
 
@@ -107,7 +107,7 @@ cmake --build build-vs2026-x64 --config Debug
 
 ```powershell
 # 运行全部 16 个测试目标（需将 Qt bin 目录加入 PATH）
-$env:PATH = "D:/Software/Qt/6.5.3/msvc2019_64/bin;" + $env:PATH
+$env:PATH = "D:/Software/Qt/6.11.1/msvc2022_64/bin;" + $env:PATH
 ctest --test-dir build-vs2026-x64 -C Debug --output-on-failure
 
 # 仅性能基准（大文件）

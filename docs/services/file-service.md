@@ -122,6 +122,8 @@ Line = { text: string          // 编辑层（权威，用户可编辑）
 
 ## 6. FileService 接口（详细）
 
+> ⚠️ **设计规划，尚未实现（2026-08-18 确认）**：`src/services/` 下不存在 `fileservice.*`，文件分发仍由 `DocumentManager` 承担；本节为后续规划，接口签名以未来实现为准。
+
 ```cpp
 class FileService : public QObject {
     Q_OBJECT

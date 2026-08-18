@@ -26,14 +26,14 @@
 ## 3. 构建与测试命令
 
 ```powershell
-# 配置（Qt 6.5.3 已内置探测；重新配置时 BUILD_TESTING 可能被缓存成 OFF，务必显式 ON）
-cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.5.3/msvc2019_64" -DBUILD_TESTING=ON
+# 配置（Qt 6.11.1 已内置探测；重新配置时 BUILD_TESTING 可能被缓存成 OFF，务必显式 ON）
+cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.11.1/msvc2022_64" -DBUILD_TESTING=ON
 
 # 构建（构建前停掉运行中的 translex.exe，避免 LNK1168 文件占用）
 cmake --build build-vs2026-x64 --config Debug
 
 # 测试（必须先加 Qt bin 到 PATH，否则 0xc0000135）
-$env:PATH = "D:/Software/Qt/6.5.3/msvc2019_64/bin;" + $env:PATH
+$env:PATH = "D:/Software/Qt/6.11.1/msvc2022_64/bin;" + $env:PATH
 ctest --test-dir build-vs2026-x64 -C Debug --output-on-failure
 
 # 单测 / 性能基准

@@ -108,7 +108,7 @@ public:
 - `qml/TranslateHomePage.qml`：打开对话框 `nameFilters` 追加 `PDF 文档 (*.pdf)`；另存为对话框追加 `PDF 文档 (*.pdf)`
 - `CMakeLists.txt`：`translex` 目标 + `tests/CMakeLists.txt` 的 `translex_services` 静态库 `SERVICE_SOURCES` **两处**注册 `pdfparser.cpp`；`find_package(Qt6)` 组件追加 `Pdf`（顶层 + tests）
 
-## 6. 测试计划（tests/tst_pdf.cpp，13 目标之一）
+## 6. 测试计划（tests/tst_pdf.cpp，16 个测试目标之一）
 
 | 用例 | 断言 |
 | --- | --- |

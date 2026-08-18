@@ -19,7 +19,7 @@
       }
     },
     "explore": {
-      "model": "opencode-go/deepseek-v4-flash"
+      "model": "opencode-go/mimo-v2.5"
     },
     "general": {
       "model": "opencode-go/deepseek-v4-flash"
@@ -83,7 +83,7 @@
     "doc-writer": {
       "description": "撰写/同步 docs/ 设计文档与 AGENTS.md/HANDOVER.md，保持文档与代码一致",
       "mode": "subagent",
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode-go/minimax-m3",
       "permission": {
         "bash": "deny"
       }

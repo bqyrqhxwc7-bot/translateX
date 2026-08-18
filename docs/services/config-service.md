@@ -147,7 +147,7 @@ signals:
 
 ### 3.3 持久化
 
-- 非敏感：`QSettings`（INI，`%APPDATA%/Translex/config.ini`），键 = `section/key`
+- 非敏感：`QSettings`（INI，`%APPDATA%/sr291/Translex/config.ini`），键 = `section/key`
 - `secret`：`SecureStorage`（复用现有机器指纹加密），键 = `section/key`
 - 删除：`set(section, key, undefined)` 恢复默认（可选）
 
@@ -215,13 +215,13 @@ TranslateSettingsPage
 
 | section | 配置项 | 现状来源 |
 | --- | --- | --- |
-| `translation` | backend、contextRadius、strictOutput、cacheEnabled、fallbackEnabled、smartChunking、maxChunkChars、qualityGateEnabled、glossary | `TranslationService` 手写 setter |
+| `translation` | backend、contextRadius、sourceLang、targetLang、strictOutput、cacheEnabled、fallbackEnabled、smartChunking、sentenceAwareChunking、maxChunkChars、qualityGateEnabled、enableCustomPrompt、customPrompt、customContextPrompt、glossary、docxCommentStyle | `src/services/config/translation.json`（原有手写 setter 已改为读写 ConfigService） |
 | `translation.ollama` | endpoint、model | `m_backendConfig` 手写 |
 | `translation.network_model` | apiEndpoint、apiKey(secret)、model | `m_backendConfig` 手写 |
 
 ## 7. 测试计划
 
-- `tst_configservice`：加载内置 JSON → schema 完整；get/set 持久化往返；默认值回退；secret 走 SecureStorage（不可明文）；configChanged 信号；values 填充默认
+- `tst_configservice`（9 用例）：加载内置 JSON → schema 完整（builtinSections）；默认值回退（defaultValues）；get/set 持久化往返（setGetRoundTrip）；configChanged 信号；values 填充默认；secret 走 SecureStorage 不可明文（secretEncrypted）；isUserSet；number/bool 类型规范化（numberBoolNormalize）；插件扫描（scanPluginDirectory）
 - 现有 `tst_translation` / `tst_quality` 回归（兼容策略保证不破坏）
 
 ## 8. 分步实施
@@ -231,7 +231,7 @@ TranslateSettingsPage
 3. 内置 `config.json`（translation + ollama + network_model）+ qrc 注册 ✅ `src/services/config/*.json` + `config.qrc`
 4. `TranslationService` 接入（setter 内部改走 ConfigService，后端创建读配置，术语表持久化） ✅
 5. QML：`ConfigSectionCard` + 设置页 schema 渲染 + secret 控件 ✅ `qml/ConfigSectionCard.qml`
-6. 测试 `tst_configservice`（10 用例）+ 回归 ✅ 6/6 通过
+6. 测试 `tst_configservice`（9 用例）+ 回归 ✅ 9/9 通过
 7. 文档收尾（更新 translation-service.md / SERVICE-ARCHITECTURE.md / plugin-development 占位） ✅
 
 ## 9. 关键决策记录

@@ -1,7 +1,8 @@
 # Translex Service 架构与插件规范
 
-> 状态：设计定稿（v1）
+> 状态：已与实现对齐（2026-08-18）
 > 本文档定义 service 的**提供方式**，是第三方开发者编写插件的依据。
+> **接口定义一律以 `src/services/` 头文件为准**（`iservice.h` / `itranslationbackend.h` / `itranslationplugin.h` / `serviceregistry.h`），本文档为说明性汇总，冲突时以头文件为准。
 
 ## 1. 目标
 
@@ -17,15 +18,15 @@
 │  QML UI (import Translex.Services 1.0)        │
 ├─────────────────────────────────────────────────┤
 │  服务注册表 ServiceRegistry (单例)              │
-│  ├─ register("ollama", Factory)                │
-│  └─ create("ollama") → ITranslationBackend     │
+│  ├─ registerBackend("ollama", Factory)          │
+│  └─ createBackend("ollama")→ITranslationBackend │
 ├─────────────────────────────────────────────────┤
 │  内置服务 (src/services)                        │
 │  DocumentModel / SecureStorage / AppGuard       │
 │  TranslationService / CommentService / ...      │
 ├─────────────────────────────────────────────────┤
 │  外部插件 (QPluginLoader 动态加载)              │
-│  plugins/*.dll → 实现 IServicePlugin 接口        │
+│  plugins/*.dll → 实现 ITranslationPlugin 接口      │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -41,30 +42,42 @@
 
 ### 3.1 服务基类
 
-所有 service 继承 `QObject`，遵循以下约定：
+**纯虚接口，不继承 `QObject`**（service 类本身是 QObject，避免多重继承；注册表经
+`qobject_cast<IService*>(obj)` 转换，service 类需 `Q_INTERFACES(IService)`）。
+定义见 `src/services/iservice.h`：
 
 ```cpp
-class IService : public QObject {
-    Q_OBJECT
+class IService {
 public:
-    // 服务标识（稳定、唯一，如 "translation.ollama"）
+    virtual ~IService() = default;
+    // 服务标识（稳定、唯一，如 "translation"）
     virtual QString serviceId() const = 0;
     // 服务名（显示用）
     virtual QString displayName() const = 0;
     // 服务版本
     virtual QString serviceVersion() const = 0;
-    // 健康检查（返回空串=正常，否则返回错误描述）
-    virtual QString healthCheck() const { return QString(); }
+    // 健康检查：返回 { status: "ok"/"warn"/"error", message, detail }
+    virtual QVariantMap healthCheck() const = 0;
+    // 侧边栏面板 QML 组件 URL（可选；空=无面板）——插件 UI 扩展点
+    virtual QString sidebarPanel() const { return QString(); }
 };
+
+#define TranslexService_iid "org.translex.IService/1.0"
+Q_DECLARE_INTERFACE(IService, TranslexService_iid)
 ```
 
 ### 3.2 翻译后端接口
 
+定义见 `src/services/itranslationbackend.h`（`TranslationOptions`/`TranslationResult` 结构体同头文件）。
+**不使用 `Q_OBJECT`**（纯虚接口、无信号槽），便于第三方插件继承，也避免 AUTOMOC 额外处理：
+
 ```cpp
 class ITranslationBackend : public QObject {
-    Q_OBJECT
 public:
-    // 后端能力描述
+    explicit ITranslationBackend(QObject *parent = nullptr) : QObject(parent) {}
+    virtual ~ITranslationBackend() = default;
+
+    // 后端标识（稳定唯一，如 "translation.ollama"）
     virtual QString backendId() const = 0;
     virtual QString displayName() const = 0;
     // 是否支持上下文翻译
@@ -72,22 +85,27 @@ public:
     // 是否支持流式
     virtual bool supportsStreaming() const { return false; }
 
-    // 单条翻译（同步返回；长耗时调用方负责放入线程池）
+    // 单条翻译（同步返回；长耗时由调用方放入线程池）
     virtual TranslationResult translate(
         const QString &text,
         const TranslationOptions &options,
         const std::shared_ptr<std::atomic_bool> &cancelFlag) = 0;
 
-    // 批量/上下文翻译（可覆盖默认的逐条循环）
+    // 批量/上下文翻译（默认逐条循环；后端可覆盖做合并/流式优化）
     virtual QList<QPair<int, TranslationResult>> translateBatch(
         const QStringList &sourceLines,
         const QList<int> &targetLines,
         const TranslationOptions &options,
         const std::shared_ptr<std::atomic_bool> &cancelFlag);
+
+    // 健康检查：空串=正常
+    virtual QString healthCheck() const { return QString(); }
+    // 配置更新（后端自行决定是否使用）
+    virtual void updateConfig(const QVariantMap &config) { Q_UNUSED(config); }
 };
 ```
 
-### 3.3 注册工厂
+### 3.3 ServiceRegistry（单例）
 
 ```cpp
 // 后端工厂：创建指定 ID 的后端实例
@@ -98,18 +116,30 @@ class ServiceRegistry : public QObject {
 public:
     static ServiceRegistry *instance();
 
+    // ---- 翻译后端 ----
     // 注册后端（核心内置 + 第三方插件都走这里）
     void registerBackend(const QString &id, BackendFactory factory, const QString &displayName);
-
-    // 按 ID 创建
-    std::shared_ptr<ITranslationBackend> createBackend(const QString &id);
-
+    // 按 ID 创建（未注册返回 nullptr）
+    std::shared_ptr<ITranslationBackend> createBackend(const QString &id) const;
     // 列出可用后端
     QStringList availableBackends() const;
     QString backendDisplayName(const QString &id) const;
 
-    // 插件目录扫描（L3）
+    // ---- 服务注册（IService，迭代5）----
+    // 注册应用级服务（qobject_cast<IService*> 校验；重复 ID 覆盖）
+    void registerService(QObject *service);
+    // 全部已注册服务（QObject*，QML 可遍历）
+    QVariantList services() const;
+    // 按 ID 查询（未注册返回 nullptr）
+    Q_INVOKABLE QObject *serviceById(const QString &id) const;
+    // 健康度聚合：[{ id, displayName, version, status, message }]
+    Q_INVOKABLE QVariantList healthReport() const;
+    // 注册了侧边栏面板的 service：[{ id, displayName, panel }]
+    Q_INVOKABLE QVariantList sidebarPanels() const;
+
+    // ---- 插件目录扫描（L3）----
     void scanPluginDirectory(const QString &dir);
+    Q_INVOKABLE QStringList loadedPluginErrors() const;
 };
 ```
 
@@ -117,18 +147,20 @@ public:
 
 ### 4.1 插件接口
 
-第三方插件编译为独立 `.dll`，实现：
+第三方插件编译为独立 `.dll`，实现 `src/services/itranslationplugin.h` 中的接口
+（**纯虚接口，不继承 QObject**——插件类自身继承 `QObject` + 本接口，避免菱形继承）：
 
 ```cpp
-// plugins/plugin_interface.h （随 SDK 发布）
-class ITranslationPlugin : public QObject {
-    Q_OBJECT
+// itranslationplugin.h （随 SDK 发布）
+class ITranslationPlugin {
 public:
     virtual ~ITranslationPlugin() = default;
     // 返回此插件提供的后端 ID 列表
     virtual QStringList backendIds() const = 0;
-    // 创建后端实例
+    // 创建后端实例（ID 不在 backendIds() 中时返回 nullptr）
     virtual std::shared_ptr<ITranslationBackend> createBackend(const QString &id) = 0;
+    // 侧边栏面板 QML 组件 URL（可选；空=无面板）——插件 UI 扩展点
+    virtual QString sidebarPanel() const { return QString(); }
 };
 
 #define TranslexPlugin_iid "org.translex.ITranslationPlugin/1.0"
@@ -171,8 +203,9 @@ public:
 
 ```
 src/services/
-├── iservice.h            # IService 基类
+├── iservice.h            # IService 基类（纯虚接口，不继承 QObject）
 ├── itranslationbackend.h # 翻译后端接口
+├── itranslationplugin.h  # L3 插件接口（Q_DECLARE_INTERFACE）
 ├── serviceregistry.h     # 注册表 + 插件扫描
 ├── documentmodel.*       # L1 内置服务（懒加载文档模型）
 ├── securestorage.*

@@ -14,11 +14,11 @@ Qt 6 桌面**翻译写作工具**：带批注/翻译对照的编辑器，支持 
 
 | 项 | 值 |
 | --- | --- |
-| Qt | **6.5.3**，`D:/Software/Qt/6.5.3/msvc2019_64`（非 C:/Qt） |
+| Qt | **6.11.1**，`D:/Software/Qt/6.11.1/msvc2022_64`（2026-08-18 自 6.5.3 升级；旧版已卸载） |
 | C++ | C++17；CMake 4.2.1；生成器 **VS 2026 x64**（`build-vs2026-x64/`） |
 | UI | QML + **FluentUI 1.7.7**（子模块 `third_party/FluentUI`） |
 | 第三方 | **QuaZip 1.7.2** + **zlib 1.3.2**（子模块，docx 导入，均**静态**编译） |
-| 测试 | 13 个目标，共享服务抽为 `translex_services` 静态库 |
+| 测试 | 16 个目标，共享服务抽为 `translex_services` 静态库 |
 
 **关键命令**（Windows PowerShell，工作目录=仓库根）：
 
@@ -27,14 +27,17 @@ Qt 6 桌面**翻译写作工具**：带批注/翻译对照的编辑器，支持 
 cmake --build build-vs2026-x64 --config Debug
 
 # 重新配置（改 CMakeLists/子模块后；BUILD_TESTING 可能被缓存成 OFF，务必显式 ON）
-cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.5.3/msvc2019_64" -DBUILD_TESTING=ON
+cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.11.1/msvc2022_64" -DBUILD_TESTING=ON
 
 # 测试（必须先加 Qt bin 到 PATH，否则 0xc0000135）
-$env:PATH = "D:/Software/Qt/6.5.3/msvc2019_64/bin;" + $env:PATH
+$env:PATH = "D:/Software/Qt/6.11.1/msvc2022_64/bin;" + $env:PATH
 ctest --test-dir build-vs2026-x64 -C Debug --output-on-failure
 
 # 单测
 ctest --test-dir build-vs2026-x64 -C Debug -R tst_docx --output-on-failure
+
+# 应用 exe 部署（升级 Qt / 换版本后必须 --force，否则旧 DLL 残留导致启动失败）
+D:\Software\Qt\6.11.1\msvc2022_64\bin\windeployqt.exe --debug --force --qmldir qml build-vs2026-x64\Debug\translex.exe
 
 # 推送（网络不稳，失败重试）
 git push origin main
@@ -63,7 +66,7 @@ git push origin main
 | **A3 .trx** | 显示层（富文本/图片）完整往返、编辑即降级 | `services/file-service.md` |
 | **B docx 导入** | DocxParser：段落→行 + 粗/斜/颜色/字号/字体 + 图片(data URI) | `services/file-service.md` |
 | **B2 docx 导出批注** | DocxParser::write：原文 + 译文批注，`docxCommentStyle: inline`（黄色高亮）/`native`（Word 原生批注，可读回） | `services/docx-comment-export.md` |
-| **C pdf 导入/导出** | PdfParser：每页一行导入（QPdfDocument）+ 文本页导出（QPdfWriter）；**导出文本层不可提取**（Qt 6.5.3 缺陷，视觉正确） | `services/pdf-service.md` |
+| **C pdf 导入/导出** | PdfParser：每页一行导入（QPdfDocument）+ 文本页导出（QPdfWriter）；**导出文本层可提取**（v2 自建 ToUnicode CMap 修复 Qt 6.5.3 缺陷，2026-08-16） | `services/pdf-service.md` |
 | **D 大文件降级** | 超 5 万行 / 200MB 进受限模式：显示层回退纯文本 + 禁批注编辑/翻译，编辑/查找/章节保留；顶部提示条 | `services/large-file.md` |
 | **迭代5 插件化** | `IService` 健康度接口（serviceId/displayName/healthCheck/sidebarPanel）+ `ServiceRegistry` 单例注册/查询；L3 动态插件（`QPluginLoader` 扫 `<exe>/plugins/*.dll`，示例插件回显后端 `translation.echo` + 面板） | `services/iteration5-plugin-ui-agent.md`、`services/plugin-development.md` |
 | **迭代5 Outlook UI** | 主窗口重构：44px 图标栏（可收起）+ service 侧边栏面板（SplitView 180-400px）+ 内容区 NoStack 切换；`IconBarButton`、`panels/`（Chapter/Comment/History）；设置页新增服务调试卡片 | `docs/ARCHITECTURE.md` |
@@ -80,7 +83,8 @@ git push origin main
 | ~~迭代4（部分）~~ | ~~文档统计、自动保存、术语自动提取~~ | ✅ 完成（2026-08-17，见 `services/iteration4-stats-autosave-glossary.md`） |
 | ~~迭代4（剩余）~~ | ~~翻译历史面板、Markdown 导出、功能引导（设置页按钮，不默认首启）~~ | ✅ 完成（2026-08-18，见 `services/iteration4b-history-markdown-guide.md`） |
 | ~~迭代5~~ | ~~插件化（IService 健康度 + 注册表 + L3 动态插件 + 示例插件）、Outlook 式主窗口（图标栏/侧边栏面板/NoStack）、设置页调试卡片~~ | ✅ 完成（2026-08-18，见 `services/iteration5-plugin-ui-agent.md`；含窗口按钮修复 + 浮窗跟随修复） |
-| 候选 | pdf 导出文本层修复（Qt 升级后复查）、.trx 图片 external 降级（>1MB 转外置）、docx 导出 `Original` 纯原文模式、更多示例插件（对照 plugin-development.md） | 非阻塞 |
+| 迭代6（规划） | **UI 底座迁移**：Qt 6.11 官方 `FluentWinUI3` QQC2 样式 + 自建轻量预制库 `translex-ui`（独立仓库 `C:/Users/sr291/Documents/projects/translex-ui`，submodule 引入）；页面从 FluentUI 1.7.7 逐步迁移（每步可构建可测试）；FluentUI 降级为过渡层，迁移完成移除 | 设计文档先行；FluentUI 在 Qt 6.11 下**实测兼容**（2026-08-18），迁移不紧迫、按节奏走 |
+| 候选 | pdf 导出文本层复查（v2 CMap hack 在 Qt 6.11 下 tst_pdf 通过；"是否可删 hack"待单独验证）、.trx 图片 external 降级（>1MB 转外置）、docx 导出 `Original` 纯原文模式、更多示例插件（对照 plugin-development.md） | 非阻塞 |
 
 > 迭代5（2026-08-18 完成）：插件化（`IService` 健康度接口 + `ServiceRegistry` + `QPluginLoader` 动态插件 + 示例回显插件 + `tst_registry`）、Outlook 式主窗口（`IconBarButton` + `panels/` 侧边栏面板 + NoStack 切换）、设置页调试卡片、窗口按钮失效修复（FluentUI `loader_app_bar z:1` 补丁）、浮窗跟随主窗口生命周期。
 
@@ -88,21 +92,20 @@ git push origin main
 > 迭代3（2026-08-17 完成）：TTS 朗读（独立 `TextToSpeechService`，`TRANSLEX_HAS_TTS` 条件编译，无模块/引擎优雅降级；工具栏/右键菜单入口；tst_texttospeech 4 用例）。
 > 迭代4 部分（2026-08-17 完成）：文档统计（`DocumentModel::stats` + 状态栏）、自动保存（60s tick + `.autosave.trx` + 崩溃恢复弹窗 + `ui.autosaveEnabled`）、术语自动提取（`TermGlossary::extractCandidates` + 设置页弹窗勾选；仅英文，中文暂不支持）。
 > 迭代4b（2026-08-18 完成）：翻译历史（`TranslationHistoryService` 内存环形缓冲 500 条 + 主页弹窗）、Markdown 导出（`writeDocument` md 分支 + 另存为 filter）、功能引导（设置页按钮弹窗，不默认首启）。
-> 迭代5（2026-08-18 完成）：插件化（`IService` 健康度接口 + `ServiceRegistry` + L3 动态插件 + 示例回显插件 `translation.echo` + `tst_registry`）、Outlook 式主窗口（图标栏 + `panels/` 侧边栏面板 + NoStack 切换）、设置页服务调试卡片、窗口按钮失效修复（FluentUI `loader_app_bar z:1` 补丁）、浮窗跟随主窗口生命周期。
 
 > 迭代1（2026-08-17 完成）：P0 回归修复（backendCombo 残留引用）、A2 句边界分块（`sentenceAwareChunking`）、B1 后端连接测试（`testBackendConnection`）、B2 拖放打开、B3 快捷键总览（`?`）、A1 质量自检复核面板（qualityWarning 汇总+跳转）、设置页语言选择 Flow 换行修复。
 > 每项任务实施蓝图见 §8；**开工前先读对应 `docs/services/` 文档，遵循 AGENTS.md**。
 
 ## 4. 架构铁律（违反必出回归 bug）
 
-1. **NoStack 页面模式**：FluNavigationView `pageMode: NoStack` → 每次导航**重建页面**。
+1. **NoStack 页面模式**：主窗口内容区每次切换**重建页面**（迭代5 起为 `Main.qml` 的 `contentLoader` Loader 切换，早前为 FluNavigationView `pageMode: NoStack`，机制已弃用、语义不变）。
    - 状态必须放**应用级**（`main_qml.cpp` 的 `setContextProperty` 单例），不能放页面属性
    - **Popup 控件按场景判定**：`FluMenu` 在主页 delegate 内错位/失效（已踩），但 `FluComboBox` 在**设置页卡片内实测可用**（语言选择即用它，2026-08-17 回退自 RadioButton 组）；结论：不可一票否决 Popup，新场景先小步实测，可用则用（按"已知可用姿势"记录）
    - **`Qt.callLater` 不可靠** → 一律用 `Timer`
 2. **QML id 作用域**：子对象 `id` 不是父的属性。delegate 里直接引用顶层 `id`（如 `lineMenu`），**不能**写 `page.lineMenu`。
 3. **DocumentModel 是应用级单例**：页面 `onCompleted` **仅当 `lineCount()==0`** 才 `loadDemoDocument()`，否则覆盖用户内容。
 4. **显示层（rich/image）编辑即降级**：`onTextChanged` 无条件 `setLineRich("")` + `setLineImages([])` + `setLineDisplay("plain")`。
-5. **新配置 key 必须**加 `src/services/config/ui.json`（schema 驱动设置页；ConfigService 只认 schema 内 key）。
+5. **新配置 key 必须**加 `src/services/config/` 下对应 schema JSON（`ui.json`/`translation.json`/`translation.ollama.json`/`translation.network_model.json`/`textToSpeech.json`；ConfigService 只认 schema 内 key，非 UI key 如 `docxCommentStyle` 在 translation.json）。
 6. **行号显示用 `String(index + 1)`**，勿绑 `row.model.lineNumber`（插入后不刷新）。
 7. 服务方法要能被 QML 调必须 `Q_INVOKABLE`（非虚或虚均可）；`documentModel` 等以 context property 暴露。
 8. **浮窗（Qt.Tool + transientParent）**：启动时主窗口未稳定 → show 竞态失败，必须延迟（`floatShowTimer` 350ms）；`screen.virtualX` 未映射返回 undefined → `Number(scr && scr.virtualX) || 0` 防 NaN。
@@ -119,7 +122,7 @@ src/services/              # ★ 服务层（Q_INVOKABLE，QML 直接调）
   chapterservice / findservice / documentmanager / trxparser / docxparser /
   configservice / securestorage / termglossary / qualitygate / translationcache /
   serviceregistry / appguard
-qml/TranslateHomePage.qml  # 核心 UI（约 2000 行：Ribbon/编辑器/右键菜单/浮窗/设置浮层/快捷键总览/质量复核面板）
+qml/TranslateHomePage.qml  # 核心 UI（约 2400 行：Ribbon/编辑器/右键菜单/浮窗/设置浮层/快捷键总览/质量复核面板）
 qml/Main.qml               # 主窗口（迭代5 Outlook 布局：图标栏 + 侧边栏面板 + NoStack 内容区）
 qml/IconBarButton.qml      # 图标栏按钮（tooltip/active 态）
 qml/panels/                # service 侧边栏面板（Chapter/Comment/History，sidebarPanels() 动态注册）
@@ -171,10 +174,12 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 - **`BUILD_TESTING` 可能被缓存成 OFF** → 重新配置务必显式 `-DBUILD_TESTING=ON`
 
 ### 其他
+- **升级 Qt 后 exe 目录旧 DLL 残留（2026-08-18 踩过）**：`windeployqt` 默认**不覆盖**已存在文件——Qt 6.5.3→6.11.1 升级后 `Debug\` 里混装两版 Qt（Qt6Cored.dll 新版 + qml 模块旧版），启动失败且 AppGuard **无日志**（QML 引擎加载前即死），错误形如 `module "QtQuick.Controls.Windows" version 6.11 is not installed`（目录在但文件是旧版）。**修复：windeployqt 必须 `--force`**（部署命令见 §1）
+- **QtPdf 组件不在默认安装里**：Qt 6.11.1 各套件均缺 QtPdf，需 Qt Maintenance Tool 手动添加（搜索 Qt PDF 组件）；CMakeLists 有硬检查（缺组件 FATAL_ERROR，不静默降级）
 - 测试 exe 需 Qt bin 在 PATH（0xc0000135）
 - 构建前停掉运行中的 `translex.exe`（LNK1168 文件占用）
 - 构建日志/`reconfigure*.log` 等已 gitignore
-- **QPdfWriter 文本层缺陷**（Qt 6.5.3）：导出 PDF 提取乱码（ASCII 重复、CJK 变 ?），视觉正常；测试夹具/往返断言禁止依赖它（详见 `pdf-service.md` §3.0/§6）
+- **QPdfWriter 文本层缺陷**（Qt 6.5.3，**已绕过**）：导出 PDF 提取乱码（ASCII 重复、CJK 变 ?），视觉正常；v2 已自建 ToUnicode CMap 重建修复（`PdfParser`，2026-08-16），文本可提取可再导入；**Qt 升级后复查**是否可删 hack 回归原生（详见 `pdf-service.md` §3.0/§6）
 - **火绒安全会挂起新 exe**（行为分析以调试方式创建进程，症状：进程停在 DbgBreakPoint、cdb 附加被拒、`tst_docx`/`tst_pdf` 等含 ZIP/PDF 写入代码的新测试 exe 无法启动）→ 把项目目录加进火绒信任区（白名单）；若某次测试突然“卡死”，先怀疑它
 - **QML pragma Singleton 绑定失效**（Qt 6.5，踩过）：`qml/DesignTokens.qml` 曾用 `pragma Singleton`，运行期全部属性 undefined（绑定从未求值，`NO_CACHEGEN` 也无效），报错形如 `Unable to assign [undefined] to double` 刷屏且探针不执行 → 改为**普通组件 + 页面内实例化**（`DesignTokens { id: tokens }`）；delegate/内联 Window 内不能访问实例 id，须经页面属性中转（`page.rowRadius`/`page.cardRadius` 模式，见 `qml/TranslateHomePage.qml` 头部注释）
 - **中文标点比较必须用码点**：`QLatin1Char('。')` 对多字节 UTF-8 字面量会截断（取最低字节），永不匹配 → 用 `QChar::unicode()` 与 `0x3002` 等码点比较（`endsWithSentenceBoundary` 踩过）

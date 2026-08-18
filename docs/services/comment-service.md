@@ -111,6 +111,7 @@ Q_INVOKABLE void setCommentProvider(CommentService *provider);
 - 导出/导入文件往返
 - 与 DocumentModel 集成：setProvider 后角色渲染、dataChanged 触发、insert/remove 行号跟随
 - 无 provider 时 DocumentModel 内部存储兼容（现有 tst_documentmodel 回归）
+- undo/redo 后批注行号跟随（undoRedoShiftsComments）
 
 ## 8. 分步实施
 
@@ -118,7 +119,7 @@ Q_INVOKABLE void setCommentProvider(CommentService *provider);
 2. `CommentService` 核心类 + 测试 ✅ `src/services/commentservice.*`
 3. `DocumentModel` provider 集成 + 行号平移 ✅ `setCommentProvider`/委托/平移
 4. QML 接线 ✅ `main_qml.cpp` 暴露 `commentService`；主页面 `setCommentProvider` + 翻译写入走 service
-5. 构建 + 回归 ✅ 7/7 通过（新增 tst_comment 6 用例）
+5. 构建 + 回归 ✅ 7/7 通过（新增 tst_comment 7 用例）
 6. 文档收尾 ✅
 
 ## 10. 实现要点
