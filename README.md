@@ -11,7 +11,10 @@ Translex 是一个基于 Qt 6 的桌面翻译写作工具。它提供了一个�
   - 网络大模型 API（OpenAI 风格地址 + API Key，内置 DeepSeek v4-flash 预设）
 - **翻译质量**：上下文感知（参考前后 N 行统一术语语气）、回显拦截（拒绝输出原文）、质量自检
 - **降低成本**：缓存复用、失败自动降级、智能分块合并（一次请求多行）、严格输出
-- **翻译浮窗**：可拖到屏幕任意位置的独立无边框窗口（Fluent 卡片样式），位置自动记忆
+- **翻译浮窗**：可拖到屏幕任意位置的独立无边框窗口（Fluent 卡片样式），位置自动记忆；跟随主窗口生命周期（最小化隐藏/恢复显示，退出随主窗口关闭）
+- **Outlook 式主窗口**：最左 44px 图标栏（可收起，含展开手柄）+ 可拖拽分割侧边栏面板（180-400px，章节/批注/翻译历史）+ 内容区 NoStack 切换（编辑页 / 设置页）
+- **插件化（L3 动态插件）**：`ServiceRegistry` 统一注册/查询/健康度聚合；启动时 `QPluginLoader` 扫描 `<exe>/plugins/`；自带示例插件（`translation.echo` 回显后端 + 侧边栏面板）验证全链路
+- **设置页服务调试卡片**：服务健康度列表（状态色点 + 消息）、插件加载诊断、配置文件 / 日志文件路径
 - **编辑能力**：撤销/重做、多选行翻译、Enter 拆行、行首 Backspace 合并
 - **批注管理**：翻译结果写为批注、上一条/下一条跳转、清空、JSON 导出/导入
 - **章节导航**：自动识别标题行（中文"第X章"、Markdown `#`）、上一章/下一章、重新检测
@@ -27,17 +30,24 @@ Translex 是一个基于 Qt 6 的桌面翻译写作工具。它提供了一个�
 .
 ├── CMakeLists.txt              # CMake 构建 / 测试 / CPack 打包
 ├── qml/                        # QML 界面（FluentUI）
-│   ├── Main.qml                # 主窗口 + 导航（FluWindow + FluNavigationView）
+│   ├── Main.qml                # 主窗口（Outlook 式布局：图标栏 + 侧边栏面板 + 内容区 NoStack 切换）
+│   ├── IconBarButton.qml       # 图标栏按钮组件（tooltip / active 指示条）
 │   ├── TranslateHomePage.qml   # 翻译编辑页：Ribbon + 虚拟化编辑器 + 翻译浮窗
 │   ├── TranslatePanelContent.qml # 翻译面板复用组件（浮窗主体）
-│   ├── TranslateSettingsPage.qml # 设置页
-│   └── ConfigSectionCard.qml   # 设置项 schema 渲染卡片
+│   ├── TranslateSettingsPage.qml # 设置页（含服务调试卡片）
+│   ├── ConfigSectionCard.qml   # 设置项 schema 渲染卡片
+│   └── panels/                 # service 侧边栏面板（sidebarPanels() 动态注册）
+│       ├── ChapterPanel.qml    # 章节导航
+│       ├── CommentPanel.qml    # 批注列表
+│       └── HistoryPanel.qml    # 翻译历史
 ├── src/
-│   ├── main_qml.cpp            # QML 版入口（当前主线）
+│   ├── main_qml.cpp            # QML 版入口（当前主线，service 注册到 ServiceRegistry）
 │   └── services/               # ★ 可插拔服务层（Q_INVOKABLE，QML 直接调用）
 │       ├── documentmodel.*     # 懒加载文档行模型（大文件性能核心）
 │       ├── translationservice.* # 翻译编排：上下文/分块/降级/回显拦截/缓存
 │       ├── translationbackend.* # 三种后端：Ollama / 云翻译 / 网络大模型
+│       ├── serviceregistry.*   # 服务注册表（注册/查询/健康度聚合/插件扫描）
+│       ├── iservice.*          # IService 接口（serviceId/displayName/健康度/侧边栏面板）
 │       ├── commentservice.*    # 批注单一数据源（provider 委托）
 │       ├── chapterservice.*    # 章节识别与跳转
 │       ├── findservice.*       # 查找替换
@@ -49,7 +59,8 @@ Translex 是一个基于 Qt 6 的桌面翻译写作工具。它提供了一个�
 │       ├── qualitygate.*       # 质量自检（回显拦截）
 │       ├── translationcache.*  # 翻译缓存
 │       └── appguard.*          # 稳定性：日志 / 崩溃诊断
-├── tests/                      # 单元测试 + 性能基准（13 个目标）
+├── plugins/                    # 示例插件（example_translation_plugin：回显后端 + 面板）
+├── tests/                      # 单元测试 + 性能基准（16 个目标）
 ├── docs/                       # 架构与服务设计文档
 ├── third_party/FluentUI/       # FluentUI 1.7.7（BSD-3-Clause，git 子模块）
 └── .vscode/                    # VS Code 构建/调试/运行配置
@@ -63,7 +74,8 @@ Translex 是一个基于 Qt 6 的桌面翻译写作工具。它提供了一个�
 
 | 目标 | 说明 |
 | --- | --- |
-| `translex` | QML 版（当前主线，FluentUI + Ribbon） |
+| `translex` | QML 版（当前主线，Outlook 式主窗口 + FluentUI） |
+| `example_translation_plugin` | 示例插件 DLL（回显后端 `translation.echo` + 侧边栏面板），构建后自动部署到 `<exe>/plugins/` |
 
 > 旧 QtWidgets 版已拆分到 `widgets` 分支维护，本分支（main）仅保留 QML 版。
 
@@ -83,6 +95,10 @@ cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.5.3/msvc201
 cmake --build build-vs2026-x64 --config Debug
 ```
 
+> 测试默认随 `include(CTest)` 开启；若某次构建目录曾以 `BUILD_TESTING=OFF` 配置过，
+> `BUILD_TESTING` 可能被缓存成 OFF，重新配置时请显式加回：
+> `cmake -S . -B build-vs2026-x64 -DCMAKE_PREFIX_PATH="D:/Software/Qt/6.5.3/msvc2019_64" -DBUILD_TESTING=ON`
+
 构建成功后，可执行文件位于 `build-vs2026-x64\Debug\translex.exe`，Qt 运行时会通过 `windeployqt` 自动部署。
 
 > 提示：如果构建时出现 “找不到 Qt6”，请检查是否在 `D:\Software\Qt\<版本>\<套件>\` 下存在 `lib\cmake\Qt6\Qt6Config.cmake`，并确保 `CMAKE_PREFIX_PATH` 指向该套件目录。
@@ -90,7 +106,7 @@ cmake --build build-vs2026-x64 --config Debug
 ## 测试
 
 ```powershell
-# 运行全部 13 个测试目标（需将 Qt bin 目录加入 PATH）
+# 运行全部 16 个测试目标（需将 Qt bin 目录加入 PATH）
 $env:PATH = "D:/Software/Qt/6.5.3/msvc2019_64/bin;" + $env:PATH
 ctest --test-dir build-vs2026-x64 -C Debug --output-on-failure
 
@@ -98,7 +114,7 @@ ctest --test-dir build-vs2026-x64 -C Debug --output-on-failure
 ctest --test-dir build-vs2026-x64 -C Debug -L perf
 ```
 
-测试覆盖：文档模型、安全存储（加密/防篡改/明文检测）、翻译（后端/回显拦截/缓存）、质量自检、配置服务、批注、文档管理、章节、查找、.trx/.docx/.pdf 格式往返、大文件性能基准（50 万行加载 < 100ms）。
+测试覆盖：文档模型、安全存储（加密/防篡改/明文检测）、翻译（后端/回显拦截/缓存）、质量自检、配置服务、批注、文档管理、章节、查找、TTS、翻译历史、插件注册表（注册/查询/健康度聚合/后端）、.trx/.docx/.pdf 格式往返、大文件性能基准（50 万行加载 < 100ms）。
 
 ## NSIS 安装程序打包
 
@@ -141,7 +157,7 @@ cmake --build build-vs2026-x64 --config Release --target package
 ## 敏感信息与隐私
 
 - **API Key 加密存储**：通过 `SecureStorage`（机器指纹密钥 + 随机盐 + 校验）加密后写入 `%APPDATA%/Translex/secure.ini`，磁盘上不出现明文。
-- **日志**：写入 `%APPDATA%/Translex/` 下的每日日志，不包含文档内容。
+- **日志**：写入 `%APPDATA%/sr291/Translex/` 下的每日日志（`Translex-<yyyyMMdd>.log`，AppDataLocation），不包含文档内容。
 - **打包产物**：仅包含可执行文件与运行时依赖，不含任何用户配置。
 
 ## Qt AI 开发工具（skills + MCP）
