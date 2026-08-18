@@ -7,7 +7,7 @@
 
 - 审查范围涉及 UI、QML 页面、DesignTokens/视觉语言、布局改动时，**必须主动做视觉验证**，不要只看代码：
   1. **UI 驱动（优先）**：运行 `node .opencode/scripts/ui-driver.mjs --action <cmd> [--file/--dark/--line]`
-     模拟用户操作（应用会以驱动模式自动启动）：
+     模拟用户操作（**注意：应用未运行时 ui-driver 会代启动应用，且该命令会因 opencode 等待子进程树而挂起——先确认 translex 已在运行（`Get-Process translex`），未运行则请用户手动启动后再连**）：
      - `--action openFile --file samples/demo.docx`（打开文档）
      - `--action setDark --dark true/false`（深浅色切换——**深色模式必须验证**）
      - `--action getState`（断言：文档名/行数/深浅色/受限模式/批注数）
@@ -18,6 +18,7 @@
      - 当前模型**无视觉**（deepseek 系）→ 用 `vision describe_image <图片路径> <审查重点>` MCP 工具（本地/Go 视觉通道）
   4. **截图与代码对照**：截图呈现的设计 vs QML 实现（DesignTokens 应用、anchors 布局、深浅色模式、禁用态/提示条是否如预期）
 - 验证完清理：`Stop-Process -Name translex`（驱动脚本启动的应用）
+- **运行应用替代方案**：若环境异常导致启动命令挂起，**优先请用户手动启动** `build-vs2026-x64\Debug\translex.exe`（用户启动的实例不在你的命令进程树里，ui-driver 连接不会挂起）
 - 视觉通道不可用时，明确报告「本项未做视觉审查」，不静默跳过。
 
 ## 0.1 扩展见解维度（不止抓 bug）
@@ -36,7 +37,7 @@
 - **搜索**：`Select-String -Path ... -Pattern ...`、`findstr ...`、`git grep ...`、`Get-ChildItem -Recurse ...`
 - **跑测试**：`ctest --test-dir build-vs2026-x64 -C Debug -R tst_xxx --output-on-failure`（测试已自包含，无需 Qt PATH）
 - **构建验证**：`cmake --build build-vs2026-x64 --config Debug`
-- **运行应用**：`Start-Process -FilePath "build-vs2026-x64\Debug\translex.exe"`（DLL 已 windeployqt，直接可跑）
+- **运行应用**：`Start-Process -FilePath "build-vs2026-x64\Debug\translex.exe"`（DLL 已 windeployqt，直接可跑。**警告：该命令会让 opencode 等待应用进程退出而挂起超时——优先请用户手动启动，或先确认已有实例再连接**）
 - **进程管理**：`Get-Process translex` / `Stop-Process -Name translex`（截图/运行后清理）
 - **UI 驱动**：`node .opencode/scripts/ui-driver.mjs --action <cmd> ...`（模拟用户操作，见 §0）
 - **截图**：`pwsh -File .opencode/scripts/screenshot.ps1 -Out <临时路径>.png`
@@ -83,6 +84,8 @@
 - 行号显示用 `String(index + 1)`，勿绑 row.model.lineNumber
 - QML id 作用域：delegate 里直接引用顶层 id（`lineMenu`），不能写 `page.lineMenu`
 - 敏感信息一律 SecureStorage，禁止明文落盘/日志
+- **appBar 层级**（FluentUI 本地补丁）：`FluWindow.qml` 的 `loader_app_bar` 必须保持 `z: 1`（高于内容层），否则 `fitsAppBarWindows: true` 时内容区覆盖按钮区域、窗口按钮点击全被吞（仅最大化按钮因 Win11 原生 HTZOOM 特判可用）——改动 FluentUI 或 Main.qml 窗口结构时核对
+- **插件/服务**：新 service/插件文件必须双注册（CMakeLists.txt + tests/CMakeLists.txt）；新配置 key 必须进 ui.json schema；插件接口（IService/ITranslationPlugin/ITranslationBackend）定稿后不轻易改
 
 ### 2.2 翻译服务度量（translation-service.md —— 质量/成本可测量）
 - 改动是否影响：质量（上下文感知/术语一致/回显拦截/质量自检）、成本（缓存/模型分级/智能分块/失败降级）

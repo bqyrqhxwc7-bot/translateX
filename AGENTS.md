@@ -83,6 +83,7 @@ ctest --test-dir build-vs2026-x64 -C Debug -L perf
 - **国内网络环境**：`git push` 可能失败（网络不稳），失败直接重试；winget/gh 安装类命令易卡死（曾超时），不要主动执行系统级安装；Qt 文档 MCP（`qt-docs-mcp.qt.io`，海外）可能超时——超时则改查本地 Qt 头文件/`D:/Software/Qt/6.5.3/` 文档，勿反复重试。
 - **火绒安全会挂起新 exe**：行为分析以调试方式创建进程（症状：测试进程停在 DbgBreakPoint、cdb 附加被拒、`tst_docx`/`tst_pdf` 等新测试 exe 无法启动）；已把项目目录加入信任区，若测试突然卡死先怀疑它（详见 HANDOVER.md §6）。
 - **终端编码**：控制台中文乱码是 GBK/UTF-8 不匹配（临时：`chcp 65001` 或 `[Console]::OutputEncoding`；永久：pwsh `$PROFILE` 已加 UTF-8 三行设置，推荐用 Windows Terminal）；用 `Read`/`Edit` 工具读写源码，勿经控制台管道改写（会破坏中文注释编码）。
+- **opencode 会等待命令启动的 GUI 子进程退出（必踩）**：任何「命令里启动 translex.exe」的操作（`Start-Process`、ui-driver 在应用未运行时代启动）都会让命令挂起直到超时（用户看到「卡死」）。**绝不用命令启动应用**——需要运行时先问用户手动启动（用户启动的实例不在命令进程树里），ui-driver 只连已运行实例；构建/ctest 不受影响（测试 exe 会退出）。ui-driver 挂起时的另类根源见 review.md §0。
 
 ## 6. opencode 操作提示
 
