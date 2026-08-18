@@ -29,6 +29,8 @@ public:
     static QString logFilePath();
     // 当前日志内容（供设置界面/诊断显示）
     static QString currentLog();
+    // QML 可调用的日志路径（静态方法无法 Q_INVOKABLE）
+    Q_INVOKABLE QString logFile() const { return logFilePath(); }
 
 private:
     static void messageHandler(QtMsgType type, const QMessageLogContext &context, const QString &message);

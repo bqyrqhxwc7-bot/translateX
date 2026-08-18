@@ -27,6 +27,11 @@ public:
     QString displayName() const override;
     QString serviceVersion() const override;
     QVariantMap healthCheck() const override;
+    // 侧边栏面板：章节导航（迭代5 UI 扩展点）
+    QString sidebarPanel() const override
+    {
+        return QStringLiteral("qrc:/qt/qml/Translex/qml/panels/ChapterPanel.qml");
+    }
 
     // 关联文档模型（QML 中模型在页面内创建，用 setter 注入）
     Q_INVOKABLE void setDocument(DocumentModel *model);

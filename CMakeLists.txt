@@ -75,6 +75,9 @@ add_library(Translex_sdk INTERFACE)
 target_include_directories(Translex_sdk INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/src/services")
 target_link_libraries(Translex_sdk INTERFACE Qt6::Core)
 
+# ---- 示例插件（迭代5：验证插件全链路，供第三方参考）----
+add_subdirectory(plugins/example_translation_plugin)
+
 # ---- QML 骨架（FluentUI 全量迁移目标）----
 # ui_driver_service.h 以 ui_ 前缀开头，会被 AUTOUIC 误判为 .ui 头文件（AutoUic error）
 set_source_files_properties(src/driver_service.cpp PROPERTIES SKIP_AUTOUIC ON)
@@ -136,10 +139,14 @@ qt_add_qml_module(translex
         qml/Main.qml
         qml/DesignTokens.qml
         qml/UiDriverActions.qml
+        qml/IconBarButton.qml
         qml/TranslateHomePage.qml
         qml/TranslateSettingsPage.qml
         qml/ConfigSectionCard.qml
         qml/TranslatePanelContent.qml
+        qml/panels/ChapterPanel.qml
+        qml/panels/CommentPanel.qml
+        qml/panels/HistoryPanel.qml
 )
 
 target_link_libraries(translex PRIVATE

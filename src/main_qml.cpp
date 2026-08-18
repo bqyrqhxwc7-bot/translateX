@@ -42,6 +42,7 @@ int main(int argc, char *argv[])
     registry->registerService(&guard);
 
     QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty("serviceRegistry", registry);
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreationFailed,
         &app, []() { QCoreApplication::exit(-1); },

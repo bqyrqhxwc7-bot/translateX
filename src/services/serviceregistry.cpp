@@ -89,7 +89,30 @@ QVariantList ServiceRegistry::healthReport() const
         item.insert(QStringLiteral("version"), iface->serviceVersion());
         item.insert(QStringLiteral("status"), health.value(QStringLiteral("status"), QStringLiteral("ok")));
         item.insert(QStringLiteral("message"), health.value(QStringLiteral("message")));
-        item.insert(QStringLiteral("detail"), health.value(QStringLiteral("detail")));
+        if (health.contains(QStringLiteral("detail"))) {
+            item.insert(QStringLiteral("detail"), health.value(QStringLiteral("detail")));
+        }
+        out.append(item);
+    }
+    return out;
+}
+
+QVariantList ServiceRegistry::sidebarPanels() const
+{
+    QVariantList out;
+    for (QObject *service : m_services) {
+        auto *iface = qobject_cast<IService *>(service);
+        if (!iface) {
+            continue;
+        }
+        const QString panel = iface->sidebarPanel();
+        if (panel.isEmpty()) {
+            continue;
+        }
+        QVariantMap item;
+        item.insert(QStringLiteral("id"), iface->serviceId());
+        item.insert(QStringLiteral("displayName"), iface->displayName());
+        item.insert(QStringLiteral("panel"), panel);
         out.append(item);
     }
     return out;

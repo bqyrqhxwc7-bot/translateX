@@ -24,6 +24,11 @@ public:
     QString displayName() const override;
     QString serviceVersion() const override;
     QVariantMap healthCheck() const override;
+    // 侧边栏面板：批注列表（迭代5 UI 扩展点）
+    QString sidebarPanel() const override
+    {
+        return QStringLiteral("qrc:/qt/qml/Translex/qml/panels/CommentPanel.qml");
+    }
 
     // 读写（空文本视为删除）
     Q_INVOKABLE void setComment(int lineNumber, const QString &text);

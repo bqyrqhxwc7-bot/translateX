@@ -22,6 +22,11 @@ public:
     QString displayName() const override;
     QString serviceVersion() const override;
     QVariantMap healthCheck() const override;
+    // 侧边栏面板：翻译历史（迭代5 UI 扩展点）
+    QString sidebarPanel() const override
+    {
+        return QStringLiteral("qrc:/qt/qml/Translex/qml/panels/HistoryPanel.qml");
+    }
 
     // 记录一条翻译结果（最新在前；超过上限覆盖最旧）
     Q_INVOKABLE void record(int lineNumber, const QString &source,

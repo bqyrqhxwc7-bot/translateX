@@ -2195,12 +2195,23 @@ FluContentPage {
     // 拖动）。关闭/切换经 Ribbon「翻译」标签的浮窗开关。位置持久化为屏幕坐标，恢复时钳制到桌面内防止无任务栏找不到。
     Window {
         id: floatWindow
-        visible: page.panelMode === "floating" && page.panelShown
+        // 主窗口最小化时隐藏（Qt.Tool 独立窗口不自动跟随最小化，需手动同步）
+        visible: page.panelMode === "floating" && page.panelShown && !floatWindow.minimized
         transientParent: mainWindow
         flags: Qt.Tool | Qt.FramelessWindowHint
         title: qsTr("翻译工具")
         width: 300
-        height: Math.max(220, floatCol.implicitHeight + 4)
+        minimumWidth: 240
+        minimumHeight: 160
+        // 主窗口最小化时置 true 隐藏浮窗；恢复时置 false 重新显示
+        property bool minimized: false
+        // 应用退出（主窗口关闭）时置 true，放行浮窗关闭，避免拦截导致进程残留
+        property bool appQuitting: false
+        // 用户手动缩放后高度不再跟随内容（否则系统缩放会被绑定拉回）
+        property bool userResized: false
+        property real manualHeight: 300
+        height: userResized ? manualHeight : Math.max(220, floatCol.implicitHeight + 4)
+        onHeightChanged: { if (floatWindow.userResized) floatWindow.manualHeight = floatWindow.height }
         color: "transparent"
         // 恢复位置期间抑制实时保存（避免把未映射时的无效 x/y 存进 config）
         property bool restoringPos: false
@@ -2235,12 +2246,31 @@ FluContentPage {
             onTriggered: { if (floatWindow.visible) saveFloatWindowPos() }
         }
         onClosing: (close) => {
-            // 隐藏而非销毁：保留对象供「浮窗」开关再次显示
+            // 应用退出（主窗口关闭）时放行，让浮窗随主窗口一起销毁，避免进程残留；
+            // 否则仅隐藏而非销毁：保留对象供「浮窗」开关再次显示
+            if (floatWindow.appQuitting) {
+                return
+            }
             page.panelShown = false
             configService.set("ui", "translatePanelVisible", false)
             saveFloatWindowPos()
             floatWindow.visibility = Window.Hidden
             close.accepted = false
+        }
+        // 跟随主窗口生命周期：最小化时隐藏浮窗、恢复时重新显示；主窗口关闭时放行浮窗关闭
+        Connections {
+            target: mainWindow
+            function onVisibilityChanged() {
+                if (mainWindow.visibility === Window.Minimized) {
+                    floatWindow.minimized = true
+                } else if (mainWindow.visibility === Window.Windowed) {
+                    floatWindow.minimized = false
+                }
+            }
+            function onClosing() {
+                floatWindow.appQuitting = true
+                floatWindow.close()
+            }
         }
         // 兜底：创建完成后延迟恢复位置（首次可见可能不触发 onVisibleChanged）
         Component.onCompleted: {
@@ -2304,6 +2334,59 @@ FluContentPage {
                     onTranslateSelectedRequested: translateSelected()
                     onCancelRequested: translator.cancelTranslation()
                 }
+            }
+        }
+
+        // ---------- 缩放手柄（原生系统缩放 startSystemResize：贴边/跨屏由系统接管） ----------
+        // 右下角手柄（带 GripperResize 图标提示）+ 右/下细条手柄；按下时先锁定手动高度，
+        // 避免系统缩放被 height 自动绑定拉回
+        MouseArea {
+            width: 6
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.right: parent.right
+            cursorShape: Qt.SizeHorCursor
+            onPressed: (mouse) => {
+                if (mouse.button === Qt.LeftButton) {
+                    floatWindow.userResized = true
+                    floatWindow.manualHeight = floatWindow.height
+                    floatWindow.startSystemResize(Qt.RightEdge)
+                }
+            }
+        }
+        MouseArea {
+            height: 6
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            cursorShape: Qt.SizeVerCursor
+            onPressed: (mouse) => {
+                if (mouse.button === Qt.LeftButton) {
+                    floatWindow.userResized = true
+                    floatWindow.manualHeight = floatWindow.height
+                    floatWindow.startSystemResize(Qt.BottomEdge)
+                }
+            }
+        }
+        MouseArea {
+            width: 18
+            height: 18
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            cursorShape: Qt.SizeFDiagCursor
+            onPressed: (mouse) => {
+                if (mouse.button === Qt.LeftButton) {
+                    floatWindow.userResized = true
+                    floatWindow.manualHeight = floatWindow.height
+                    floatWindow.startSystemResize(Qt.RightEdge | Qt.BottomEdge)
+                }
+            }
+            FluIcon {
+                anchors.fill: parent
+                iconSource: FluentIcons.GripperResize
+                iconSize: 12
+                iconColor: FluTheme.fontTertiaryColor
+                opacity: 0.7
             }
         }
     }

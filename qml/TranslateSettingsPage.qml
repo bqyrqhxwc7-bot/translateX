@@ -32,6 +32,22 @@ FluScrollablePage {
     property bool findCaseSensitive: false
     property bool findWholeWord: false
     property bool findFuzzy: false
+    // 调试卡片（迭代5）：服务健康度模型 + 插件错误文本
+    property string pluginErrorsText: ""
+
+    // 服务健康度模型（healthReport 聚合，刷新时重建）
+    ListModel {
+        id: debugHealthModel
+    }
+    function refreshDebugHealth() {
+        debugHealthModel.clear()
+        const items = serviceRegistry.healthReport()
+        for (let i = 0; i < items.length; ++i) {
+            debugHealthModel.append(items[i])
+        }
+        const errs = serviceRegistry.loadedPluginErrors()
+        pluginErrorsText = errs.length === 0 ? qsTr("无插件加载错误") : errs.join("\n")
+    }
 
     // 通知条：NoStack 模式下 Window.window 附加属性解析失败，改用页面内 InfoBar 实例
     FluInfoBar {
@@ -53,6 +69,7 @@ FluScrollablePage {
         findCaseSensitive = Boolean(configService.get("ui", "findCaseSensitive"))
         findWholeWord = Boolean(configService.get("ui", "findWholeWord"))
         findFuzzy = Boolean(configService.get("ui", "findFuzzy"))
+        refreshDebugHealth()
     }
 
     // ---------- 术语表操作 ----------
@@ -760,6 +777,114 @@ FluScrollablePage {
             FluButton {
                 text: qsTr("功能引导")
                 onClicked: guideDialog.open()
+            }
+        }
+    }
+
+    // ---------- 卡片：调试（迭代5：服务健康度/插件诊断/路径） ----------
+    // 注意：implicitHeight 用固定值而非 cardDebugCol.implicitHeight + 32——实测动态绑定
+    // 在含 Repeater 列表时少算尾部行（插件加载/路径行被裁），固定值最稳妥。
+    // 高度按实测行高估算：10 行服务（行距 ~46px）+ 2 标题 + 插件行 + 配置/日志行（各 40px）
+    // + spacing/margins ≈ 720+；实测 700 时配置/日志行仍被窗口底缘裁掉，取 820（留余量）。
+    Rectangle {
+        Layout.fillWidth: true
+        radius: tokens.radiusCard
+        color: tokens.bgCard
+        border.color: FluTheme.dividerColor
+        implicitHeight: 820
+
+        ColumnLayout {
+            id: cardDebugCol
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 12
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                FluIcon { iconSource: FluentIcons.DeveloperTools; iconSize: 16; color: FluTheme.primaryColor }
+                FluText { text: qsTr("调试"); font.pixelSize: 16; font.bold: true }
+                Item { Layout.fillWidth: true }
+                FluButton {
+                    text: qsTr("刷新")
+                    onClicked: refreshDebugHealth()
+                }
+            }
+
+            // 服务健康度（healthReport 聚合：状态色点 + 消息）
+            FluText {
+                text: qsTr("服务健康度")
+                font.pixelSize: 13
+                font.bold: true
+                color: FluTheme.fontSecondaryColor
+            }
+            Repeater {
+                model: debugHealthModel
+                RowLayout {
+                    width: cardDebugCol.width - 32
+                    spacing: 8
+                    Rectangle {
+                        width: 8
+                        height: 8
+                        radius: 4
+                        color: model.status === "ok" ? tokens.success : tokens.error
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    FluText {
+                        text: model.displayName
+                        font.pixelSize: 13
+                        font.bold: true
+                        Layout.preferredWidth: 130
+                        elide: Text.ElideRight
+                    }
+                    FluText {
+                        text: model.version
+                        font.pixelSize: 11
+                        color: FluTheme.fontTertiaryColor
+                        Layout.preferredWidth: 60
+                    }
+                    FluText {
+                        text: model.message
+                        font.pixelSize: 12
+                        color: model.status === "ok" ? FluTheme.fontSecondaryColor : tokens.error
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
+                }
+            }
+
+            // 插件加载诊断
+            FluText {
+                text: qsTr("插件加载")
+                font.pixelSize: 13
+                font.bold: true
+                color: FluTheme.fontSecondaryColor
+            }
+            FluText {
+                text: pluginErrorsText
+                font.pixelSize: 12
+                color: pluginErrorsText === qsTr("无插件加载错误") ? tokens.success : tokens.error
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+            }
+
+            // 配置/日志路径（wrapMode 文本给显式 preferredHeight：与既有卡片模式一致，
+            // 避免 implicitHeight 按单行算导致卡片高度不足、底部内容被裁）
+            FluText {
+                text: qsTr("配置文件：%1").arg(configService.configFilePath())
+                font.pixelSize: 12
+                color: FluTheme.fontSecondaryColor
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+                Layout.preferredHeight: 40
+            }
+            FluText {
+                text: qsTr("日志文件：%1").arg(serviceRegistry.serviceById("appGuard").logFile())
+                font.pixelSize: 12
+                color: FluTheme.fontSecondaryColor
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+                Layout.preferredHeight: 40
             }
         }
     }

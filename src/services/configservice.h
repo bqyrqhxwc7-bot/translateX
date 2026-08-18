@@ -72,6 +72,10 @@ signals:
     void configChanged(const QString &section, const QString &key, const QVariant &value);
     void sectionsChanged();   // schema 变化（扫描插件后）
 
+public:
+    // QML 可调用的配置文件路径（静态方法无法 Q_INVOKABLE）
+    Q_INVOKABLE QString configFilePath() const { return settingsPath(); }
+
 private:
     explicit ConfigService(QObject *parent = nullptr);
     static QString settingsPath();

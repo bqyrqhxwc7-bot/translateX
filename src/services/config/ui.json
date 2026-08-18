@@ -90,6 +90,30 @@
       "type": "bool",
       "default": true,
       "group": "自动保存"
+    },
+    {
+      "key": "leftPanelWidth",
+      "displayName": "侧边栏宽度（内部）",
+      "description": "分割侧边栏拖拽后的宽度（内部状态，不在设置页显示）",
+      "type": "number",
+      "default": 240,
+      "group": "布局"
+    },
+    {
+      "key": "iconBarVisible",
+      "displayName": "图标栏可见（内部）",
+      "description": "最左 Outlook 式图标栏收起状态（内部状态）",
+      "type": "bool",
+      "default": true,
+      "group": "布局"
+    },
+    {
+      "key": "sidebarVisible",
+      "displayName": "侧边栏可见（内部）",
+      "description": "分割侧边栏收起状态（内部状态）",
+      "type": "bool",
+      "default": true,
+      "group": "布局"
     }
   ]
 }

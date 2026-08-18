@@ -39,13 +39,16 @@ public:
     // 全部已注册服务（QObject*，QML 可遍历）
     QVariantList services() const;
     // 按 ID 查询（未注册返回 nullptr）
-    QObject *serviceById(const QString &id) const;
+    Q_INVOKABLE QObject *serviceById(const QString &id) const;
     // 健康度聚合：[{ id, displayName, version, status, message }]
-    QVariantList healthReport() const;
+    Q_INVOKABLE QVariantList healthReport() const;
+    // 注册了侧边栏面板的 service（迭代5 UI 扩展点）：
+    // [{ id, displayName, panel }]（panel = sidebarPanel() QML 组件 URL）
+    Q_INVOKABLE QVariantList sidebarPanels() const;
 
     // ---- 插件（L3 动态插件）----
     void scanPluginDirectory(const QString &dir);
-    QStringList loadedPluginErrors() const;
+    Q_INVOKABLE QStringList loadedPluginErrors() const;
 
 private:
     explicit ServiceRegistry(QObject *parent = nullptr);
