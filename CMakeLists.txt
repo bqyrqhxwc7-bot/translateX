@@ -30,7 +30,7 @@ if(NOT Qt6Pdf_FOUND)
     message(FATAL_ERROR
         "缺少 Qt6Pdf 组件：Translex 的 PDF 导入/导出依赖 QtPdf 模块。\n"
         "请用 Qt Maintenance Tool 为当前套件添加「Qt PDF」模块，"
-        "或改用含 Pdf 组件的 Qt 套件（如 msvc2019_64）构建。")
+        "或改用含 Pdf 组件的 Qt 套件（如 msvc2022_64）构建。")
 endif()
 
 # TTS 朗读（迭代3）为可选功能：无 TextToSpeech 模块的平台照常构建（服务空实现降级）。
@@ -180,9 +180,15 @@ endif()
 # windeployqt 部署：仅对 MSVC（cl）构建执行——clang-cl/MinGW 构建用于跨平台
 # 编译验证，部署环境依赖 MSVC 工具链检测，跳过部署不影响构建产物
 if(WIN32 AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND NOT MINGW)
-    get_target_property(QT_QMAKE_EXECUTABLE Qt6::qmake IMPORTED_LOCATION)
-    get_filename_component(QT_BIN_DIR "${QT_QMAKE_EXECUTABLE}" DIRECTORY)
-    find_program(QT_WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${QT_BIN_DIR}")
+    # 优先用 find_package 提供的 imported target（随 Qt 版本自动更新）；
+    # 勿用 find_program 缓存变量——Qt 升级后缓存旧路径导致 post-build 失败（2026-08-18 踩过）
+    if(TARGET Qt6::windeployqt)
+        get_target_property(QT_WINDEPLOYQT_EXECUTABLE Qt6::windeployqt IMPORTED_LOCATION)
+    else()
+        get_target_property(QT_QMAKE_EXECUTABLE Qt6::qmake IMPORTED_LOCATION)
+        get_filename_component(QT_BIN_DIR "${QT_QMAKE_EXECUTABLE}" DIRECTORY)
+        find_program(QT_WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${QT_BIN_DIR}")
+    endif()
 
     if(QT_WINDEPLOYQT_EXECUTABLE)
         # windeployqt 找不到 VS 会报 "Cannot find Visual Studio installation
@@ -201,17 +207,18 @@ if(WIN32 AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND NOT MINGW)
             endif()
         endif()
 
-        get_filename_component(QT_QML_SRC_DIR "${QT_BIN_DIR}/../qml" ABSOLUTE)
+        get_filename_component(QT_QML_SRC_DIR "${QT_WINDEPLOYQT_EXECUTABLE}/../qml" ABSOLUTE)
+        # 部署策略：--force 覆盖旧 Qt 版本残留文件；含 translations（Qt 内置控件中文文案）
         if(VCINSTALLDIR)
             add_custom_command(TARGET translex POST_BUILD
                 COMMAND "${CMAKE_COMMAND}" -E env "VCINSTALLDIR=${VCINSTALLDIR}"
-                        "${QT_WINDEPLOYQT_EXECUTABLE}" --no-translations --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml" "$<TARGET_FILE:translex>"
+                        "${QT_WINDEPLOYQT_EXECUTABLE}" --force --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml" "$<TARGET_FILE:translex>"
                 COMMAND "${CMAKE_COMMAND}" -E copy_directory "${QT_QML_SRC_DIR}" "$<TARGET_FILE_DIR:translex>/qml"
                 COMMENT "Deploying Qt runtime (incl. all QML modules) for translex"
             )
         else()
             add_custom_command(TARGET translex POST_BUILD
-                COMMAND "${QT_WINDEPLOYQT_EXECUTABLE}" --no-translations --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml" "$<TARGET_FILE:translex>"
+                COMMAND "${QT_WINDEPLOYQT_EXECUTABLE}" --force --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml" "$<TARGET_FILE:translex>"
                 COMMAND "${CMAKE_COMMAND}" -E copy_directory "${QT_QML_SRC_DIR}" "$<TARGET_FILE_DIR:translex>/qml"
                 COMMENT "Deploying Qt runtime (incl. all QML modules) for translex"
             )
@@ -223,11 +230,15 @@ if(WIN32 AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND NOT MINGW)
     )
 
     if(QT_WINDEPLOYQT_EXECUTABLE)
+        # 安装完整部署产物（QML 模块/platforms/translations/imageformats 等）——
+        # 否则 cmake --install 的发布包不能独立运行
         install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/"
             DESTINATION .
-            FILES_MATCHING
-            PATTERN "translex.exe"
-            PATTERN "*.dll")
+            PATTERN "*.pdb" EXCLUDE
+            PATTERN "*.lib" EXCLUDE
+            PATTERN "*.exp" EXCLUDE
+            PATTERN "tests" EXCLUDE
+        )
     endif()
 endif()
 

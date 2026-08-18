@@ -33,7 +33,7 @@
       "cacheVariables": {
         "CMAKE_C_COMPILER": "gcc",
         "CMAKE_CXX_COMPILER": "g++",
-        "CMAKE_PREFIX_PATH": "D:/Software/Qt/6.5.3/mingw_64",
+        "CMAKE_PREFIX_PATH": "D:/Software/Qt/6.11.1/mingw_64",
         "CMAKE_BUILD_TYPE": "Debug",
         "BUILD_TESTING": "ON"
       }

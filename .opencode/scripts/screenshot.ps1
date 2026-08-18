@@ -23,7 +23,7 @@ $exe = Join-Path $appDir "build-vs2026-x64\Debug\translex.exe"
 $proc = Get-Process -Name translex -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $proc) {
     if (Test-Path $exe) {
-        $env:PATH = "D:/Software/Qt/6.5.3/msvc2019_64/bin;" + $env:PATH
+        $env:PATH = "D:/Software/Qt/6.11.1/msvc2022_64/bin;" + $env:PATH
         Start-Process -FilePath $exe | Out-Null
         $proc = Get-Process -Name translex -ErrorAction SilentlyContinue | Select-Object -First 1
     }

@@ -1,10 +1,10 @@
 {
-    "qtConfigure.qtKitDir": "D:/Software/Qt/6.5.3/msvc2019_64",
+    "qtConfigure.qtKitDir": "D:/Software/Qt/6.11.1/msvc2022_64",
     "cmake.generator": "Visual Studio 18 2026",
     "cmake.platform": "x64",
     "cmake.buildDirectory": "${workspaceFolder}/build-vs2026-x64",
     "cmake.configureSettings": {
-        "CMAKE_PREFIX_PATH": "D:/Software/Qt/6.5.3/msvc2019_64"
+        "CMAKE_PREFIX_PATH": "D:/Software/Qt/6.11.1/msvc2022_64"
     },
     "git.ignoreLimitWarning": true
 }

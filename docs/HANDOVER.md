@@ -36,8 +36,9 @@ ctest --test-dir build-vs2026-x64 -C Debug --output-on-failure
 # 单测
 ctest --test-dir build-vs2026-x64 -C Debug -R tst_docx --output-on-failure
 
-# 应用 exe 部署（升级 Qt / 换版本后必须 --force，否则旧 DLL 残留导致启动失败）
-D:\Software\Qt\6.11.1\msvc2022_64\bin\windeployqt.exe --debug --force --qmldir qml build-vs2026-x64\Debug\translex.exe
+# 应用 exe 部署：post-build 已自动执行（Qt6::windeployqt --force --qmldir + qml 全量拷贝，
+# 2026-08-18 review 修复：改用 imported target 防缓存旧路径）；仅异常时可手动补跑：
+D:\Software\Qt\6.11.1\msvc2022_64\bin\windeployqt.exe --force --qmldir qml build-vs2026-x64\Debug\translex.exe
 
 # 推送（网络不稳，失败重试）
 git push origin main

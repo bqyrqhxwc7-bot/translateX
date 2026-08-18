@@ -29,3 +29,7 @@ if(WIN32 AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND NOT MINGW)
         COMMENT "Deploying example plugin to translex plugins dir"
     )
 endif()
+
+# 安装（发布包）：插件 DLL + 插件 QML 进 <安装根>/plugins
+install(TARGETS example_translation_plugin RUNTIME DESTINATION plugins)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/qml/ExamplePanel.qml" DESTINATION plugins)

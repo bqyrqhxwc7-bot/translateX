@@ -23,7 +23,7 @@
             "environment": [
                 {
                     "name": "PATH",
-                    "value": "D:/Software/Qt/6.5.3/msvc2019_64/bin"
+                    "value": "D:/Software/Qt/6.11.1/msvc2022_64/bin"
                 }
             ],
             "console": "integratedTerminal",

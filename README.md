@@ -81,8 +81,8 @@ Translex 是一个基于 Qt 6 的桌面翻译写作工具。它提供了一个�
 
 ## 构建要求
 
-- **克隆后先拉取 FluentUI 子模块**：`git submodule update --init`
-- Qt 6（本机示例路径：`D:\Software\Qt\6.5.3\msvc2019_64`，需含 Quick/Qml/QuickWidgets 模块）
+- **克隆后首次拉取子模块**：`git submodule update --init`（仅首次；之后**绝不**再跑 `git submodule update`——`third_party/FluentUI`、`zlib` 带有意本地补丁，会被覆盖）
+- Qt 6（本机示例路径：`D:\Software\Qt\6.11.1\msvc2022_64`，需含 Quick/Qml/QuickWidgets/Pdf 模块）
 - CMake 3.21+
 - Microsoft Visual Studio（Windows，项目生成器为 `Visual Studio 18 2026`，x64）
 

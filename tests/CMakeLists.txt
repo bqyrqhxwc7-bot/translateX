@@ -32,7 +32,7 @@ set(SERVICE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/services/appguard.cpp
 )
 
-# 共享服务抽为静态库：11 个测试目标只需编译一次服务源码（避免约 130 次重复编译）。
+# 共享服务抽为静态库：16 个测试目标只需编译一次服务源码（避免约 130 次重复编译）。
 # qrc 资源在静态库中需 Q_INIT_RESOURCE 显式初始化（见 configservice.cpp）。
 qt_add_library(translex_services STATIC
     ${SERVICE_SOURCES}
@@ -65,6 +65,11 @@ if(WIN32)
     if(TARGET Qt6::TextToSpeech)
         list(APPEND QT_TEST_RUNTIME_DLLS
             "${QT_TEST_BIN_DIR}/Qt6TextToSpeech${QT_DBG_SUFFIX}.dll")
+    endif()
+    # QtPdf 6.11 传递依赖 QtMultimedia（tst_documentmodel 链接 Qt6Multimediad.lib）
+    if(TARGET Qt6::Multimedia)
+        list(APPEND QT_TEST_RUNTIME_DLLS
+            "${QT_TEST_BIN_DIR}/Qt6Multimedia${QT_DBG_SUFFIX}.dll")
     endif()
     add_custom_command(TARGET translex_services POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${QT_TEST_RUNTIME_DLLS}
