@@ -136,6 +136,16 @@ QtObject {
         return JSON.stringify({ ok: true, backend: backendId })
     }
 
+    // ---- 可用后端列表（迭代5：验证插件后端注册）----
+    function getBackends() {
+        const ids = translationService.availableBackends()
+        const out = []
+        for (let i = 0; i < ids.length; ++i) {
+            out.push({ id: ids[i], name: translationService.backendDisplayName(ids[i]) })
+        }
+        return JSON.stringify(out)
+    }
+
     // ---- 导航（main.qml 注入 navView 引用；index 0=编辑 1=设置）----
     property var navViewRef: null
     function navigate(index) {

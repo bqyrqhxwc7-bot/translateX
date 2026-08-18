@@ -111,14 +111,18 @@ void ServiceRegistry::scanPluginDirectory(const QString &dir)
     for (const QString &fileName : entries) {
         auto *loader = new QPluginLoader(pluginsDir.absoluteFilePath(fileName), this);
         if (!loader->load()) {
-            m_pluginErrors.append(loader->errorString());
+            const QString err = loader->errorString();
+            m_pluginErrors.append(err);
+            qWarning() << "ServiceRegistry: 插件加载失败" << fileName << err;
             delete loader;
             continue;
         }
 
         QObject *pluginInstance = loader->instance();
         if (!pluginInstance) {
-            m_pluginErrors.append(fileName + QStringLiteral(": instance() failed"));
+            const QString err = fileName + QStringLiteral(": instance() failed");
+            m_pluginErrors.append(err);
+            qWarning() << err;
             delete loader;
             continue;
         }
@@ -126,7 +130,9 @@ void ServiceRegistry::scanPluginDirectory(const QString &dir)
         // 统一接口：ITranslationPlugin（Q_DECLARE_INTERFACE + Q_PLUGIN_METADATA）
         auto *plugin = qobject_cast<ITranslationPlugin *>(pluginInstance);
         if (!plugin) {
-            m_pluginErrors.append(fileName + QStringLiteral(": 未实现 ITranslationPlugin 接口"));
+            const QString err = fileName + QStringLiteral(": 未实现 ITranslationPlugin 接口");
+            m_pluginErrors.append(err);
+            qWarning() << err;
             delete loader;
             continue;
         }

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <QObject>
 #include <QString>
 #include <QStringList>
 #include <memory>
@@ -12,17 +11,12 @@ class ITranslationBackend;
 //   - 提供自定义翻译后端（backendIds/createBackend）
 //   - 可选：提供侧边栏面板 QML（sidebarPanel，插件 UI 扩展点）
 // 应用启动时 ServiceRegistry::scanPluginDirectory() 用 QPluginLoader 扫描加载。
+// 注意：纯虚接口不继承 QObject（避免插件类菱形继承），插件类自身继承 QObject + 本接口。
 // 见 docs/services/SERVICE-ARCHITECTURE.md §4 与 docs/services/plugin-development.md
-class ITranslationPlugin : public QObject
+class ITranslationPlugin
 {
-    Q_OBJECT
-
 public:
-    explicit ITranslationPlugin(QObject *parent = nullptr)
-        : QObject(parent)
-    {
-    }
-    ~ITranslationPlugin() override = default;
+    virtual ~ITranslationPlugin() = default;
 
     // 返回此插件提供的后端 ID 列表
     virtual QStringList backendIds() const = 0;
