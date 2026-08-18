@@ -41,6 +41,7 @@
 - **接口稳定**：`IService` / `ITranslationBackend` 等公共接口定稿后不轻易改；扩展用新增方法（带默认实现）。
 - **翻译服务定位（不可偏离）**：更好的质量（上下文感知/术语一致/质量自检）+ 为用户减成本（缓存/模型分级/智能分块/失败降级）；改动必须对照 `docs/services/translation-service.md` 的度量指标做验收（质量提升/成本下降要可测量，不能只凭感觉）。
 - **NoStack 页面模式**（`FluNavigationView pageMode: NoStack`）：每次导航重建页面 → 状态必须放应用级 context property 单例，禁止放页面属性；**Popup 控件按场景判定**（FluMenu 主页 delegate 内不可用，FluComboBox 设置页卡片内可用——先小步实测）；`Qt.callLater` 不可靠，用 `Timer`。详见 HANDOVER.md §4。
+- **appBar 悬浮层必须高于内容层**：FluentUI `FluWindow.qml` 的 `loader_app_bar` 保持 `z: 1`（本地补丁）——否则内容区盖住窗口按钮、点击全被吞（仅最大化可用）；浮窗必须跟随主窗口生命周期（最小化隐藏/关闭放行），详见 HANDOVER.md §4 铁律 9/10。
 - **大文件性能**：虚拟化渲染（ListView + 懒加载模型），禁止全量刷新；超 5 万行/200MB 自动进**受限模式**（显示层回退纯文本、禁批注编辑/翻译，详见 `docs/services/large-file.md`）。
 - **敏感信息**：一律走 `SecureStorage`（`%APPDATA%/Translex/secure.ini`），禁止明文落盘。
 - **新配置 key** 必须加进 `src/services/config/ui.json` schema（ConfigService 只认 schema 内 key）。

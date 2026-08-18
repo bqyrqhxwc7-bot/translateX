@@ -65,8 +65,11 @@ git push origin main
 | **B2 docx 导出批注** | DocxParser::write：原文 + 译文批注，`docxCommentStyle: inline`（黄色高亮）/`native`（Word 原生批注，可读回） | `services/docx-comment-export.md` |
 | **C pdf 导入/导出** | PdfParser：每页一行导入（QPdfDocument）+ 文本页导出（QPdfWriter）；**导出文本层不可提取**（Qt 6.5.3 缺陷，视觉正确） | `services/pdf-service.md` |
 | **D 大文件降级** | 超 5 万行 / 200MB 进受限模式：显示层回退纯文本 + 禁批注编辑/翻译，编辑/查找/章节保留；顶部提示条 | `services/large-file.md` |
+| **迭代5 插件化** | `IService` 健康度接口（serviceId/displayName/healthCheck/sidebarPanel）+ `ServiceRegistry` 单例注册/查询；L3 动态插件（`QPluginLoader` 扫 `<exe>/plugins/*.dll`，示例插件回显后端 `translation.echo` + 面板） | `services/iteration5-plugin-ui-agent.md`、`services/plugin-development.md` |
+| **迭代5 Outlook UI** | 主窗口重构：44px 图标栏（可收起）+ service 侧边栏面板（SplitView 180-400px）+ 内容区 NoStack 切换；`IconBarButton`、`panels/`（Chapter/Comment/History）；设置页新增服务调试卡片 | `docs/ARCHITECTURE.md` |
+| **迭代5 窗口修复** | 窗口按钮失效修复（appBar 悬浮层 z:1 补丁，见 §7）；浮窗跟随主窗口（最小化隐藏/恢复显示、关闭放行防进程残留） | `services/iteration5-plugin-ui-agent.md` |
 
-**测试**：15 目标全绿（`tst_docx` 10 用例：7 导入 + 3 导出（writeInline/writeNative/roundTrip，批注=译文往返保真）；`tst_pdf` 9 用例；`tst_documentmanager` 含 4 个受限模式 + 6 个自动保存 + markdownExport 用例；`tst_texttospeech` 4 用例（无 TTS 引擎环境 graceful 通过）；`tst_history` 5 用例（迭代4b）；`tst_documentmodel` 含 stats 用例；`tst_quality` 含 extractCandidates 用例）。
+**测试**：16 目标全绿（MSVC + clang-cl 双编译器，含 perf 基准；`tst_registry` 插件注册表用例；`tst_docx` 10 用例：7 导入 + 3 导出（writeInline/writeNative/roundTrip，批注=译文往返保真）；`tst_pdf` 9 用例；`tst_documentmanager` 含 4 个受限模式 + 6 个自动保存 + markdownExport 用例；`tst_texttospeech` 4 用例（无 TTS 引擎环境 graceful 通过）；`tst_history` 5 用例（迭代4b）；`tst_documentmodel` 含 stats 用例；`tst_quality` 含 extractCandidates 用例）。
 
 ## 3. 路线图（下一步从这里开始）
 
@@ -76,12 +79,16 @@ git push origin main
 | ~~迭代3~~ | ~~TTS 朗读（Qt6TextToSpeech 已装，Windows SAPI 系统语音）~~ | ✅ 完成（2026-08-17，见 `services/text-to-speech.md`；用户确认：选中行+选区朗读、语速+停止、语音跟随系统） |
 | ~~迭代4（部分）~~ | ~~文档统计、自动保存、术语自动提取~~ | ✅ 完成（2026-08-17，见 `services/iteration4-stats-autosave-glossary.md`） |
 | ~~迭代4（剩余）~~ | ~~翻译历史面板、Markdown 导出、功能引导（设置页按钮，不默认首启）~~ | ✅ 完成（2026-08-18，见 `services/iteration4b-history-markdown-guide.md`） |
-| 候选 | pdf 导出文本层修复（Qt 升级后复查）、.trx 图片 external 降级（>1MB 转外置）、docx 导出 `Original` 纯原文模式 | 非阻塞 |
+| ~~迭代5~~ | ~~插件化（IService 健康度 + 注册表 + L3 动态插件 + 示例插件）、Outlook 式主窗口（图标栏/侧边栏面板/NoStack）、设置页调试卡片~~ | ✅ 完成（2026-08-18，见 `services/iteration5-plugin-ui-agent.md`；含窗口按钮修复 + 浮窗跟随修复） |
+| 候选 | pdf 导出文本层修复（Qt 升级后复查）、.trx 图片 external 降级（>1MB 转外置）、docx 导出 `Original` 纯原文模式、更多示例插件（对照 plugin-development.md） | 非阻塞 |
+
+> 迭代5（2026-08-18 完成）：插件化（`IService` 健康度接口 + `ServiceRegistry` + `QPluginLoader` 动态插件 + 示例回显插件 + `tst_registry`）、Outlook 式主窗口（`IconBarButton` + `panels/` 侧边栏面板 + NoStack 切换）、设置页调试卡片、窗口按钮失效修复（FluentUI `loader_app_bar z:1` 补丁）、浮窗跟随主窗口生命周期。
 
 > 迭代2（2026-08-17 完成）：docx 导出批注（`DocxParser::write` + `docxCommentStyle` 配置 + tst_docx 3 个新用例）。
 > 迭代3（2026-08-17 完成）：TTS 朗读（独立 `TextToSpeechService`，`TRANSLEX_HAS_TTS` 条件编译，无模块/引擎优雅降级；工具栏/右键菜单入口；tst_texttospeech 4 用例）。
 > 迭代4 部分（2026-08-17 完成）：文档统计（`DocumentModel::stats` + 状态栏）、自动保存（60s tick + `.autosave.trx` + 崩溃恢复弹窗 + `ui.autosaveEnabled`）、术语自动提取（`TermGlossary::extractCandidates` + 设置页弹窗勾选；仅英文，中文暂不支持）。
 > 迭代4b（2026-08-18 完成）：翻译历史（`TranslationHistoryService` 内存环形缓冲 500 条 + 主页弹窗）、Markdown 导出（`writeDocument` md 分支 + 另存为 filter）、功能引导（设置页按钮弹窗，不默认首启）。
+> 迭代5（2026-08-18 完成）：插件化（`IService` 健康度接口 + `ServiceRegistry` + L3 动态插件 + 示例回显插件 `translation.echo` + `tst_registry`）、Outlook 式主窗口（图标栏 + `panels/` 侧边栏面板 + NoStack 切换）、设置页服务调试卡片、窗口按钮失效修复（FluentUI `loader_app_bar z:1` 补丁）、浮窗跟随主窗口生命周期。
 
 > 迭代1（2026-08-17 完成）：P0 回归修复（backendCombo 残留引用）、A2 句边界分块（`sentenceAwareChunking`）、B1 后端连接测试（`testBackendConnection`）、B2 拖放打开、B3 快捷键总览（`?`）、A1 质量自检复核面板（qualityWarning 汇总+跳转）、设置页语言选择 Flow 换行修复。
 > 每项任务实施蓝图见 §8；**开工前先读对应 `docs/services/` 文档，遵循 AGENTS.md**。
@@ -99,6 +106,8 @@ git push origin main
 6. **行号显示用 `String(index + 1)`**，勿绑 `row.model.lineNumber`（插入后不刷新）。
 7. 服务方法要能被 QML 调必须 `Q_INVOKABLE`（非虚或虚均可）；`documentModel` 等以 context property 暴露。
 8. **浮窗（Qt.Tool + transientParent）**：启动时主窗口未稳定 → show 竞态失败，必须延迟（`floatShowTimer` 350ms）；`screen.virtualX` 未映射返回 undefined → `Number(scr && scr.virtualX) || 0` 防 NaN。
+9. **appBar 悬浮层必须高于内容层**（FluentUI 本地补丁）：`FluWindow.qml` 的 `loader_app_bar` 保持 `z: 1`（> `layout_content` z=0）。`fitsAppBarWindows: true` 时内容从 y=0 起、后声明的 `layout_content` 会盖住 appBar → 窗口按钮点击被下层页面吞掉（仅最大化按钮因 Win11 原生 HTZOOM 特判可用，2026-08-18 踩过）。改 FluentUI 或窗口结构时核对。
+10. **浮窗跟随主窗口生命周期**：主窗口最小化/关闭时浮窗（Qt.Tool 独立窗口）不会自动跟随——`TranslateHomePage.qml` 浮窗内必须保持 `minimized`/`appQuitting` 标志 + `Connections`（最小化隐藏/恢复显示；主窗口 onClosing 时 `appQuitting=true` + `floatWindow.close()` 放行），否则最小化后浮窗残留屏幕、关闭应用后进程不退出。
 
 ## 5. 文件地图
 
@@ -111,8 +120,12 @@ src/services/              # ★ 服务层（Q_INVOKABLE，QML 直接调）
   configservice / securestorage / termglossary / qualitygate / translationcache /
   serviceregistry / appguard
 qml/TranslateHomePage.qml  # 核心 UI（约 2000 行：Ribbon/编辑器/右键菜单/浮窗/设置浮层/快捷键总览/质量复核面板）
-qml/Main.qml / TranslateSettingsPage.qml / TranslatePanelContent.qml / ConfigSectionCard.qml / UiDriverActions.qml
-tests/                     # 13 目标；CMakeLists 抽 translex_services 静态库
+qml/Main.qml               # 主窗口（迭代5 Outlook 布局：图标栏 + 侧边栏面板 + NoStack 内容区）
+qml/IconBarButton.qml      # 图标栏按钮（tooltip/active 态）
+qml/panels/                # service 侧边栏面板（Chapter/Comment/History，sidebarPanels() 动态注册）
+qml/TranslateSettingsPage.qml / TranslatePanelContent.qml / ConfigSectionCard.qml / UiDriverActions.qml
+tests/                     # 16 目标；CMakeLists 抽 translex_services 静态库
+plugins/                   # 示例插件（example_translation_plugin：回显后端 + 面板）
 samples/demo.trx           # .trx 示例（含富文本/图片显示层）
 samples/demo.docx          # docx 示例（gen_docx.py 生成，纯 stdlib 可再生成）
 docs/                      # 设计文档（services/ + ui/ + ARCHITECTURE.md + 本文件）
@@ -131,6 +144,12 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 - 位置失效根因 = `screen.virtualX/Width` 未映射返回 undefined → NaN 污染钳制 → `Number()||fallback`
 - 启动不显示 = Qt.Tool show 竞态 → 延迟 350ms + `onVisibleChanged` 时 `show()` 确认
 - 位置保存：`onX/YChanged` 节流 350ms + `isFinite && >-10000` 守卫 + `restoringPos` 抑制恢复期保存
+- **不跟随主窗口**：Qt.Tool 独立窗口在主窗口最小化/关闭时不自动跟随（WS_EX_TOOLWINDOW 非 WS_OWNED）→ 须手动（铁律 10，2026-08-18）
+
+### 窗口按钮（appBar）
+- **现象**：最小化/关闭/黑暗模式/固定全失效，仅最大化可用 → 根因是**内容层盖住 appBar**（`fitsAppBarWindows: true` 内容从 y=0 起，`layout_content` 在 `loader_app_bar` 后声明 → QML 命中测试把点击给下层页面）；最大化按钮走 Win11 `WM_NCHITTEST → HTZOOM` + sendEvent 原生路径所以幸免
+- **诊断方法**：`containsCursorToItem` 临时加日志（写 `%TEMP%`/AppGuard 日志）确认 `WM_NCHITTEST` 返回 HTCLIENT（命中测试正常）→ 再查 QML 层命中（z 顺序）——**命中测试正常 ≠ 按钮可点**，两层要分开查
+- **修复**：`loader_app_bar z:1`（铁律 9）；`fitsAppBarWindows: false` 会露底（窗口背景透明）不可用
 
 ### 富文本 / .trx / docx
 - 编辑富文本行 → 必须降级纯文本（否则退出编辑不显示新内容）
@@ -168,18 +187,18 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 
 | 子模块 | 补丁 |
 | --- | --- |
-| FluentUI | `src/CMakeLists.txt`（PLUGIN_TARGET 条件化）、`src/FluFrameless.cpp`（防御）、`src/Qt6/imports/FluentUI/Controls/FluWindow.qml`（typeof 防御）；`.gitignore` 加 `src/FluentUI/`（构建产物） |
+| FluentUI | `src/CMakeLists.txt`（PLUGIN_TARGET 条件化）、`src/FluFrameless.cpp`（防御）、`src/Qt6/imports/FluentUI/Controls/FluWindow.qml`（typeof 防御 + **`loader_app_bar z:1`**——appBar 悬浮层高于内容层，2026-08-18 窗口按钮修复）；`.gitignore` 加 `src/FluentUI/`（构建产物） |
 | zlib | `CMakeLists.txt`（静态 ZLIB::ZLIB alias；注释 `test/`、`contrib/`） |
 | quazip | 无补丁 |
 
 ## 8. 下一步实施蓝图
 
-### 候选任务（C/D 已完成后的非阻塞项）
+### 候选任务（迭代5 完成后的非阻塞项）
 - docx 导出（对称补全 B）
 - pdf 导出文本层修复（升级 Qt ≥6.8 后复查 pdf-service.md §3.0）
 - .trx 图片 external 降级（>1MB 图片外置 `*.images/` 目录，已在 file-service.md §7 设计）
 - 术语表 UI（`TermGlossary` 已有 C++ 层）
-- 翻译历史 / 会话记录
+- 更多示例插件（对照 `docs/services/plugin-development.md` 写第三方插件演示）
 
 ## 9. 工作流程（AGENTS.md 摘要）
 
@@ -195,6 +214,7 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 - 客户端：.opencode/scripts/ui-driver.mjs（Node net.connect 到 pipe；应用未运行自动以驱动模式启动）
 - 命令：openFile / setDark / getState / translateLine / translateAll / navigate（--index，0=编辑 1=设置）/ testConnection / getConfig（--section）/ setConfig（--set section=key=value）
 - 踩坑：QML 函数参数在 meta 系统暴露为 QVariant（invokeMethod 须 Q_ARG(QVariant)）；客户端需自行 end() 连接（服务端不主动断开）；ui_ 前缀文件名会被 AUTOUIC 误判（命名 driver_service 规避）；**鼠标点击类 UI 验证不可靠**（SendMessage/真实点击对 QML 窗口常无效，且多实例会串窗口）→ 优先用驱动命令直达服务层
+- **挂起陷阱（2026-08-18）**：应用未运行时 ui-driver 会代启动应用（spawn detached），但 opencode 的 bash 工具会等待该 GUI 子进程退出 → 命令超时（用户看到「卡死」）→ **先确认应用已在运行（`Get-Process translex`），未运行则请用户手动启动后再连**；诊断日志优先走 AppGuard（`%APPDATA%/sr291/Translex/Translex-<日期>.log`）而非终端重定向
 - review 流程：.opencode/prompts/review.md §0（驱动操作 -> 截图 -> vision 断言 -> Stop-Process 清理）
 
 ### Review 权限语义与导出往返（2026-08-17）
