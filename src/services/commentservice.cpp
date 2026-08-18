@@ -9,6 +9,27 @@ CommentService::CommentService(QObject *parent)
 {
 }
 
+QString CommentService::serviceId() const
+{
+    return QStringLiteral("comment");
+}
+
+QString CommentService::displayName() const
+{
+    return QStringLiteral("批注服务");
+}
+
+QString CommentService::serviceVersion() const
+{
+    return QStringLiteral("1.0");
+}
+
+QVariantMap CommentService::healthCheck() const
+{
+    return { { QStringLiteral("status"), QStringLiteral("ok") },
+             { QStringLiteral("message"), QStringLiteral("批注 %1 条").arg(count()) } };
+}
+
 void CommentService::setComment(int lineNumber, const QString &text)
 {
     if (lineNumber < 0) {

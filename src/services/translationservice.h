@@ -12,18 +12,26 @@
 #include "itranslationbackend.h"
 #include "termglossary.h"
 #include "qualitygate.h"
+#include "iservice.h"
 
 class TranslationCache;
 
 // 翻译门面：QML 可调用。负责后端选择、线程池异步、缓存、降级链、
 // 智能分块（成本）、术语表+质量自检（质量）。
-class TranslationService : public QObject
+class TranslationService : public QObject, public IService
 {
     Q_OBJECT
+    Q_INTERFACES(IService)
 
 public:
     explicit TranslationService(QObject *parent = nullptr);
     ~TranslationService() override;
+
+    // ---- IService ----
+    QString serviceId() const override;
+    QString displayName() const override;
+    QString serviceVersion() const override;
+    QVariantMap healthCheck() const override;
 
     // ---- 配置 ----
     Q_INVOKABLE void setBackend(const QString &backendId);

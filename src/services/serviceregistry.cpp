@@ -2,28 +2,9 @@
 
 #include <QPluginLoader>
 #include <QDir>
-#include <QMetaMethod>
 #include <QDebug>
 
-namespace {
-
-// 供内部后端注册的辅助
-struct BuiltinRegistrar {
-    BuiltinRegistrar()
-    {
-        // 各后端在自身 cpp 中通过 registerBuiltinBackends 注册
-        registerBuiltinBackends();
-    }
-    void registerBuiltinBackends();
-};
-
-void registerBuiltinBackends()
-{
-    // 具体后端在对应 cpp 中通过 RegisterBackendHelper 静态对象注册
-    // 这里留空；后端文件各自包含注册逻辑
-}
-
-} // namespace
+#include "itranslationplugin.h"
 
 ServiceRegistry *ServiceRegistry::instance()
 {
@@ -64,6 +45,56 @@ QString ServiceRegistry::backendDisplayName(const QString &id) const
     return it == m_backends.constEnd() ? id : it->displayName;
 }
 
+void ServiceRegistry::registerService(QObject *service)
+{
+    if (!service) {
+        return;
+    }
+    auto *iface = qobject_cast<IService *>(service);
+    if (!iface) {
+        qWarning() << "ServiceRegistry: 对象未实现 IService 接口，忽略注册" << service->metaObject()->className();
+        return;
+    }
+    m_services.insert(iface->serviceId(), service);
+}
+
+QVariantList ServiceRegistry::services() const
+{
+    QVariantList out;
+    out.reserve(m_services.size());
+    for (QObject *service : m_services) {
+        out.append(QVariant::fromValue(service));
+    }
+    return out;
+}
+
+QObject *ServiceRegistry::serviceById(const QString &id) const
+{
+    return m_services.value(id, nullptr);
+}
+
+QVariantList ServiceRegistry::healthReport() const
+{
+    QVariantList out;
+    out.reserve(m_services.size());
+    for (QObject *service : m_services) {
+        auto *iface = qobject_cast<IService *>(service);
+        if (!iface) {
+            continue;
+        }
+        const QVariantMap health = iface->healthCheck();
+        QVariantMap item;
+        item.insert(QStringLiteral("id"), iface->serviceId());
+        item.insert(QStringLiteral("displayName"), iface->displayName());
+        item.insert(QStringLiteral("version"), iface->serviceVersion());
+        item.insert(QStringLiteral("status"), health.value(QStringLiteral("status"), QStringLiteral("ok")));
+        item.insert(QStringLiteral("message"), health.value(QStringLiteral("message")));
+        item.insert(QStringLiteral("detail"), health.value(QStringLiteral("detail")));
+        out.append(item);
+    }
+    return out;
+}
+
 void ServiceRegistry::scanPluginDirectory(const QString &dir)
 {
     QDir pluginsDir(dir);
@@ -92,17 +123,21 @@ void ServiceRegistry::scanPluginDirectory(const QString &dir)
             continue;
         }
 
-        // 约定：插件实例提供 registerTo(ServiceRegistry*) 槽方法
-        const int metaIndex = pluginInstance->metaObject()->indexOfMethod("registerTo(ServiceRegistry*)");
-        if (metaIndex < 0) {
-            m_pluginErrors.append(fileName + QStringLiteral(": 缺少 registerTo(ServiceRegistry*) 方法"));
+        // 统一接口：ITranslationPlugin（Q_DECLARE_INTERFACE + Q_PLUGIN_METADATA）
+        auto *plugin = qobject_cast<ITranslationPlugin *>(pluginInstance);
+        if (!plugin) {
+            m_pluginErrors.append(fileName + QStringLiteral(": 未实现 ITranslationPlugin 接口"));
             delete loader;
             continue;
         }
 
-        const QMetaMethod method = pluginInstance->metaObject()->method(metaIndex);
-        method.invoke(pluginInstance, Q_ARG(ServiceRegistry *, this));
+        const QStringList backendIds = plugin->backendIds();
+        for (const QString &id : backendIds) {
+            registerBackend(id, [plugin, id]() { return plugin->createBackend(id); },
+                            id);
+        }
         m_pluginLoaders.append(loader);
+        qInfo() << "ServiceRegistry: 插件加载成功" << fileName << "后端:" << backendIds;
     }
 }
 

@@ -3,11 +3,14 @@
 #include <QAbstractListModel>
 #include <QVector>
 
+#include "iservice.h"
+
 class CommentService;
 
-class DocumentModel : public QAbstractListModel
+class DocumentModel : public QAbstractListModel, public IService
 {
     Q_OBJECT
+    Q_INTERFACES(IService)
 
 public:
     enum Roles {
@@ -22,6 +25,12 @@ public:
     };
 
     explicit DocumentModel(QObject *parent = nullptr);
+
+    // ---- IService ----
+    QString serviceId() const override;
+    QString displayName() const override;
+    QString serviceVersion() const override;
+    QVariantMap healthCheck() const override;
 
     // 受限模式（大文件降级，见 docs/services/large-file.md）：数据不丢，
     // 仅对外渲染为纯文本（DisplayRole/RichTextRole/ImageIdsRole 掩蔽），

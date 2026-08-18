@@ -38,6 +38,31 @@ ConfigService::ConfigService(QObject *parent)
     loadBuiltinConfigs();
 }
 
+QString ConfigService::serviceId() const
+{
+    return QStringLiteral("config");
+}
+
+QString ConfigService::displayName() const
+{
+    return QStringLiteral("配置服务");
+}
+
+QString ConfigService::serviceVersion() const
+{
+    return QStringLiteral("1.0");
+}
+
+QVariantMap ConfigService::healthCheck() const
+{
+    if (m_sections.isEmpty()) {
+        return { { QStringLiteral("status"), QStringLiteral("error") },
+                 { QStringLiteral("message"), QStringLiteral("配置 schema 未加载") } };
+    }
+    return { { QStringLiteral("status"), QStringLiteral("ok") },
+             { QStringLiteral("message"), QStringLiteral("配置段 %1 个").arg(m_sections.size()) } };
+}
+
 QString ConfigService::settingsPath()
 {
     if (!s_dataDirectoryOverride.isEmpty()) {

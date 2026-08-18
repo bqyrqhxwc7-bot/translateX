@@ -6,6 +6,8 @@
 #include <QStringList>
 #include <QVariantMap>
 
+#include "iservice.h"
+
 class DocumentModel;
 class CommentService;
 class QTimer;
@@ -15,12 +17,19 @@ class QTimer;
 // 自动保存（迭代4）：见 docs/services/iteration4-stats-autosave-glossary.md §2——
 //   dirty 且未受限时每 60s 写 <AppConfigLocation>/autosave/<名>.autosave.trx（完整往返含批注）；
 //   正常保存/打开/新建/恢复后清理；启动时 hasAutosave() 提示恢复。
-class DocumentManager : public QObject
+class DocumentManager : public QObject, public IService
 {
     Q_OBJECT
+    Q_INTERFACES(IService)
 
 public:
     explicit DocumentManager(QObject *parent = nullptr);
+
+    // ---- IService ----
+    QString serviceId() const override;
+    QString displayName() const override;
+    QString serviceVersion() const override;
+    QVariantMap healthCheck() const override;
 
     // 关联（模型在 QML 页面内创建，用 setter 注入）
     Q_INVOKABLE void setDocument(DocumentModel *model);

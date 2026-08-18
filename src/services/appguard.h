@@ -3,16 +3,25 @@
 #include <QObject>
 #include <QString>
 
+#include "iservice.h"
+
 // 稳定性服务：统一日志 + 崩溃诊断 + 启动信息。
 // - 将所有 Qt 消息（qWarning/qCritical/qFatal）重定向到本地日志文件
 // - 记录启动信息（版本、Qt 版本、平台），便于排查
-class AppGuard : public QObject
+class AppGuard : public QObject, public IService
 {
     Q_OBJECT
+    Q_INTERFACES(IService)
 
 public:
     explicit AppGuard(QObject *parent = nullptr);
     ~AppGuard() override;
+
+    // ---- IService ----
+    QString serviceId() const override;
+    QString displayName() const override;
+    QString serviceVersion() const override;
+    QVariantMap healthCheck() const override;
 
     // 初始化全局消息处理器（应用启动时调用一次）
     static void install();

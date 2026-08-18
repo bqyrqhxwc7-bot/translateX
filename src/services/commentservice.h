@@ -5,16 +5,25 @@
 #include <QVariantMap>
 #include <QString>
 
+#include "iservice.h"
+
 // 批注服务（可插拔）：批注数据单一数据源。
 // - 供翻译服务写入译文、用户手写批注、第三方插件扩展
 // - DocumentModel 通过 provider 委托读取（角色渲染）与行号平移
 // - 支持导出/导入 JSON（为 DocumentManager 打开/保存预留）
-class CommentService : public QObject
+class CommentService : public QObject, public IService
 {
     Q_OBJECT
+    Q_INTERFACES(IService)
 
 public:
     explicit CommentService(QObject *parent = nullptr);
+
+    // ---- IService ----
+    QString serviceId() const override;
+    QString displayName() const override;
+    QString serviceVersion() const override;
+    QVariantMap healthCheck() const override;
 
     // 读写（空文本视为删除）
     Q_INVOKABLE void setComment(int lineNumber, const QString &text);

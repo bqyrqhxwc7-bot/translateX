@@ -10,6 +10,27 @@ DocumentModel::DocumentModel(QObject *parent)
 {
 }
 
+QString DocumentModel::serviceId() const
+{
+    return QStringLiteral("documentModel");
+}
+
+QString DocumentModel::displayName() const
+{
+    return QStringLiteral("文档模型");
+}
+
+QString DocumentModel::serviceVersion() const
+{
+    return QStringLiteral("1.0");
+}
+
+QVariantMap DocumentModel::healthCheck() const
+{
+    return { { QStringLiteral("status"), QStringLiteral("ok") },
+             { QStringLiteral("message"), QStringLiteral("模型可用") } };
+}
+
 int DocumentModel::rowCount(const QModelIndex &parent) const
 {
     if (parent.isValid()) {

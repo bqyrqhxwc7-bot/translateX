@@ -6,16 +6,25 @@
 #include <QList>
 #include <QRegularExpression>
 
+#include "iservice.h"
+
 class DocumentModel;
 
 // 查找替换服务：基于 DocumentModel 数据（而非 UI）全文查找/替换。
 // 虚拟化编辑器只渲染可见行，查找必须直接遍历模型数据。
-class FindService : public QObject
+class FindService : public QObject, public IService
 {
     Q_OBJECT
+    Q_INTERFACES(IService)
 
 public:
     explicit FindService(QObject *parent = nullptr);
+
+    // ---- IService ----
+    QString serviceId() const override;
+    QString displayName() const override;
+    QString serviceVersion() const override;
+    QVariantMap healthCheck() const override;
 
     // 关联文档模型（QML 中模型在页面内创建，用 setter 注入）
     Q_INVOKABLE void setDocument(DocumentModel *model);

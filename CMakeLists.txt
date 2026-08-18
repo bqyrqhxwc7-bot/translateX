@@ -69,6 +69,12 @@ add_subdirectory(third_party/quazip)
 # QML 版版本号（Widgets 版已迁移至 widgets 分支）
 set(TRANSLEX_QML_VERSION "1.1.0-qml")
 
+# ---- Translex_sdk（迭代5 插件化 A3）：第三方插件开发用公共接口 ----
+# 导出 iservice.h / itranslationbackend.h / itranslationplugin.h / serviceregistry.h
+add_library(Translex_sdk INTERFACE)
+target_include_directories(Translex_sdk INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/src/services")
+target_link_libraries(Translex_sdk INTERFACE Qt6::Core)
+
 # ---- QML 骨架（FluentUI 全量迁移目标）----
 # ui_driver_service.h 以 ui_ 前缀开头，会被 AUTOUIC 误判为 .ui 头文件（AutoUic error）
 set_source_files_properties(src/driver_service.cpp PROPERTIES SKIP_AUTOUIC ON)
@@ -84,6 +90,8 @@ qt_add_executable(translex
     src/services/securestorage.cpp
     src/services/securestorage.h
     src/services/itranslationbackend.h
+    src/services/itranslationplugin.h
+    src/services/iservice.h
     src/services/serviceregistry.cpp
     src/services/serviceregistry.h
     src/services/translationbackend.cpp
@@ -138,6 +146,7 @@ target_link_libraries(translex PRIVATE
     Qt6::Quick Qt6::Qml Qt6::Widgets Qt6::Svg Qt6::ShaderTools Qt6::PrintSupport Qt6::Network Qt6::Concurrent Qt6::Pdf
     fluentuiplugin
     QuaZip::QuaZip
+    Translex_sdk
 )
 if(TRANSLEX_HAS_TTS)
     target_link_libraries(translex PRIVATE Qt6::TextToSpeech)

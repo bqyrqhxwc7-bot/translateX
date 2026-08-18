@@ -7,17 +7,26 @@
 #include <QVector>
 #include <QRegularExpression>
 
+#include "iservice.h"
+
 class DocumentModel;
 class QTimer;
 
 // 章节服务：按标题行识别文档章节，提供章节列表与"行归属章节"查询。
 // 为翻译提供章节级上下文、跳转、分块边界。
-class ChapterService : public QObject
+class ChapterService : public QObject, public IService
 {
     Q_OBJECT
+    Q_INTERFACES(IService)
 
 public:
     explicit ChapterService(QObject *parent = nullptr);
+
+    // ---- IService ----
+    QString serviceId() const override;
+    QString displayName() const override;
+    QString serviceVersion() const override;
+    QVariantMap healthCheck() const override;
 
     // 关联文档模型（QML 中模型在页面内创建，用 setter 注入）
     Q_INVOKABLE void setDocument(DocumentModel *model);

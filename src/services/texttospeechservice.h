@@ -3,6 +3,8 @@
 #include <QObject>
 #include <QVariantList>
 
+#include "iservice.h"
+
 #ifdef TRANSLEX_HAS_TTS
 class QTextToSpeech;
 #endif
@@ -14,15 +16,22 @@ class QTextToSpeech;
 //   - 无模块（TRANSLEX_HAS_TTS 未定义）或无引擎（availableEngines 空）时优雅降级：
 //     speak* 返回 false + unavailable() 信号，不崩溃
 //   - 语音跟随系统默认；语速 0.5~2.0（ConfigService textToSpeech.rate 持久化）
-class TextToSpeechService : public QObject
+class TextToSpeechService : public QObject, public IService
 {
     Q_OBJECT
+    Q_INTERFACES(IService)
     Q_PROPERTY(bool speaking READ speaking NOTIFY stateChanged)
     Q_PROPERTY(bool available READ available NOTIFY stateChanged)
 
 public:
     explicit TextToSpeechService(QObject *parent = nullptr);
     ~TextToSpeechService() override;
+
+    // ---- IService ----
+    QString serviceId() const override;
+    QString displayName() const override;
+    QString serviceVersion() const override;
+    QVariantMap healthCheck() const override;
 
     // 单段朗读（选区/单行）：立即替换当前播放。无引擎返回 false。
     Q_INVOKABLE bool speakText(const QString &text);

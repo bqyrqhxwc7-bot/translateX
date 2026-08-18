@@ -14,6 +14,27 @@ ChapterService::ChapterService(QObject *parent)
     connect(m_debounceTimer, &QTimer::timeout, this, &ChapterService::rebuild);
 }
 
+QString ChapterService::serviceId() const
+{
+    return QStringLiteral("chapter");
+}
+
+QString ChapterService::displayName() const
+{
+    return QStringLiteral("章节服务");
+}
+
+QString ChapterService::serviceVersion() const
+{
+    return QStringLiteral("1.0");
+}
+
+QVariantMap ChapterService::healthCheck() const
+{
+    return { { QStringLiteral("status"), QStringLiteral("ok") },
+             { QStringLiteral("message"), QStringLiteral("章节 %1 个").arg(chapterCount()) } };
+}
+
 void ChapterService::setDocument(DocumentModel *model)
 {
     if (m_model) {

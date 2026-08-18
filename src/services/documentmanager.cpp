@@ -87,6 +87,33 @@ DocumentManager::DocumentManager(QObject *parent)
     m_autosaveTimer->start();
 }
 
+QString DocumentManager::serviceId() const
+{
+    return QStringLiteral("documentManager");
+}
+
+QString DocumentManager::displayName() const
+{
+    return QStringLiteral("文档管理");
+}
+
+QString DocumentManager::serviceVersion() const
+{
+    return QStringLiteral("1.0");
+}
+
+QVariantMap DocumentManager::healthCheck() const
+{
+    if (!m_model) {
+        return { { QStringLiteral("status"), QStringLiteral("warn") },
+                 { QStringLiteral("message"), QStringLiteral("未关联文档模型（尚无打开文档）") } };
+    }
+    return { { QStringLiteral("status"), QStringLiteral("ok") },
+             { QStringLiteral("message"),
+               m_path.isEmpty() ? QStringLiteral("无当前文档")
+                                : QStringLiteral("当前文档：%1").arg(documentName()) } };
+}
+
 void DocumentManager::setDocument(DocumentModel *model)
 {
     if (m_model == model) {

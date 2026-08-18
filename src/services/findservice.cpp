@@ -7,6 +7,27 @@ FindService::FindService(QObject *parent)
 {
 }
 
+QString FindService::serviceId() const
+{
+    return QStringLiteral("find");
+}
+
+QString FindService::displayName() const
+{
+    return QStringLiteral("查找替换");
+}
+
+QString FindService::serviceVersion() const
+{
+    return QStringLiteral("1.0");
+}
+
+QVariantMap FindService::healthCheck() const
+{
+    return { { QStringLiteral("status"), QStringLiteral("ok") },
+             { QStringLiteral("message"), QStringLiteral("可用") } };
+}
+
 void FindService::setDocument(DocumentModel *model)
 {
     m_model = model;

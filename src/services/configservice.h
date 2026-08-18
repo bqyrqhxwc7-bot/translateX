@@ -8,6 +8,8 @@
 #include <QStringList>
 #include <QSettings>
 
+#include "iservice.h"
+
 // 配置项（对应 config.json 的一条 settings）
 struct ConfigItem {
     QString key;             // 如 "apiEndpoint"
@@ -33,14 +35,21 @@ struct ConfigSection {
 
 // 配置服务（单例）：服务提供者声明配置 → 统一读写/持久化/加密 → 通知变化。
 // 类比 VSCode：getConfiguration()/update()/onDidChangeConfiguration + 设置面板自动生成。
-class ConfigService : public QObject
+class ConfigService : public QObject, public IService
 {
     Q_OBJECT
+    Q_INTERFACES(IService)
 
 public:
     static ConfigService *instance();
     // 测试用：覆盖数据目录（必须在首次 instance() 之前调用）
     static void setDataDirectoryForTest(const QString &dir);
+
+    // ---- IService ----
+    QString serviceId() const override;
+    QString displayName() const override;
+    QString serviceVersion() const override;
+    QVariantMap healthCheck() const override;
 
     // ---- 声明加载 ----
     void loadBuiltinConfigs();                     // 从 qrc:/config/*.json 加载内置声明

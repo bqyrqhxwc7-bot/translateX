@@ -8,6 +8,27 @@ TranslationHistoryService::TranslationHistoryService(QObject *parent)
 {
 }
 
+QString TranslationHistoryService::serviceId() const
+{
+    return QStringLiteral("translationHistory");
+}
+
+QString TranslationHistoryService::displayName() const
+{
+    return QStringLiteral("翻译历史");
+}
+
+QString TranslationHistoryService::serviceVersion() const
+{
+    return QStringLiteral("1.0");
+}
+
+QVariantMap TranslationHistoryService::healthCheck() const
+{
+    return { { QStringLiteral("status"), QStringLiteral("ok") },
+             { QStringLiteral("message"), QStringLiteral("记录 %1 条").arg(count()) } };
+}
+
 void TranslationHistoryService::record(int lineNumber, const QString &source,
                                        const QString &translated, bool success)
 {

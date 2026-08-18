@@ -48,6 +48,31 @@ AppGuard::AppGuard(QObject *parent)
 
 AppGuard::~AppGuard() = default;
 
+QString AppGuard::serviceId() const
+{
+    return QStringLiteral("appGuard");
+}
+
+QString AppGuard::displayName() const
+{
+    return QStringLiteral("稳定性服务");
+}
+
+QString AppGuard::serviceVersion() const
+{
+    return QStringLiteral("1.0");
+}
+
+QVariantMap AppGuard::healthCheck() const
+{
+    if (g_logPath.isEmpty()) {
+        return { { QStringLiteral("status"), QStringLiteral("warn") },
+                 { QStringLiteral("message"), QStringLiteral("日志未初始化") } };
+    }
+    return { { QStringLiteral("status"), QStringLiteral("ok") },
+             { QStringLiteral("message"), QStringLiteral("日志：%1").arg(g_logPath) } };
+}
+
 void AppGuard::install()
 {
     qInstallMessageHandler(&AppGuard::messageHandler);

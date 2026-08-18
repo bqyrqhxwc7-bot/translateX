@@ -727,3 +727,34 @@ std::shared_ptr<ITranslationBackend> TranslationService::backendForId(const QStr
 {
     return ServiceRegistry::instance()->createBackend(id);
 }
+
+QString TranslationService::serviceId() const
+{
+    return QStringLiteral("translation");
+}
+
+QString TranslationService::displayName() const
+{
+    return QStringLiteral("翻译服务");
+}
+
+QString TranslationService::serviceVersion() const
+{
+    return QStringLiteral("1.0");
+}
+
+QVariantMap TranslationService::healthCheck() const
+{
+    if (m_backendId.isEmpty()) {
+        return { { QStringLiteral("status"), QStringLiteral("error") },
+                 { QStringLiteral("message"), QStringLiteral("未选择翻译后端") } };
+    }
+    const QStringList backends = ServiceRegistry::instance()->availableBackends();
+    if (!backends.contains(m_backendId)) {
+        return { { QStringLiteral("status"), QStringLiteral("error") },
+                 { QStringLiteral("message"), QStringLiteral("当前后端未注册：%1").arg(m_backendId) } };
+    }
+    return { { QStringLiteral("status"), QStringLiteral("ok") },
+             { QStringLiteral("message"),
+               QStringLiteral("后端 %1 已注册，可用后端 %2 个").arg(m_backendId).arg(backends.size()) } };
+}

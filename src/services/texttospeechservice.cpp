@@ -27,6 +27,31 @@ TextToSpeechService::TextToSpeechService(QObject *parent)
 
 TextToSpeechService::~TextToSpeechService() = default;
 
+QString TextToSpeechService::serviceId() const
+{
+    return QStringLiteral("textToSpeech");
+}
+
+QString TextToSpeechService::displayName() const
+{
+    return QStringLiteral("朗读服务");
+}
+
+QString TextToSpeechService::serviceVersion() const
+{
+    return QStringLiteral("1.0");
+}
+
+QVariantMap TextToSpeechService::healthCheck() const
+{
+    if (!m_available) {
+        return { { QStringLiteral("status"), QStringLiteral("warn") },
+                 { QStringLiteral("message"), QStringLiteral("无 TTS 引擎（功能降级）") } };
+    }
+    return { { QStringLiteral("status"), QStringLiteral("ok") },
+             { QStringLiteral("message"), QStringLiteral("引擎可用") } };
+}
+
 bool TextToSpeechService::available() const
 {
     return m_available;
