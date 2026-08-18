@@ -18,7 +18,7 @@ private slots:
     void openSaveRoundTrip();
     void commentsPersistWithDocument();
     void saveFileAsUpdatesPath();
-void markdownExport();
+    void markdownExport();
     void openMissingFileFails();
     void recentFilesPersist();
     void largeFileLimitedModeByLines();
@@ -110,7 +110,8 @@ void TestDocumentManager::saveFileAsUpdatesPath()
 void TestDocumentManager::markdownExport()
 {
     m_mgr.newDocument({ QStringLiteral("Hello world"), QStringLiteral("第二行"),
-                        QStringLiteral("") });
+                        QStringLiteral(""), QStringLiteral("# 标题原文"),
+                        QStringLiteral("> 引用原文") });
     m_comments.setComment(0, QStringLiteral("你好世界"));
     const QString path = m_temp.filePath(QStringLiteral("export.md"));
     QVERIFY(m_mgr.saveFileAs(path));
@@ -129,6 +130,9 @@ void TestDocumentManager::markdownExport()
     QVERIFY2(content.contains(QStringLiteral("## 第 2 行")), qPrintable(content));
     QVERIFY2(content.contains(QStringLiteral("第二行")), qPrintable(content));
     QVERIFY2(!content.contains(QStringLiteral("第 3 行")), qPrintable(content));
+    // 行首 Markdown 语法字符转义（review 修复）：反斜杠前缀，避免被解析为标题/引用
+    QVERIFY2(content.contains(QStringLiteral("\\# 标题原文")), qPrintable(content));
+    QVERIFY2(content.contains(QStringLiteral("\\> 引用原文")), qPrintable(content));
 }
 
 void TestDocumentManager::openMissingFileFails()

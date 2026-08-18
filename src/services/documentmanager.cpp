@@ -38,6 +38,24 @@ bool isAutosavePath(const QString &path)
 {
     return QFileInfo(path).fileName().endsWith(QLatin1String(".autosave.trx"));
 }
+// Markdown 行首转义：原文以 Markdown 语法字符开头时前缀反斜杠，
+// 避免导出后被解析为标题/引用/列表/表格/代码块（review 2026-08-18）
+QString escapeMarkdownLine(const QString &line)
+{
+    if (line.isEmpty()) {
+        return line;
+    }
+    const QChar first = line.at(0);
+    const bool listItem = first.isDigit()
+                          && line.size() > 1 && line.at(1) == QLatin1Char('.');
+    if (first == QLatin1Char('#') || first == QLatin1Char('>')
+        || first == QLatin1Char('-') || first == QLatin1Char('+')
+        || first == QLatin1Char('*') || first == QLatin1Char('|')
+        || first == QLatin1Char('`') || listItem) {
+        return QLatin1Char('\\') + line;
+    }
+    return line;
+}
 } // namespace
 
 int DocumentManager::s_maxLines = 50000;
@@ -533,7 +551,7 @@ bool DocumentManager::writeDocument(const QString &path)
             if (src.trimmed().isEmpty()) {
                 continue;
             }
-            md << QStringLiteral("## 第 %1 行").arg(i + 1) << src;
+            md << QStringLiteral("## 第 %1 行").arg(i + 1) << escapeMarkdownLine(src);
             const QString trans = m_comments ? m_comments->commentAt(i) : QString();
             if (!trans.trimmed().isEmpty()) {
                 md << QStringLiteral("> %1").arg(trans);
@@ -554,6 +572,9 @@ bool DocumentManager::writeDocument(const QString &path)
         m_path = path;
         clearAutosaveFor(path);
         setDirty(false);
+        if (isAutosavePath(path)) {
+            QFile::remove(path);
+        }
         emit documentChanged(m_path);
         return true;
     }

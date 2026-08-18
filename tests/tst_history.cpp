@@ -1,5 +1,6 @@
 // 翻译历史服务测试（迭代4b）：record 顺序/字段、环形上限、clear、entryAdded 信号
 #include <QtTest>
+#include <QRegularExpression>
 
 #include "services/translationhistoryservice.h"
 
@@ -36,21 +37,32 @@ void TestTranslationHistory::recordFields()
     QCOMPARE(e.value(QStringLiteral("source")).toString(), QStringLiteral("hello world"));
     QCOMPARE(e.value(QStringLiteral("translated")).toString(), QStringLiteral("你好世界"));
     QCOMPARE(e.value(QStringLiteral("success")).toBool(), false);
-    QVERIFY(!e.value(QStringLiteral("time")).toString().isEmpty());
+    // time 格式 HH:mm:ss（8 字符）
+    const QString t = e.value(QStringLiteral("time")).toString();
+    QVERIFY2(QRegularExpression(QStringLiteral(R"(^\d{2}:\d{2}:\d{2}$)")).match(t).hasMatch(),
+             qPrintable(t));
+    // success=true 正路径
+    svc.record(4, QStringLiteral("ok"), QStringLiteral("好"), true);
+    QCOMPARE(svc.entries().at(0).toMap().value(QStringLiteral("success")).toBool(), true);
 }
 
 void TestTranslationHistory::ringBufferCapsAt500()
 {
     TranslationHistoryService svc;
-    for (int i = 0; i < 520; ++i) {
+    // 临界边界：499/500/501 锁死上限语义
+    for (int i = 0; i < 499; ++i) {
         svc.record(i, QStringLiteral("s%1").arg(i), QStringLiteral("t%1").arg(i), true);
     }
+    QCOMPARE(svc.count(), 499);
+    svc.record(499, QStringLiteral("s499"), QStringLiteral("t499"), true);
+    QCOMPARE(svc.count(), 500);
+    svc.record(500, QStringLiteral("s500"), QStringLiteral("t500"), true);
     QCOMPARE(svc.count(), 500);
     const QVariantList entries = svc.entries();
     QCOMPARE(entries.size(), 500);
-    // 最新在前：第 519 条在最前，最旧的第 20 条被覆盖
-    QCOMPARE(entries.at(0).toMap().value(QStringLiteral("line")).toInt(), 519);
-    QCOMPARE(entries.at(499).toMap().value(QStringLiteral("line")).toInt(), 20);
+    // 最新在前：第 500 条在最前，最旧的第 0 条被覆盖
+    QCOMPARE(entries.at(0).toMap().value(QStringLiteral("line")).toInt(), 500);
+    QCOMPARE(entries.at(499).toMap().value(QStringLiteral("line")).toInt(), 1);
 }
 
 void TestTranslationHistory::clearEmitsAndEmpties()
@@ -62,6 +74,9 @@ void TestTranslationHistory::clearEmitsAndEmpties()
     QCOMPARE(spy.count(), 1);
     QCOMPARE(svc.count(), 0);
     QVERIFY(svc.entries().isEmpty());
+    // clear 后仍可继续写入（reset 不污染）
+    svc.record(1, QStringLiteral("b"), QStringLiteral("乙"), true);
+    QCOMPARE(svc.entries().at(0).toMap().value(QStringLiteral("line")).toInt(), 1);
 }
 
 void TestTranslationHistory::entryAddedSignal()

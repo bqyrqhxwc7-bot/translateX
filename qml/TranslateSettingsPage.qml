@@ -773,7 +773,7 @@ FluScrollablePage {
         contentDelegate: Component {
             ColumnLayout {
                 width: 380
-                spacing: 10
+                spacing: 8
                 Repeater {
                     model: [
                         qsTr("编辑器：逐行编辑，Enter 拆分 / Backspace 行首合并，右键菜单快速操作"),

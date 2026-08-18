@@ -1055,7 +1055,9 @@ FluContentPage {
                             enabled: page.selectedLines.length > 0
                             onClicked: page.speakSelectedLines()
                         }
-                        // 翻译历史（迭代4b）：会话内翻译记录，点击条目跳转行
+                        FluDivider { orientation: Qt.Vertical; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
+                        // 翻译历史（迭代4b）：会话内翻译记录，点击条目跳转行；
+                        // 属查询/辅助功能，与浮窗开关同区（review 2026-08-18：不混入翻译动作组）
                         FluButton {
                             text: qsTr("翻译历史")
                             onClicked: page.openHistoryDialog()
@@ -1699,7 +1701,7 @@ FluContentPage {
     }
 
     // ---------- 翻译历史（迭代4b） ----------
-    // ListModel 必须声明在页面级（contentDelegate 由 Loader 延迟创建，组件内 id 不可访问）
+    // ListModel 必须在 dialog 外声明（contentDelegate 重建时模型会被释放）
     ListModel {
         id: historyModel
     }
@@ -1724,11 +1726,16 @@ FluContentPage {
             Column {
                 width: 380
                 spacing: 8
-                Row {
+                RowLayout {
                     width: parent.width
                     spacing: 8
-                    FluText { text: qsTr("共 %1 条").arg(historyModel.count); font.pixelSize: 12; color: FluTheme.fontSecondaryColor }
-                    Item { Layout.fillWidth: true; width: 10 }
+                    FluText {
+                        text: qsTr("共 %1 条").arg(historyModel.count)
+                        font.pixelSize: 12
+                        color: FluTheme.fontSecondaryColor
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Item { Layout.fillWidth: true }
                     FluButton {
                         text: qsTr("清空")
                         enabled: historyModel.count > 0
@@ -1742,7 +1749,7 @@ FluContentPage {
                     model: historyModel
                     delegate: ItemDelegate {
                         width: parent.width
-                        height: 56
+                        implicitHeight: 50
                         onClicked: {
                             page.focusLine(model.line)
                             historyDialog.close()
