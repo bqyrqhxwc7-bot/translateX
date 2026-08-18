@@ -82,6 +82,7 @@ private slots:
     void glossaryAffectsCacheKey();
     void extractCandidatesBasic();
     void extractCandidatesFiltering();
+    void emptyTranslationPlaceholder();
 };
 
 void TestQuality::initTestCase()
@@ -370,7 +371,8 @@ void TestQuality::extractCandidatesBasic()
     const auto candidates = g.extractCandidates(lines, 3, 20);
     // API 出现 4 次、client 3 次、endpoint 2 次（< minFreq 3 被过滤）
     QCOMPARE(candidates.size(), 2);
-    QCOMPARE(candidates[0].first, QStringLiteral("api"));
+    // 返回最高频的实际书写形式（大小写不敏感归组，保留原文形式）
+    QCOMPARE(candidates[0].first, QStringLiteral("API"));
     QCOMPARE(candidates[0].second, 4);
     QCOMPARE(candidates[1].first, QStringLiteral("client"));
     QCOMPARE(candidates[1].second, 3);
@@ -379,14 +381,15 @@ void TestQuality::extractCandidatesBasic()
 void TestQuality::extractCandidatesFiltering()
 {
     TermGlossary g;
-    // 停用词（the/and/for）与已收录术语（api）被过滤；maxCount 截断；大小写归一
-    g.setTerm(QStringLiteral("api"), QStringLiteral("应用程序接口"));
+    // 停用词（the/and/for）与已收录术语被过滤（大小写不敏感：术语表存 API，正文 api 也过滤）；
+    // maxCount 截断
+    g.setTerm(QStringLiteral("API"), QStringLiteral("应用程序接口"));
     const QStringList lines{
         QStringLiteral("The API and the client for the server."),
-        QStringLiteral("API client server client server"),
+        QStringLiteral("api client server client server"),
     };
     const auto candidates = g.extractCandidates(lines, 2, 2);
-    // 候选：client(3) server(3)；api 已在术语表被排除；the/and/for 停用词排除
+    // 候选：client(3) server(3)；api/API 已在术语表被排除；the/and/for 停用词排除
     QCOMPARE(candidates.size(), 2);
     QCOMPARE(candidates[0].first, QStringLiteral("client"));
     QCOMPARE(candidates[0].second, 3);
@@ -396,6 +399,21 @@ void TestQuality::extractCandidatesFiltering()
     // minFreq/maxCount 边界：minFreq 0 → 视为 1；maxCount 0 → 视为 1
     const auto edge = g.extractCandidates(lines, 0, 0);
     QCOMPARE(edge.size(), 1);
+}
+
+// 空译文占位：不注入提示词、不参与质量校验（review fd8d1f3 🟡8）
+void TestQuality::emptyTranslationPlaceholder()
+{
+    TermGlossary g;
+    g.setTerm(QStringLiteral("API"), QString());
+    g.setTerm(QStringLiteral("client"), QStringLiteral("客户端"));
+    // 提示词只含已填译文的术语
+    const QString prompt = g.buildConstraintPrompt();
+    QVERIFY(!prompt.contains(QStringLiteral("API")));
+    QVERIFY(prompt.contains(QStringLiteral("client")));
+    // 校验：空译文项不参与（源文含 API 也不计入 missing）
+    QCOMPARE(g.verify(QStringLiteral("API client"), QStringLiteral("客户端")), 1.0);
+    QVERIFY(g.missingTerms(QStringLiteral("API client"), QStringLiteral("客户端")).isEmpty());
 }
 
 QTEST_GUILESS_MAIN(TestQuality)

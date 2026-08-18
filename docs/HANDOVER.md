@@ -55,7 +55,7 @@ git push origin main
 | 设置页 | schema 驱动（`ui.json`），字号滑条、查找开关、浮窗开关 | `services/config-service.md` |
 | TTS 朗读 | **迭代3**：独立 TextToSpeechService（朗读选中行/选区、语速、停止；跨平台 Qt6TextToSpeech，无模块/引擎优雅降级） | `services/text-to-speech.md` |
 | 文档统计 | **迭代4**：`DocumentModel::stats()`（行/非空行/字/词/批注/富文本/图片行），状态栏「共 N 行 · M 字 · K 条批注」 | `services/iteration4-stats-autosave-glossary.md` |
-| 自动保存 | **迭代4**：dirty 时每 60s 写 `%APPDATA%/Translex/autosave/<名>.autosave.trx`（完整往返含批注）；正常保存/打开/新建后清理；启动检测崩溃残留 → 恢复/丢弃弹窗；受限模式与 `ui.autosaveEnabled` 关闭时跳过 | `services/iteration4-stats-autosave-glossary.md` |
+| 自动保存 | **迭代4**：dirty 时每 60s 写 `%LOCALAPPDATA%/sr291/Translex/autosave/<名>-<路径哈希>.autosave.trx`（完整往返含批注）；正常保存/打开/新建后清理；启动检测崩溃残留（只弹一次）→ 恢复/丢弃弹窗（恢复还原原始路径）；受限模式与 `ui.autosaveEnabled` 关闭时跳过 | `services/iteration4-stats-autosave-glossary.md` |
 | 术语自动提取 | **迭代4**：`TermGlossary::extractCandidates`（英文高频词 ≥3 次、停用词/已有术语过滤、频率降序）；设置页「从文档提取」弹窗勾选加入 | `services/iteration4-stats-autosave-glossary.md` |
 | **A3 .trx** | 显示层（富文本/图片）完整往返、编辑即降级 | `services/file-service.md` |
 | **B docx 导入** | DocxParser：段落→行 + 粗/斜/颜色/字号/字体 + 图片(data URI) | `services/file-service.md` |

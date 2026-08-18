@@ -125,6 +125,10 @@ QString TermGlossary::buildConstraintPrompt() const
     QStringList lines;
     lines.append(QStringLiteral("翻译时必须使用以下术语对照（严格遵守，不得意译或混用）："));
     for (auto it = m_terms.constBegin(); it != m_terms.constEnd(); ++it) {
+        // 空译文 = 占位（自动提取未填标准译文），不注入提示词
+        if (it.value().isEmpty()) {
+            continue;
+        }
         lines.append(QStringLiteral("  “%1” 一律译为 “%2”").arg(it.key(), it.value()));
     }
     return lines.join(QLatin1Char('\n'));
@@ -140,6 +144,9 @@ double TermGlossary::verify(const QString &sourceText, const QString &translated
     int total = 0;
     int hit = 0;
     for (auto it = m_terms.constBegin(); it != m_terms.constEnd(); ++it) {
+        if (it.value().isEmpty()) {
+            continue;   // 空译文占位不参与校验
+        }
         if (sourceText.contains(it.key())) {
             ++total;
             if (translatedText.contains(it.value())) {
@@ -154,6 +161,9 @@ QStringList TermGlossary::missingTerms(const QString &sourceText, const QString 
 {
     QStringList missing;
     for (auto it = m_terms.constBegin(); it != m_terms.constEnd(); ++it) {
+        if (it.value().isEmpty()) {
+            continue;   // 空译文占位不参与校验
+        }
         if (sourceText.contains(it.key()) && !translatedText.contains(it.value())) {
             missing.append(it.key());
         }
@@ -172,22 +182,35 @@ QList<QPair<QString, int>> TermGlossary::extractCandidates(const QStringList &li
         maxCount = 1;
     }
     const QRegularExpression wordRe(QStringLiteral("[A-Za-z]{3,}"));
-    QHash<QString, int> freq;
+    // lower → {原始书写形式 → 次数}：统计按小写归组（大小写不敏感），
+    // 但返回原文中最高频的实际书写形式（术语表校验是大小写敏感的）
+    QHash<QString, QHash<QString, int>> formFreq;
     for (const QString &line : lines) {
         auto it = wordRe.globalMatch(line);
         while (it.hasNext()) {
-            const QString word = it.next().captured().toLower();
-            if (stopWords().contains(word) || contains(word)) {
+            const QString raw = it.next().captured();
+            const QString lower = raw.toLower();
+            if (stopWords().contains(lower) || containsCaseInsensitive(lower)) {
                 continue;
             }
-            ++freq[word];
+            ++formFreq[lower][raw];
         }
     }
     // 频率 ≥ minFreq，按频率降序（同频按字母序稳定）
     QList<QPair<QString, int>> candidates;
-    for (auto it = freq.constBegin(); it != freq.constEnd(); ++it) {
-        if (it.value() >= minFreq) {
-            candidates.append(qMakePair(it.key(), it.value()));
+    for (auto it = formFreq.constBegin(); it != formFreq.constEnd(); ++it) {
+        int total = 0;
+        QString best;
+        int bestCount = 0;
+        for (auto f = it.value().constBegin(); f != it.value().constEnd(); ++f) {
+            total += f.value();
+            if (f.value() > bestCount) {
+                bestCount = f.value();
+                best = f.key();
+            }
+        }
+        if (total >= minFreq) {
+            candidates.append(qMakePair(best, total));
         }
     }
     std::sort(candidates.begin(), candidates.end(),
@@ -195,10 +218,20 @@ QList<QPair<QString, int>> TermGlossary::extractCandidates(const QStringList &li
                   if (a.second != b.second) {
                       return a.second > b.second;
                   }
-                  return a.first < b.first;
+                  return a.first.compare(b.first, Qt::CaseInsensitive) < 0;
               });
     for (int i = 0; i < candidates.size() && i < maxCount; ++i) {
         result.append(candidates.at(i));
     }
     return result;
+}
+
+bool TermGlossary::containsCaseInsensitive(const QString &word) const
+{
+    for (auto it = m_terms.constBegin(); it != m_terms.constEnd(); ++it) {
+        if (it.key().compare(word, Qt::CaseInsensitive) == 0) {
+            return true;
+        }
+    }
+    return false;
 }

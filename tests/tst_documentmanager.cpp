@@ -31,6 +31,7 @@ private slots:
     void autosaveLimitedModeSkips();
     void autosaveRestoreRoundTrip();
     void autosaveDiscardRemoves();
+    void autosavePromptOnce();
 
 private:
     QTemporaryDir m_temp;
@@ -302,13 +303,15 @@ void TestDocumentManager::autosaveLimitedModeSkips()
     fireAutosaveTick();
     QVERIFY(!m_mgr.hasAutosave());
     DocumentManager::setLargeFileLimits(50000, 200LL * 1024 * 1024);   // 还原默认
+    m_model.setLimitedMode(false);   // 还原受限模式，避免泄漏到后续用例
 }
 
-// 恢复：restoreAutosave 后行/批注一致，且自动保存文件被清理
+// 恢复：restoreAutosave 后行/批注一致、m_path 还原为原始文档路径（dirty）、自动保存文件被清理
 void TestDocumentManager::autosaveRestoreRoundTrip()
 {
     m_mgr.discardAutosave();
-    m_mgr.newDocument({ QStringLiteral("恢复一"), QStringLiteral("恢复二") });
+    const QString original = m_temp.filePath(QStringLiteral("restore.txt"));
+    QVERIFY(m_mgr.saveFileAs(original));
     m_comments.setComment(1, QStringLiteral("译文乙"));
     m_model.updateLineText(0, QStringLiteral("恢复一（改）"));
     fireAutosaveTick();
@@ -316,9 +319,26 @@ void TestDocumentManager::autosaveRestoreRoundTrip()
 
     QVERIFY(m_mgr.restoreAutosave());
     QVERIFY(!m_mgr.hasAutosave());   // 恢复成功即清理
+    // 回归：m_path 必须还原为原始文档路径（而非已删除的 autosave 文件），
+    // 否则 Ctrl+S 会写进应用数据目录、自动保存失效（review fd8d1f3 🔴2）
+    QCOMPARE(m_mgr.currentPath(), original);
+    QVERIFY(m_mgr.isDirty());        // 恢复的内容尚未保存到原文件
     QCOMPARE(m_model.lineCount(), 2);
     QCOMPARE(m_model.lineText(0), QStringLiteral("恢复一（改）"));
     QCOMPARE(m_comments.commentAt(1), QStringLiteral("译文乙"));
+}
+
+// 启动提示只弹一次（NoStack 页面重建防护）
+void TestDocumentManager::autosavePromptOnce()
+{
+    m_mgr.discardAutosave();
+    m_mgr.newDocument({ QStringLiteral("x") });
+    m_model.updateLineText(0, QStringLiteral("edited"));
+    fireAutosaveTick();
+    QVERIFY(m_mgr.takeAutosavePrompt());
+    QVERIFY(!m_mgr.takeAutosavePrompt());   // 第二次恒 false
+    QVERIFY(!m_mgr.takeAutosavePrompt());
+    m_mgr.discardAutosave();
 }
 
 // 丢弃：删除全部自动保存文件

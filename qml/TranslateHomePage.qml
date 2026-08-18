@@ -202,7 +202,13 @@ FluContentPage {
         page.findFuzzy = Boolean(configService.get("ui", "findFuzzy"))
         // 自动保存（迭代4）：配置开关同步到 DocumentManager；启动时检测崩溃残留
         documentManager.setAutosaveEnabled(Boolean(configService.get("ui", "autosaveEnabled")))
-        if (documentManager.hasAutosave()) {
+        if (documentManager.takeAutosavePrompt()) {
+            const desc = documentManager.autosaveDescription()
+            const dirtyWarn = documentManager.isDirty()
+                ? qsTr("\n\n注意：当前文档有未保存的修改，恢复将覆盖当前内容。")
+                : ""
+            restoreAutosaveDialog.message = qsTr("检测到上次未保存的更改（%1），是否恢复？%2")
+                                            .arg(desc).arg(dirtyWarn)
             restoreAutosaveDialog.open()
         }
         // 浮窗位置在 floatWindow.Component.onCompleted 中恢复（真实窗口屏幕坐标）
@@ -214,6 +220,16 @@ FluContentPage {
     FluInfoBar {
         id: infoBar
         root: page
+    }
+
+    // 自动保存开关（迭代4）：设置页修改后立即生效（无需等导航回主页）
+    Connections {
+        target: configService
+        function onConfigChanged(section, key, value) {
+            if (section === "ui" && key === "autosaveEnabled") {
+                documentManager.setAutosaveEnabled(Boolean(value))
+            }
+        }
     }
 
     // 翻译结果回调 → 写入批注（走 CommentService，单一数据源）
@@ -232,12 +248,13 @@ FluContentPage {
                 statusIconSource = FluentIcons.Warning
                 statusIconColor = tokens.error
             }
-            refreshDocStatus()
+            // 统计在 onBatchFinished 统一刷新（避免批量翻译时每行全量 stats() → O(N²)）
         }
         function onBatchFinished(total, ok, failed) {
             page.translating = false
             statusLabel.text = qsTr("翻译完成：成功 %1 / 失败 %2（共 %3 行）")
                                 .arg(ok).arg(failed).arg(total)
+            refreshDocStatus()
             // 有质量告警 → 弹出复核面板（收集在 onQualityWarning）
             if (page.qualityWarnings.count > 0) {
                 page.qualityReport.visible = true
@@ -1638,10 +1655,12 @@ FluContentPage {
     }
 
     // ---------- 崩溃恢复（自动保存，迭代4） ----------
+    // 只弹一次（takeAutosavePrompt 由应用级 DocumentManager 记住），
+    // message 在 onCompleted 动态拼接：快照文件名/时间 + 当前 dirty 警告
     FluContentDialog {
         id: restoreAutosaveDialog
         title: qsTr("恢复未保存的更改")
-        message: qsTr("检测到上次未保存的更改，是否恢复？")
+        message: ""
         negativeText: qsTr("丢弃")
         positiveText: qsTr("恢复")
         onNegativeClicked: documentManager.discardAutosave()

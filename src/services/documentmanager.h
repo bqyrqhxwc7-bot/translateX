@@ -40,6 +40,10 @@ public:
     // ---- 自动保存（迭代4）----
     Q_INVOKABLE void setAutosaveEnabled(bool enabled);   // ui.autosaveEnabled 变化时调用
     Q_INVOKABLE bool hasAutosave() const;                // autosave 目录存在未恢复的自动保存文件
+    // 启动提示（只弹一次）：首次调用返回 hasAutosave() 并置位，之后恒 false
+    //（NoStack 页面每次导航重建，须由应用级单例记住已提示）
+    Q_INVOKABLE bool takeAutosavePrompt();
+    Q_INVOKABLE QString autosaveDescription() const;     // 最新快照的「文件名（时间）」描述
     Q_INVOKABLE QString autosavePath() const;            // 当前文档对应的自动保存文件
     Q_INVOKABLE bool restoreAutosave();                  // 恢复最新的自动保存文件（成功后清理）
     Q_INVOKABLE void discardAutosave();                  // 丢弃（删除全部自动保存文件）
@@ -81,6 +85,7 @@ private:
     bool m_suppressDirty = false;
     QTimer *m_autosaveTimer = nullptr;
     bool m_autosaveEnabled = true;
+    bool m_autosavePromptShown = false;   // 启动恢复提示只弹一次（NoStack 页面重建防护）
     static int s_maxLines;         // 大文件受限阈值：行数（默认 50000）
     static qint64 s_maxBytes;      // 大文件受限阈值：字节（默认 200MB）
 };

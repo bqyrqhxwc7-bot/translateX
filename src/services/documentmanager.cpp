@@ -3,6 +3,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QCryptographicHash>
 #include <QRegularExpression>
 #include <QSettings>
 #include <QStandardPaths>
@@ -155,6 +156,7 @@ bool DocumentManager::openFile(const QString &path)
         }
         clearAutosaveFor(m_path);
         m_path = path;
+        clearAutosaveFor(path);
         setDirty(false);
         if (isAutosavePath(path)) {
             QFile::remove(path);
@@ -178,6 +180,7 @@ bool DocumentManager::openFile(const QString &path)
         }
         clearAutosaveFor(m_path);
         m_path = path;
+        clearAutosaveFor(path);
         setDirty(false);
         if (isAutosavePath(path)) {
             QFile::remove(path);
@@ -201,6 +204,7 @@ bool DocumentManager::openFile(const QString &path)
         }
         clearAutosaveFor(m_path);
         m_path = path;
+        clearAutosaveFor(path);
         setDirty(false);
         if (isAutosavePath(path)) {
             QFile::remove(path);
@@ -323,7 +327,11 @@ QString DocumentManager::autosavePathFor(const QString &path)
 {
     const QString base = path.isEmpty() ? QStringLiteral("未命名")
                                         : QFileInfo(path).completeBaseName();
+    // 路径哈希后缀：跨目录/跨格式同名文档（A/report.docx vs B/report.txt）不互相覆盖
+    const QByteArray hash = QCryptographicHash::hash(path.toUtf8(), QCryptographicHash::Sha1)
+                                .toHex().left(8);
     return autosaveDir() + QLatin1Char('/') + sanitizeFileName(base)
+           + QStringLiteral("-") + QString::fromLatin1(hash)
            + QStringLiteral(".autosave.trx");
 }
 
@@ -340,6 +348,30 @@ bool DocumentManager::hasAutosave() const
     return !files.isEmpty();
 }
 
+bool DocumentManager::takeAutosavePrompt()
+{
+    if (m_autosavePromptShown) {
+        return false;
+    }
+    m_autosavePromptShown = true;
+    return hasAutosave();
+}
+
+QString DocumentManager::autosaveDescription() const
+{
+    const QDir dir(autosaveDir());
+    const QStringList files = dir.entryList(QStringList() << QStringLiteral("*.autosave.trx"),
+                                            QDir::Files, QDir::Time);
+    if (files.isEmpty()) {
+        return QString();
+    }
+    const QFileInfo info(dir.absoluteFilePath(files.first()));
+    QString base = info.completeBaseName();
+    base.remove(QStringLiteral(".autosave"));
+    return QStringLiteral("%1（%2）").arg(base,
+        info.lastModified().toString(QStringLiteral("yyyy-MM-dd HH:mm")));
+}
+
 bool DocumentManager::restoreAutosave()
 {
     const QDir dir(autosaveDir());
@@ -348,7 +380,28 @@ bool DocumentManager::restoreAutosave()
     if (files.isEmpty()) {
         return false;
     }
-    return openFile(dir.absoluteFilePath(files.first()));
+    const QString autosave = dir.absoluteFilePath(files.first());
+    if (!openFile(autosave)) {
+        return false;
+    }
+    // 还原原始文档路径（tick 写入时记录在 meta.originalPath）：
+    // 否则 m_path 指向已删除的 autosave 文件 → Ctrl+S 写进数据目录、自动保存失效
+    const QString original = m_meta.value(QStringLiteral("originalPath")).toString();
+    m_meta.remove(QStringLiteral("originalPath"));
+    if (!original.isEmpty()) {
+        m_path = original;
+        setDirty(true);   // 恢复的内容尚未保存到原文件
+        emit documentChanged(m_path);
+        // openFile 已把 autosave 路径加入最近文件，移除死条目
+        QStringList recents = recentFiles();
+        recents.removeAll(autosave);
+        const QString dir2 = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+        QSettings settings(dir2 + QStringLiteral("/recent.ini"), QSettings::IniFormat);
+        settings.setValue(QStringLiteral("recentFiles"), recents);
+        settings.sync();
+        emit recentFilesChanged();
+    }
+    return true;
 }
 
 void DocumentManager::discardAutosave()
@@ -381,7 +434,10 @@ void DocumentManager::onAutosaveTick()
         return;
     }
     QString error;
-    if (!TrxParser::write(autosavePath(), m_model, m_comments, m_meta, &error)) {
+    // meta 副本注入 originalPath：恢复时还原原始文档路径（见 restoreAutosave）
+    QVariantMap meta = m_meta;
+    meta.insert(QStringLiteral("originalPath"), m_path);
+    if (!TrxParser::write(autosavePath(), m_model, m_comments, meta, &error)) {
         emit operationFailed(error.isEmpty() ? QStringLiteral("自动保存失败") : error);
     }
 }
@@ -416,6 +472,7 @@ bool DocumentManager::writeDocument(const QString &path)
         }
         clearAutosaveFor(m_path);
         m_path = path;
+        clearAutosaveFor(path);
         setDirty(false);
         if (isAutosavePath(path)) {
             QFile::remove(path);
@@ -435,6 +492,7 @@ bool DocumentManager::writeDocument(const QString &path)
         }
         clearAutosaveFor(m_path);
         m_path = path;
+        clearAutosaveFor(path);
         setDirty(false);
         if (isAutosavePath(path)) {
             QFile::remove(path);
@@ -452,6 +510,7 @@ bool DocumentManager::writeDocument(const QString &path)
         }
         clearAutosaveFor(m_path);
         m_path = path;
+        clearAutosaveFor(path);
         setDirty(false);
         if (isAutosavePath(path)) {
             QFile::remove(path);
@@ -484,6 +543,7 @@ bool DocumentManager::writeDocument(const QString &path)
 
     clearAutosaveFor(m_path);
     m_path = path;
+    clearAutosaveFor(path);
     setDirty(false);
     emit documentChanged(m_path);
     return true;

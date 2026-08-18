@@ -87,8 +87,13 @@ FluScrollablePage {
     // ---------- 术语自动提取（迭代4） ----------
     // 从文档原文提取高频英文词 → 弹窗勾选 → 加入术语表
     function extractTerms() {
+        // 受限模式（大文件）禁用：一次性搬 50 万行到 JS 数组会卡死 UI
+        if (documentModel.limitedMode) {
+            infoBar.showWarning(qsTr("大文件受限模式下不支持术语提取"))
+            return
+        }
         const lines = []
-        const count = documentModel.lineCount()
+        const count = Math.min(documentModel.lineCount(), 50000)
         for (let i = 0; i < count; ++i) {
             lines.push(documentModel.lineText(i))
         }
@@ -115,14 +120,16 @@ FluScrollablePage {
         for (let i = 0; i < termCandidateModel.count; ++i) {
             if (termCandidateModel.get(i).checked) {
                 const w = termCandidateModel.get(i).word
-                glossaryMap[w] = w
+                // 译文留空占位：不注入提示词、不参与质量校验（见 TermGlossary），
+                // 避免「译文=原文」污染质量自检
+                glossaryMap[w] = ""
                 ++added
             }
         }
         if (added > 0) {
             translationService.setGlossary(glossaryMap)
             rebuildTermList()
-            infoBar.showSuccess(qsTr("已添加 %1 个术语（译文占位，请修改为标准译文）").arg(added))
+            infoBar.showSuccess(qsTr("已添加 %1 个术语（译文为空，请填写标准译文）").arg(added))
         }
     }
 
@@ -521,6 +528,11 @@ FluScrollablePage {
     }
 
     // ---------- 术语提取弹窗（迭代4） ----------
+    // ListModel 必须声明在页面级：FluContentDialog 的 contentDelegate 由 Loader 延迟创建，
+    // 组件内 id 无法被页面级函数访问（跨 Component 边界），且 open() 时才实例化
+    ListModel {
+        id: termCandidateModel
+    }
     FluContentDialog {
         id: extractDialog
         title: qsTr("从文档提取术语")
@@ -528,15 +540,13 @@ FluScrollablePage {
         positiveText: qsTr("添加选中")
         contentDelegate: Component {
             ColumnLayout {
-                width: 420
+                // FluContentDialog implicitWidth 400，内容宽度须小于对话框宽度避免裁剪
+                width: 380
                 spacing: 8
                 FluText {
-                    text: qsTr("勾选要加入术语表的词（译文初始为原文占位，添加后请修改为标准译文）：")
+                    text: qsTr("勾选要加入术语表的词（译文初始为空，添加后请填写标准译文）：")
                     color: FluTheme.fontSecondaryColor
                     wrapMode: Text.Wrap
-                }
-                ListModel {
-                    id: termCandidateModel
                 }
                 ListView {
                     id: extractListView

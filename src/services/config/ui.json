@@ -78,7 +78,7 @@
     {
       "key": "findFuzzy",
       "displayName": "模糊查找",
-      "description": "查找字符按顺序部分匹配（忽略中文分词）？需要澄清",
+      "description": "查询字符按顺序出现即匹配（子序列模糊匹配），不要求连续",
       "type": "bool",
       "default": false,
       "group": "查找"

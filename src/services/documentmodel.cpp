@@ -415,36 +415,33 @@ void DocumentModel::clearUndoHistory()
 
 QVariantMap DocumentModel::stats() const
 {
+    // 正则只编译一次（50 万行场景避免每行重编译）
+    static const QRegularExpression ws(QStringLiteral("\\s+"));
     QVariantMap out;
     int nonEmpty = 0;
     qint64 chars = 0;
     qint64 words = 0;
     int richLines = 0;
     int imageLines = 0;
+    int comments = 0;
     for (int i = 0; i < m_lines.size(); ++i) {
         const LineEntry &entry = m_lines.at(i);
         if (!entry.text.trimmed().isEmpty()) {
             ++nonEmpty;
         }
         // 非空白字符数
-        const QString compact = entry.text;
-        for (const QChar &c : compact) {
+        for (const QChar &c : entry.text) {
             if (!c.isSpace()) {
                 ++chars;
             }
         }
         // 空白分词数（不含首尾空白的空串）
-        const QStringList parts = compact.split(QRegularExpression(QStringLiteral("\\s+")),
-                                                 Qt::SkipEmptyParts);
-        words += parts.size();
+        words += entry.text.split(ws, Qt::SkipEmptyParts).size();
         if (entry.display == QStringLiteral("rich")) {
             ++richLines;
         } else if (entry.display == QStringLiteral("image")) {
             ++imageLines;
         }
-    }
-    int comments = 0;
-    for (int i = 0; i < m_lines.size(); ++i) {
         if (hasCommentAt(i)) {
             ++comments;
         }

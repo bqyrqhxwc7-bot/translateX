@@ -19,16 +19,21 @@
 - **配置**（`ui.json`，设置页自动渲染）：
   - `autosaveEnabled`（bool，default `true`）
   - 间隔固定 60s（不进配置，减少复杂度；文档注明）
-- **路径**：`%APPDATA%/sr291/Translex/autosave/<文档名>.autosave.trx`（`.trx` 完整往返含批注；
-  文件名 sanitize；未命名文档 → `未命名.autosave.trx`）
+- **路径**：`QStandardPaths::AppConfigLocation`（Windows 实测 `%LOCALAPPDATA%/sr291/Translex/autosave/`）
+  `<文档名>-<路径哈希8位>.autosave.trx`（`.trx` 完整往返含批注；文件名 sanitize；
+  路径哈希避免跨目录/跨格式同名文档互相覆盖；未命名文档 → `未命名-<hash>.autosave.trx`）
 - **逻辑**：
   - `QTimer` 60s tick：`isDirty() && autosaveEnabled && !limitedMode`（受限模式禁用，
-    避免大文件反复写盘）→ `TrxParser::write` 到 autosave 文件（不清 dirty）
-  - 保存成功/打开文件/新建文档/恢复后 → 删除对应 autosave 文件
-  - `autosaveEnabled` 变化（`configChanged` 信号）→ QML 调 `setAutosaveEnabled` 启停 timer
+    避免大文件反复写盘）→ `TrxParser::write` 到 autosave 文件（不清 dirty）；
+    meta 副本注入 `originalPath` 供恢复时还原原始文档路径
+  - 保存成功/打开文件/新建文档/恢复后 → 删除对应 autosave 文件（新旧路径都清理）
+  - `autosaveEnabled` 变化（`configChanged` 信号）→ 主页 Connections 调 `setAutosaveEnabled` 立即生效
 - **崩溃恢复**：
-  - `hasAutosave()` → 主页 onCompleted 弹 FluContentDialog「检测到未保存的更改，是否恢复？」
-  - `restoreAutosave()` = 恢复（openFile autosave 文件）/ `discardAutosave()` = 丢弃（删文件）
+  - 启动时 `takeAutosavePrompt()`（应用级单例只弹一次，NoStack 页面重建不重复弹）
+    → FluContentDialog「检测到上次未保存的更改（<文件名（时间）>），是否恢复？」
+    （当前文档 dirty 时附加覆盖警告）
+  - `restoreAutosave()` = 恢复（openFile autosave 文件 → 读 `meta.originalPath` 还原
+    `m_path` + `setDirty(true)` + 移除最近文件死条目）/ `discardAutosave()` = 丢弃（删全部）
 - **接口**：`setAutosaveEnabled(bool)`、`hasAutosave()`、`autosavePath()`、
   `restoreAutosave()`、`discardAutosave()`；`operationFailed` 复用提示
 - **注意**：自动保存文件本身不再二次自动保存（tick 时若当前路径是 autosave 则跳过）
@@ -38,13 +43,14 @@
 - **接口**：`extractCandidates(const QStringList &lines, int minFreq = 3, int maxCount = 20)`
   → `QList<QPair<QString, int>>`（词 → 频次，频率降序）
 - **算法**（英文为主，文档注明中文暂不支持自动提取）：
-  1. 正则提取 ASCII 字母序列（≥3 字母），转小写
-  2. 过滤停用词（内置 ~60 词表：a/an/the/and/.../i/you/he/she/...）
-  3. 过滤已在术语表中的词（`contains`）
-  4. 频率 ≥ minFreq → 按频率降序 → top maxCount
-- **UI**（设置页术语表卡片）：「从文档提取」按钮 →
+  1. 正则提取 ASCII 字母序列（≥3 字母），按小写归组统计（大小写不敏感）
+  2. 过滤停用词（内置 ~60 词表：a/an/the/and/.../i/you/he/she/...）与已收录术语（大小写不敏感）
+  3. 频率 ≥ minFreq → 按频率降序 → top maxCount
+  4. 返回原文中**最高频的实际书写形式**（术语表校验是大小写敏感的）
+- **UI**（设置页术语表卡片）：「从文档提取」按钮（受限模式禁用；最多取前 5 万行）→
   `FluContentDialog` 弹窗列出候选（CheckBox 多选 + 全选）→ 确认加入术语表
-  （经现有 `addTerm` 流程写回 `translation.glossary`）
+  （译文留空占位：不注入提示词、不参与质量校验，避免「译文=原文」污染自检；
+  经现有 `addTerm` 流程写回 `translation.glossary`）
 - 空文档/无候选 → 提示"未提取到高频词"
 
 ## 4. 测试计划
