@@ -1095,6 +1095,34 @@ FluContentPage {
         if (!isFinite(py)) py = sy + 80
         px = Math.max(sx, Math.min(px, sx + Math.max(0, sw - 300)))
         py = Math.max(sy, Math.min(py, sy + Math.max(0, sh - 240)))
+        // 不与主窗口重叠：浮窗若落在主窗口范围内（尤其盖住左侧边栏，用户反馈
+        // 「侧边栏文字重叠」根因——浮窗盖住批注/章节列表），移到主窗口右侧。
+        // 仅当主窗口已映射（x/y/width 有效）才做此钳制，否则保持桌面内钳制。
+        if (mainWindow && isFinite(mainWindow.x) && isFinite(mainWindow.y)
+                && mainWindow.width > 0 && mainWindow.height > 0) {
+            const mw = mainWindow.width
+            const mh = mainWindow.height
+            const fw = floatWindow.width
+            const fh = floatWindow.height
+            const overlapX = px < mainWindow.x + mw && px + fw > mainWindow.x
+            const overlapY = py < mainWindow.y + mh && py + fh > mainWindow.y
+            if (overlapX && overlapY) {
+                // 优先放主窗口右侧；右侧放不下（贴屏幕右缘）则放主窗口下方；
+                // 下方也放不下（主窗口几乎占满屏幕）则兜底到屏幕右下角，保证完全可见
+                const rightX = mainWindow.x + mw + 8
+                if (rightX + fw <= sx + sw) {
+                    px = rightX
+                } else {
+                    const belowY = mainWindow.y + mh + 8
+                    if (belowY + fh <= sy + sh) {
+                        py = belowY
+                    } else {
+                        px = sx + sw - fw - 8
+                        py = sy + sh - fh - 8
+                    }
+                }
+            }
+        }
         // setX/setY 显式触发窗口位置更新；isFinite 防御（坏值一律回退默认右上角）
         if (isFinite(px) && isFinite(py)) {
             floatWindow.setX(Math.round(px))
