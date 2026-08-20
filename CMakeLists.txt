@@ -144,6 +144,7 @@ qt_add_qml_module(translex
         qml/DesignTokens.qml
         qml/UiDriverActions.qml
         qml/IconBarButton.qml
+        qml/RibbonButton.qml
         qml/TranslateHomePage.qml
         qml/TranslateSettingsPage.qml
         qml/ConfigSectionCard.qml
@@ -207,19 +208,27 @@ if(WIN32 AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND NOT MINGW)
             endif()
         endif()
 
-        get_filename_component(QT_QML_SRC_DIR "${QT_WINDEPLOYQT_EXECUTABLE}/../qml" ABSOLUTE)
-        # 部署策略：--force 覆盖旧 Qt 版本残留文件；含 translations（Qt 内置控件中文文案）
+        get_filename_component(QT_WINDEPLOYQT_BIN_DIR "${QT_WINDEPLOYQT_EXECUTABLE}" DIRECTORY)
+        get_filename_component(QT_QML_SRC_DIR "${QT_WINDEPLOYQT_BIN_DIR}/../qml" ABSOLUTE)
+        # 部署策略：不用 --force——windeployqt 替换已存在 DLL 时会被火绒实时防护拦截
+        #（"Cannot remove existing file msvcp140_*.dll"，2026-08-18 踩过，反复失败）；
+        # 不带 --force 则跳过已存在文件（版本一致无需更新）。Qt 升级后需手动清理部署目录
+        # 或手动补跑一次 --force（见 HANDOVER.md §6）。
         if(VCINSTALLDIR)
             add_custom_command(TARGET translex POST_BUILD
                 COMMAND "${CMAKE_COMMAND}" -E env "VCINSTALLDIR=${VCINSTALLDIR}"
-                        "${QT_WINDEPLOYQT_EXECUTABLE}" --force --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml" "$<TARGET_FILE:translex>"
+                        "${QT_WINDEPLOYQT_EXECUTABLE}" --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml" "$<TARGET_FILE:translex>"
                 COMMAND "${CMAKE_COMMAND}" -E copy_directory "${QT_QML_SRC_DIR}" "$<TARGET_FILE_DIR:translex>/qml"
+                COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                        "${QT_WINDEPLOYQT_BIN_DIR}/Qt6ShaderTools$<$<CONFIG:Debug>:d>.dll" "$<TARGET_FILE_DIR:translex>"
                 COMMENT "Deploying Qt runtime (incl. all QML modules) for translex"
             )
         else()
             add_custom_command(TARGET translex POST_BUILD
-                COMMAND "${QT_WINDEPLOYQT_EXECUTABLE}" --force --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml" "$<TARGET_FILE:translex>"
+                COMMAND "${QT_WINDEPLOYQT_EXECUTABLE}" --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qml" "$<TARGET_FILE:translex>"
                 COMMAND "${CMAKE_COMMAND}" -E copy_directory "${QT_QML_SRC_DIR}" "$<TARGET_FILE_DIR:translex>/qml"
+                COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                        "${QT_WINDEPLOYQT_BIN_DIR}/Qt6ShaderTools$<$<CONFIG:Debug>:d>.dll" "$<TARGET_FILE_DIR:translex>"
                 COMMENT "Deploying Qt runtime (incl. all QML modules) for translex"
             )
         endif()

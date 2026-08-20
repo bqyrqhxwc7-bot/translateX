@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
 import FluentUI
+import Translex
 
 FluScrollablePage {
     id: page
@@ -94,6 +95,17 @@ FluScrollablePage {
         rebuildTermList()
     }
 
+    // 行内编辑译文（自动提取的占位项在此补填；空译文不注入提示词/不参与校验）
+    function updateTermTranslation(src, t) {
+        const cur = glossaryMap[src]
+        if (t.trim() === cur) {
+            return
+        }
+        glossaryMap[src] = t.trim()
+        translationService.setGlossary(glossaryMap)
+        rebuildTermList()
+    }
+
     function clearTerms() {
         glossaryMap = ({})
         translationService.clearGlossary()
@@ -114,13 +126,13 @@ FluScrollablePage {
         for (let i = 0; i < count; ++i) {
             lines.push(documentModel.lineText(i))
         }
-        const candidates = translationService.extractTermCandidates(lines, 3, 20)
+        const candidates = translationService.extractTermCandidates(lines, 3, -1)
         termCandidateModel.clear()
         for (const c of candidates) {
             termCandidateModel.append({ word: c.word, count: c.count, checked: false })
         }
         if (termCandidateModel.count === 0) {
-            infoBar.showWarning(qsTr("未提取到高频词（英文单词需出现 3 次以上；中文暂不支持自动提取）"))
+            infoBar.showWarning(qsTr("未提取到高频词（词需出现 3 次以上；英文/标识符/中文均支持）"))
             return
         }
         extractDialog.open()
@@ -132,21 +144,43 @@ FluScrollablePage {
         }
     }
 
+    // AI 建议译文：请求大模型按文档上下文猜测勾选术语的标准译文（回填输入框）
+    function suggestTermTranslations() {
+        const terms = []
+        for (let i = 0; i < termCandidateModel.count; ++i) {
+            if (termCandidateModel.get(i).checked) {
+                terms.push(termCandidateModel.get(i).word)
+            }
+        }
+        if (terms.length === 0) {
+            infoBar.showWarning(qsTr("请先勾选要建议译文的术语"))
+            return
+        }
+        const lines = []
+        const count = Math.min(documentModel.lineCount(), 50000)
+        for (let i = 0; i < count; ++i) {
+            lines.push(documentModel.lineText(i))
+        }
+        infoBar.showInfo(qsTr("正在请求大模型建议 %1 个术语译文...").arg(terms.length))
+        translationService.suggestTermTranslations(terms, lines)
+    }
+
     function addExtractedTerms() {
         let added = 0
         for (let i = 0; i < termCandidateModel.count; ++i) {
             if (termCandidateModel.get(i).checked) {
                 const w = termCandidateModel.get(i).word
+                const t = termCandidateModel.get(i).translation
                 // 译文留空占位：不注入提示词、不参与质量校验（见 TermGlossary），
                 // 避免「译文=原文」污染质量自检
-                glossaryMap[w] = ""
+                glossaryMap[w] = String(t || "").trim()
                 ++added
             }
         }
         if (added > 0) {
             translationService.setGlossary(glossaryMap)
             rebuildTermList()
-            infoBar.showSuccess(qsTr("已添加 %1 个术语（译文为空，请填写标准译文）").arg(added))
+            infoBar.showSuccess(qsTr("已添加 %1 个术语（译文为空的是占位，可点击行内输入框补填）").arg(added))
         }
     }
 
@@ -192,6 +226,23 @@ FluScrollablePage {
             backendTestOk = ok
             backendTestLabel.text = ok ? qsTr("连接正常：%1").arg(message) : qsTr("连接失败：%1").arg(message)
         }
+        // 术语建议译文（提取弹窗）：回填勾选术语的建议译文（可修改后添加）
+        function onTermSuggestionsReady(suggestions, ok, errorMessage) {
+            if (!ok) {
+                infoBar.showWarning(errorMessage, 6000)
+                return
+            }
+            let filled = 0
+            for (let i = 0; i < termCandidateModel.count; ++i) {
+                const w = termCandidateModel.get(i).word
+                const s = suggestions[w]
+                if (s !== undefined && String(s).trim() !== "") {
+                    termCandidateModel.setProperty(i, "translation", String(s).trim())
+                    ++filled
+                }
+            }
+            infoBar.showSuccess(qsTr("已为 %1 个术语填入建议译文（可修改）").arg(filled))
+        }
     }
 
     // ================= 界面 =================
@@ -200,13 +251,13 @@ FluScrollablePage {
     // ---------- 页头 ----------
     FluText {
         text: qsTr("翻译设置")
-        font.pixelSize: 22
+        font.pixelSize: tokens.fontDisplay
         font.bold: true
         Layout.fillWidth: true
     }
     FluText {
         text: qsTr("可插拔翻译后端、翻译选项与术语一致性配置，实时生效并持久化。")
-        font.pixelSize: 12
+        font.pixelSize: tokens.fontCaption
         color: FluTheme.fontSecondaryColor
         wrapMode: Text.WordWrap
         Layout.fillWidth: true
@@ -230,7 +281,7 @@ FluScrollablePage {
                 Layout.fillWidth: true
                 spacing: 8
                 FluIcon { iconSource: FluentIcons.Sync; iconSize: 16; color: FluTheme.primaryColor }
-                FluText { text: qsTr("翻译后端"); font.pixelSize: 16; font.bold: true }
+                FluText { text: qsTr("翻译后端"); font.pixelSize: tokens.fontTitle; font.bold: true }
             }
 
             RowLayout {
@@ -263,7 +314,7 @@ FluScrollablePage {
             }
             FluText {
                 text: qsTr("可插拔后端：本地 Ollama、内置免费云端、网络大模型（OpenAI 兼容）。")
-                font.pixelSize: 12
+                font.pixelSize: tokens.fontCaption
                 color: FluTheme.fontSecondaryColor
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
@@ -293,7 +344,7 @@ FluScrollablePage {
                 FluText {
                     id: backendTestLabel
                     text: ""
-                    font.pixelSize: 12
+                    font.pixelSize: tokens.fontCaption
                     color: backendTestOk ? tokens.success : tokens.error
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
@@ -320,7 +371,7 @@ FluScrollablePage {
                 Layout.fillWidth: true
                 spacing: 8
                 FluIcon { iconSource: FluentIcons.Edit; iconSize: 16; color: FluTheme.primaryColor }
-                FluText { text: qsTr("翻译选项"); font.pixelSize: 16; font.bold: true }
+                FluText { text: qsTr("翻译选项"); font.pixelSize: tokens.fontTitle; font.bold: true }
             }
 
             // 语言选择（FluComboBox：设置页内 Popup 实测可用，回退自 RadioButton 组）
@@ -376,7 +427,7 @@ FluScrollablePage {
                     spacing: 8
                     FluText {
                         text: qsTr("翻译支持两种呈现：功能区（顶部 Ribbon「翻译」标签）与悬浮窗。在「翻译」标签页点「浮窗」开关即可切换；悬浮窗位置拖动标题栏即自动记忆，无需设置。下方仅设置启动时是否自动显示悬浮窗。")
-                        font.pixelSize: 12
+                        font.pixelSize: tokens.fontCaption
                         color: FluTheme.fontSecondaryColor
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
@@ -386,8 +437,11 @@ FluScrollablePage {
                         // 模式由 Ribbon 浮窗开关统一切换；位置与当前标签为内部状态；
                         // 字号与查找选项由下方「显示/查找」卡片以滑动条/开关呈现
                         excludeKeys: ["translatePanelMode", "currentRibbonTab", "translatePanelX", "translatePanelY",
+                                      "translatePanelWidth", "translatePanelHeight",
                                       "originalFontSize", "commentFontSize",
-                                      "findCaseSensitive", "findWholeWord", "findFuzzy"]
+                                      "findCaseSensitive", "findWholeWord", "findFuzzy",
+                                      "leftPanelWidth", "iconBarVisible", "sidebarVisible",
+                                      "windowX", "windowY", "windowWidth", "windowHeight", "windowMaximized"]
                         showSectionTitle: false
                         Layout.fillWidth: true
                     }
@@ -405,7 +459,7 @@ FluScrollablePage {
                     spacing: 8
                     FluText {
                         text: qsTr("自定义提示词仅对本地 Ollama 与网络大模型生效（免费云端 API 不支持自定义提示词）。")
-                        font.pixelSize: 12
+                        font.pixelSize: tokens.fontCaption
                         color: FluTheme.fontSecondaryColor
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
@@ -424,7 +478,7 @@ FluScrollablePage {
                     }
                     FluText {
                         text: qsTr("普通翻译提示词（%1 将被替换为原文）")
-                        font.pixelSize: 12
+                        font.pixelSize: tokens.fontCaption
                         color: FluTheme.fontSecondaryColor
                     }
                     FluMultilineTextBox {
@@ -435,7 +489,7 @@ FluScrollablePage {
                     }
                     FluText {
                         text: qsTr("上下文翻译提示词（%1 原文，%2 上下文）")
-                        font.pixelSize: 12
+                        font.pixelSize: tokens.fontCaption
                         color: FluTheme.fontSecondaryColor
                     }
                     FluMultilineTextBox {
@@ -467,7 +521,7 @@ FluScrollablePage {
                 Layout.fillWidth: true
                 spacing: 8
                 FluIcon { iconSource: FluentIcons.DictionaryAdd; iconSize: 16; color: FluTheme.primaryColor }
-                FluText { text: qsTr("术语表（保证术语翻译一致）"); font.pixelSize: 16; font.bold: true }
+                FluText { text: qsTr("术语表（保证术语翻译一致）"); font.pixelSize: tokens.fontTitle; font.bold: true }
             }
 
             RowLayout {
@@ -505,10 +559,18 @@ FluScrollablePage {
                     width: termList.width
                     spacing: 8
                     FluText {
-                        text: "“%1” → “%2”".arg(model.source).arg(model.translation)
-                        Layout.fillWidth: true
+                        text: "“%1” →".arg(model.source)
+                        Layout.preferredWidth: Math.max(90, termList.width * 0.3)
                         Layout.alignment: Qt.AlignVCenter
                         elide: Text.ElideRight
+                    }
+                    // 行内编辑标准译文（自动提取的占位项在此填写；失焦保存）
+                    FluTextBox {
+                        id: termTransBox
+                        Layout.fillWidth: true
+                        text: model.translation
+                        placeholderText: qsTr("标准译文")
+                        onEditingFinished: updateTermTranslation(model.source, text)
                     }
                     FluButton {
                         text: qsTr("删除")
@@ -581,14 +643,32 @@ FluScrollablePage {
                         }
                         FluText {
                             text: qsTr("%1（出现 %2 次）").arg(model.word).arg(model.count)
-                            Layout.fillWidth: true
+                            Layout.preferredWidth: 150
                             Layout.alignment: Qt.AlignVCenter
+                            elide: Text.ElideRight
+                        }
+                        // 行内填标准译文（AI 建议译文回填；空 = 占位）
+                        FluTextBox {
+                            Layout.fillWidth: true
+                            text: model.translation
+                            placeholderText: qsTr("标准译文")
+                            onEditingFinished: termCandidateModel.setProperty(index, "translation", text)
                         }
                     }
                 }
-                FluCheckBox {
-                    text: qsTr("全选")
-                    onToggled: extractSelectAll(checked)
+                RowLayout {
+                    Layout.fillWidth: true
+                    FluCheckBox {
+                        text: qsTr("全选")
+                        onToggled: extractSelectAll(checked)
+                    }
+                    // AI 建议译文：仅配置了网络大模型 API 时可用（按文档上下文猜测标准译文）
+                    FluButton {
+                        text: qsTr("AI 建议译文")
+                        enabled: translationService.termSuggestionAvailable()
+                        onClicked: suggestTermTranslations()
+                    }
+                    Item { Layout.fillWidth: true }
                 }
             }
         }
@@ -613,7 +693,7 @@ FluScrollablePage {
                 Layout.fillWidth: true
                 spacing: 8
                 FluIcon { iconSource: FluentIcons.FontIncrease; iconSize: 16; color: FluTheme.primaryColor }
-                FluText { text: qsTr("显示"); font.pixelSize: 16; font.bold: true }
+                FluText { text: qsTr("显示"); font.pixelSize: tokens.fontTitle; font.bold: true }
             }
 
             RowLayout {
@@ -621,7 +701,7 @@ FluScrollablePage {
                 spacing: 12
                 FluText {
                     text: qsTr("原文字号 %1").arg(page.originalFontSize)
-                    font.pixelSize: 13
+                    font.pixelSize: tokens.fontMenu
                     Layout.preferredWidth: 120
                 }
                 FluSlider {
@@ -641,7 +721,7 @@ FluScrollablePage {
                 spacing: 12
                 FluText {
                     text: qsTr("批注字号 %1").arg(page.commentFontSize)
-                    font.pixelSize: 13
+                    font.pixelSize: tokens.fontMenu
                     Layout.preferredWidth: 120
                 }
                 FluSlider {
@@ -658,7 +738,7 @@ FluScrollablePage {
             }
             FluText {
                 text: qsTr("字号即时生效并持久化；编辑器内右键「显示设置」可快速调整，与本页完全同步。")
-                font.pixelSize: 12
+                font.pixelSize: tokens.fontCaption
                 color: FluTheme.fontSecondaryColor
                 wrapMode: Text.Wrap
                 Layout.fillWidth: true
@@ -684,7 +764,7 @@ FluScrollablePage {
                 Layout.fillWidth: true
                 spacing: 8
                 FluIcon { iconSource: FluentIcons.Search; iconSize: 16; color: FluTheme.primaryColor }
-                FluText { text: qsTr("查找"); font.pixelSize: 16; font.bold: true }
+                FluText { text: qsTr("查找"); font.pixelSize: tokens.fontTitle; font.bold: true }
             }
 
             RowLayout {
@@ -737,7 +817,7 @@ FluScrollablePage {
             }
             FluText {
                 text: qsTr("模糊查找：查询字符按顺序出现即匹配（如查「tran」可命中 translation），不要求连续。")
-                font.pixelSize: 12
+                font.pixelSize: tokens.fontCaption
                 color: FluTheme.fontSecondaryColor
                 wrapMode: Text.Wrap
                 Layout.fillWidth: true
@@ -763,12 +843,12 @@ FluScrollablePage {
                 Layout.fillWidth: true
                 spacing: 8
                 FluIcon { iconSource: FluentIcons.Info; iconSize: 16; color: FluTheme.primaryColor }
-                FluText { text: qsTr("帮助与引导"); font.pixelSize: 16; font.bold: true }
+                FluText { text: qsTr("帮助与引导"); font.pixelSize: tokens.fontTitle; font.bold: true }
             }
 
             FluText {
                 text: qsTr("快速了解 Translex 的核心功能与快捷键。")
-                font.pixelSize: 12
+                font.pixelSize: tokens.fontCaption
                 color: FluTheme.fontSecondaryColor
                 wrapMode: Text.Wrap
                 Layout.fillWidth: true
@@ -803,7 +883,7 @@ FluScrollablePage {
                 Layout.fillWidth: true
                 spacing: 8
                 FluIcon { iconSource: FluentIcons.DeveloperTools; iconSize: 16; color: FluTheme.primaryColor }
-                FluText { text: qsTr("调试"); font.pixelSize: 16; font.bold: true }
+                FluText { text: qsTr("调试"); font.pixelSize: tokens.fontTitle; font.bold: true }
                 Item { Layout.fillWidth: true }
                 FluButton {
                     text: qsTr("刷新")
@@ -814,7 +894,7 @@ FluScrollablePage {
             // 服务健康度（healthReport 聚合：状态色点 + 消息）
             FluText {
                 text: qsTr("服务健康度")
-                font.pixelSize: 13
+                font.pixelSize: tokens.fontMenu
                 font.bold: true
                 color: FluTheme.fontSecondaryColor
             }
@@ -826,26 +906,26 @@ FluScrollablePage {
                     Rectangle {
                         width: 8
                         height: 8
-                        radius: 4
+                        radius: tokens.radiusControl
                         color: model.status === "ok" ? tokens.success : tokens.error
                         Layout.alignment: Qt.AlignVCenter
                     }
                     FluText {
                         text: model.displayName
-                        font.pixelSize: 13
+                        font.pixelSize: tokens.fontMenu
                         font.bold: true
                         Layout.preferredWidth: 130
                         elide: Text.ElideRight
                     }
                     FluText {
                         text: model.version
-                        font.pixelSize: 11
+                        font.pixelSize: tokens.fontCaption
                         color: FluTheme.fontTertiaryColor
                         Layout.preferredWidth: 60
                     }
                     FluText {
                         text: model.message
-                        font.pixelSize: 12
+                        font.pixelSize: tokens.fontCaption
                         color: model.status === "ok" ? FluTheme.fontSecondaryColor : tokens.error
                         Layout.fillWidth: true
                         elide: Text.ElideRight
@@ -856,13 +936,13 @@ FluScrollablePage {
             // 插件加载诊断
             FluText {
                 text: qsTr("插件加载")
-                font.pixelSize: 13
+                font.pixelSize: tokens.fontMenu
                 font.bold: true
                 color: FluTheme.fontSecondaryColor
             }
             FluText {
                 text: pluginErrorsText
-                font.pixelSize: 12
+                font.pixelSize: tokens.fontCaption
                 color: pluginErrorsText === qsTr("无插件加载错误") ? tokens.success : tokens.error
                 wrapMode: Text.Wrap
                 Layout.fillWidth: true
@@ -872,7 +952,7 @@ FluScrollablePage {
             // 避免 implicitHeight 按单行算导致卡片高度不足、底部内容被裁）
             FluText {
                 text: qsTr("配置文件：%1").arg(configService.configFilePath())
-                font.pixelSize: 12
+                font.pixelSize: tokens.fontCaption
                 color: FluTheme.fontSecondaryColor
                 wrapMode: Text.Wrap
                 Layout.fillWidth: true
@@ -880,7 +960,7 @@ FluScrollablePage {
             }
             FluText {
                 text: qsTr("日志文件：%1").arg(serviceRegistry.serviceById("appGuard").logFile())
-                font.pixelSize: 12
+                font.pixelSize: tokens.fontCaption
                 color: FluTheme.fontSecondaryColor
                 wrapMode: Text.Wrap
                 Layout.fillWidth: true
@@ -913,7 +993,7 @@ FluScrollablePage {
                     delegate: FluText {
                         Layout.fillWidth: true
                         text: "• " + modelData
-                        font.pixelSize: 13
+                        font.pixelSize: tokens.fontMenu
                         wrapMode: Text.Wrap
                     }
                 }

@@ -38,12 +38,14 @@ public:
     // 返回未命中的术语列表（用于报告）
     QStringList missingTerms(const QString &sourceText, const QString &translatedText) const;
 
-    // 术语自动提取（迭代4）：从行文本提取高频英文词候选。
-    // - 提取 ASCII 字母序列（≥3 字母），按小写归组统计（大小写不敏感）
+    // 术语自动提取（迭代4，2026-08-19 增强）：从行文本提取高频词候选。
+    // - 英文/标识符：ASCII 字母数字连字符（≥2 字符且含字母，如 API/C++/P2899R1/x86-64），
+    //   按小写归组统计（大小写不敏感）
+    // - 中文：连续 CJK 段内 2-3 字 n-gram（过滤虚词字符）
     // - 过滤内置停用词与已收录术语（大小写不敏感）
     // - 频率 ≥ minFreq，按频率降序，最多 maxCount 个
     // - 返回原文中最高频的实际书写形式（术语表校验是大小写敏感的）
-    // 返回 {word, count} 列表；中文分词暂不支持（返回空）。
+    // 返回 {word, count} 列表。
     QList<QPair<QString, int>> extractCandidates(const QStringList &lines,
                                                  int minFreq = 3, int maxCount = 20) const;
 

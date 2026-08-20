@@ -1,11 +1,17 @@
 import QtQuick
 import QtQuick.Layouts
 import FluentUI
+import Translex
 
 // 翻译面板主体内容：按钮 + 进度 + 快捷键
 // 供「浮动 Popup」与「停靠面板」两种模式复用（组件无标题栏/拖拽逻辑）
 Item {
     id: root
+
+    // 视觉 token 实例（普通组件；delegate/内联组件内经页面属性中转）
+    DesignTokens {
+        id: tokens
+    }
 
     // 状态（由页面注入）
     property bool translating: false
@@ -29,33 +35,39 @@ Item {
     // 否则父级高度少算 32px → 浮窗高度不足，底部文字被窗口边缘裁掉
     implicitHeight: panelCol.implicitHeight + 32
 
+    // 自适应缩放因子：浮窗变窄时字号/间距等比缩小，内容不溢出，提供更大的缩放范围
+    readonly property real scale: Math.max(0.85, Math.min(1.0, root.width / 280))
+    // 宽度过窄时隐藏次要文本（说明/快捷键），只保留核心按钮
+    readonly property bool compact: root.width < 250
+
     ColumnLayout {
         id: panelCol
         anchors.fill: parent
         anchors.margins: 16
-        spacing: 8
+        spacing: 8 * root.scale
 
         // 可选标题（停靠模式）
         FluText {
             visible: root.titleText !== ""
             text: root.titleText
-            font.pixelSize: 16
+            font.pixelSize: tokens.fontTitle * root.scale
             font.bold: true
             color: FluTheme.fontPrimaryColor
         }
 
         FluText {
+            visible: !root.compact
             text: qsTr("译文会写入为批注。支持当前行/所选行翻译，以及整篇范围批量翻译。")
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
             // 说明文字按两行渲染：必须显式给 preferredHeight——WordWrap 的 implicitHeight 按单行算，
             // 否则父级 implicitHeight 少算、浮窗高度不足导致底部文字被窗口边缘截断
-            Layout.preferredHeight: 34
+            Layout.preferredHeight: 34 * root.scale
             Layout.minimumWidth: 0
             // wrapMode 不影响 implicitWidth（仍按整段文本宽度计算），会撑大 ColumnLayout；
             // 用 maximumWidth 限制实际/隐式宽度，避免按钮被 implicitWidth 撑出
             Layout.maximumWidth: root.width - 32
-            font.pixelSize: 12
+            font.pixelSize: tokens.fontCaption * root.scale
             color: FluTheme.fontSecondaryColor
         }
 
@@ -65,6 +77,7 @@ Item {
             Layout.fillWidth: true
             Layout.minimumWidth: 0
             Layout.maximumWidth: root.width - 32
+            font.pixelSize: tokens.fontBody * root.scale
             onClicked: root.translateCurrentRequested()
         }
         FluButton {
@@ -72,6 +85,7 @@ Item {
             Layout.fillWidth: true
             Layout.minimumWidth: 0
             Layout.maximumWidth: root.width - 32
+            font.pixelSize: tokens.fontBody * root.scale
             onClicked: root.translateAllRequested()
         }
         FluButton {
@@ -80,6 +94,7 @@ Item {
             Layout.minimumWidth: 0
             Layout.maximumWidth: root.width - 32
             enabled: root.hasSelection
+            font.pixelSize: tokens.fontBody * root.scale
             onClicked: root.translateSelectedRequested()
         }
 
@@ -89,7 +104,7 @@ Item {
             Layout.minimumWidth: 0
             Layout.maximumWidth: root.width - 32
             visible: root.translating
-            spacing: 8
+            spacing: 8 * root.scale
             FluProgressBar {
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
@@ -99,25 +114,27 @@ Item {
             }
             FluText {
                 text: qsTr("%1/%2").arg(root.progressDone).arg(root.progressTotal)
-                font.pixelSize: 12
+                font.pixelSize: tokens.fontCaption * root.scale
                 color: FluTheme.primaryColor
             }
             FluButton {
                 text: qsTr("取消")
-                Layout.preferredHeight: 26
+                Layout.preferredHeight: 26 * root.scale
+                font.pixelSize: tokens.fontBody * root.scale
                 onClicked: root.cancelRequested()
             }
         }
 
         // 快捷键说明（两行换行 + 显式 preferredHeight：保证隐式高度正确且文字完整不截断）
         FluText {
+            visible: !root.compact
             text: qsTr("快捷键：Ctrl+Alt+T 当前行 · Ctrl+Alt+Shift+T 整篇范围")
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
             Layout.minimumWidth: 0
-            Layout.preferredHeight: 32
+            Layout.preferredHeight: 32 * root.scale
             Layout.maximumWidth: root.width - 32
-            font.pixelSize: 11
+            font.pixelSize: tokens.fontCaption * root.scale
             color: FluTheme.fontTertiaryColor
         }
 

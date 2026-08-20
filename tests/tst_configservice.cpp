@@ -71,11 +71,11 @@ void TestConfigService::defaultValues()
     ConfigService *cfg = ConfigService::instance();
     QCOMPARE(cfg->get(QStringLiteral("translation"), QStringLiteral("contextRadius")).toInt(), 2);
     QVERIFY(cfg->get(QStringLiteral("translation"), QStringLiteral("smartChunking")).toBool());
-    QCOMPARE(cfg->get(QStringLiteral("translation"), QStringLiteral("maxChunkChars")).toInt(), 14000);
+    QCOMPARE(cfg->get(QStringLiteral("translation"), QStringLiteral("maxChunkChars")).toInt(), 6000);
     QCOMPARE(cfg->get(QStringLiteral("translation.ollama"), QStringLiteral("endpoint")).toString(),
              QStringLiteral("http://localhost:11434"));
     QCOMPARE(cfg->get(QStringLiteral("translation.network_model"), QStringLiteral("model")).toString(),
-             QStringLiteral("deepseek-chat"));
+             QStringLiteral("deepseek-v4-flash"));
 }
 
 void TestConfigService::setGetRoundTrip()

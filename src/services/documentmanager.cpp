@@ -78,6 +78,24 @@ void DocumentManager::applyLargeFileLimit(const QString &path)
     m_model->setLimitedMode(limited);
 }
 
+// 富文本持久化：%TEMP%/Translex/<pdf名>.trx（含 rich/images，复用 TrxParser::write）。
+// 失败静默（不阻塞打开）；临时文件不污染文档目录，应用退出不清理（用户可复用）。
+void DocumentManager::writePdfTrxTemp(const QString &pdfPath)
+{
+    if (!m_model) {
+        return;
+    }
+    const QString dir = QDir::temp().filePath(QStringLiteral("Translex"));
+    if (!QDir().mkpath(dir)) {
+        return;
+    }
+    const QString trxPath = dir + QLatin1Char('/')
+                            + QFileInfo(pdfPath).completeBaseName() + QStringLiteral(".trx");
+    QVariantMap meta = m_meta;   // 副本：write 会回填 importedAt 等，不污染 m_meta
+    QString error;
+    TrxParser::write(trxPath, m_model, m_comments, meta, &error);
+}
+
 DocumentManager::DocumentManager(QObject *parent)
     : QObject(parent)
 {
@@ -251,6 +269,7 @@ bool DocumentManager::openFile(const QString &path)
             emit operationFailed(error.isEmpty() ? QStringLiteral("导入 .pdf 失败") : error);
             return false;
         }
+        writePdfTrxTemp(path);   // 富文本持久化：%TEMP%/Translex/<pdf名>.trx（pdf-service.md §9.3）
         clearAutosaveFor(m_path);
         m_path = path;
         clearAutosaveFor(path);

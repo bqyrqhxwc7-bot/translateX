@@ -82,9 +82,9 @@
     {
       "key": "maxChunkChars",
       "displayName": "单块最大字符",
-      "description": "智能分块的单块字符预算",
+      "description": "智能分块的单块字符预算（越小请求越快，适合慢速大模型）",
       "type": "number",
-      "default": 14000,
+      "default": 6000,
       "min": 256,
       "max": 100000,
       "step": 256,
@@ -93,7 +93,7 @@
     {
       "key": "qualityGateEnabled",
       "displayName": "质量自检",
-      "description": "翻译后规则自检（回显/长度/Token 保留/术语一致），异常时提示人工复核",
+      "description": "翻译后规则自检（长度/Token 保留/术语一致），异常时弹出复核面板。注：纯回显拦截（译文=原文）始终生效，不受此开关控制",
       "type": "bool",
       "default": true,
       "group": "质量"

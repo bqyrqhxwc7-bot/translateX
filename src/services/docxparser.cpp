@@ -367,6 +367,16 @@ bool DocxParser::read(const QString &path, DocumentModel *model,
         }
     }
 
+    // ---- meta（先于模型填充：setLines 触发 QML delegate 绑定求值时
+    //       imageSource 需要 meta.images 已就绪）----
+    meta.insert(QStringLiteral("sourceFile"), QFileInfo(path).fileName());
+    meta.insert(QStringLiteral("sourceFormat"), QStringLiteral("docx"));
+    meta.insert(QStringLiteral("importedAt"),
+                QDateTime::currentDateTime().toString(Qt::ISODate));
+    if (!imageList.isEmpty()) {
+        meta.insert(QStringLiteral("images"), imageList);
+    }
+
     // ---- 填充模型 ----
     model->setLines(texts);
     const int n = qMin<int>(paragraphs.size(), model->lineCount());
@@ -380,15 +390,6 @@ bool DocxParser::read(const QString &path, DocumentModel *model,
             model->setLineDisplay(i, QStringLiteral("image"));
             imageLines.removeFirst();
         }
-    }
-
-    // ---- meta ----
-    meta.insert(QStringLiteral("sourceFile"), QFileInfo(path).fileName());
-    meta.insert(QStringLiteral("sourceFormat"), QStringLiteral("docx"));
-    meta.insert(QStringLiteral("importedAt"),
-                QDateTime::currentDateTime().toString(Qt::ISODate));
-    if (!imageList.isEmpty()) {
-        meta.insert(QStringLiteral("images"), imageList);
     }
 
     if (error) {

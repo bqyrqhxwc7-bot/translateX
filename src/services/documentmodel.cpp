@@ -226,6 +226,17 @@ void DocumentModel::updateLineText(int lineNumber, const QString &text)
     }
     const QModelIndex idx = index(lineNumber);
     emit dataChanged(idx, idx, { TextRole });
+
+    // 编辑 rich/image 行 → 显示层同步降级并清空（富文本/图片与编辑后内容
+    // 不同步，残留会导致 .trx 保存后再打开显示旧样式错位；降级不可逆是
+    // 既有设计权衡，见 HANDOVER.md §4「显示层退化」）
+    LineEntry &entry = m_lines[lineNumber];
+    if (entry.display != QLatin1String("plain")) {
+        entry.display = QStringLiteral("plain");
+        entry.rich.clear();
+        entry.imageIds.clear();
+        emit dataChanged(idx, idx, { DisplayRole, RichTextRole, ImageIdsRole });
+    }
 }
 
 void DocumentModel::setLineDisplay(int lineNumber, const QString &mode)

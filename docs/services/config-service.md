@@ -57,7 +57,7 @@
       "key": "model",
       "displayName": "模型",
       "type": "string",
-      "default": "deepseek-chat",
+      "default": "deepseek-v4-flash",
       "group": "模型"
     }
   ]

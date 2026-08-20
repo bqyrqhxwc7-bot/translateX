@@ -57,15 +57,27 @@ foreach ($h in @($proc.MainWindowHandle)) {
 $bmp = $null
 if ($hWnd -ne [IntPtr]::Zero -and $bestArea -gt 0) {
     # 优先 PrintWindow（无需窗口前置/遮挡也能捕获）
+    # PW_RENDERFULLCONTENT(2)：Qt/ANGLE 等 GPU 渲染的窗口必须用该 flag，
+    # 否则 PrintWindow 返回假/黑图（后台窗口尤其如此）
     $bmp = New-Object System.Drawing.Bitmap($winW, $winH)
     $g = [System.Drawing.Graphics]::FromImage($bmp)
     $hdc = $g.GetHdc()
-    $ok = [TranslexCap]::PrintWindow($hWnd, $hdc, 0)
+    $ok = [TranslexCap]::PrintWindow($hWnd, $hdc, 2)
     $g.ReleaseHdc($hdc)
     $g.Dispose()
     if (-not $ok) {
+        # 退一级：flags=0 重试（部分老窗口不认 PW_RENDERFULLCONTENT）
         $bmp.Dispose()
-        $bmp = $null
+        $bmp = New-Object System.Drawing.Bitmap($winW, $winH)
+        $g = [System.Drawing.Graphics]::FromImage($bmp)
+        $hdc = $g.GetHdc()
+        $ok = [TranslexCap]::PrintWindow($hWnd, $hdc, 0)
+        $g.ReleaseHdc($hdc)
+        $g.Dispose()
+        if (-not $ok) {
+            $bmp.Dispose()
+            $bmp = $null
+        }
     }
 }
 if (-not $bmp) {

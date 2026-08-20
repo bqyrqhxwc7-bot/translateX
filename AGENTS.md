@@ -80,7 +80,7 @@ ctest --test-dir build-vs2026-x64 -C Debug -L perf
 ## 5. AI 工具环境
 
 - 本仓库带 Qt 官方 skills（`.agents/skills/`：QML/C++ 审查、Qt Quick Test、CMake、UI 设计等）与 Qt 文档 MCP（`.mcp.json`）。
-- opencode 多模型分工已配置在 `opencode.json`（build=deepseek-v4-flash，plan=gpt-5.6-luna，review=minimax-m3——原生支持视觉，UI 审查可直接读图，explore=mimo-v2.5，doc-writer=minimax-m3），改动前先读该文件。
+- opencode 多模型分工已配置在 `opencode.json`（build=deepseek-v4-flash，plan=gpt-5.6-luna，review=minimax-m3——原生支持视觉，UI 审查可直接读图，explore=mimo-v2.5，doc-writer=deepseek-v4-flash），改动前先读该文件。
 - **国内网络环境**：`git push` 可能失败（网络不稳），失败直接重试；winget/gh 安装类命令易卡死（曾超时），不要主动执行系统级安装；Qt 文档 MCP（`qt-docs-mcp.qt.io`，海外）可能超时——超时则改查本地 Qt 头文件/`D:/Software/Qt/6.11.1/` 文档，勿反复重试。
 - **火绒安全会挂起新 exe**：行为分析以调试方式创建进程（症状：测试进程停在 DbgBreakPoint、cdb 附加被拒、`tst_docx`/`tst_pdf` 等新测试 exe 无法启动）；已把项目目录加入信任区，若测试突然卡死先怀疑它（详见 HANDOVER.md §6）。
 - **终端编码**：控制台中文乱码是 GBK/UTF-8 不匹配（临时：`chcp 65001` 或 `[Console]::OutputEncoding`；永久：pwsh `$PROFILE` 已加 UTF-8 三行设置，推荐用 Windows Terminal）；用 `Read`/`Edit` 工具读写源码，勿经控制台管道改写（会破坏中文注释编码）。
@@ -91,7 +91,7 @@ ctest --test-dir build-vs2026-x64 -C Debug -L perf
 - **agent 切换**：`Tab` / `Shift+Tab` 循环主 agent（build → plan → review）；`Ctrl+X 然后 A` 打开 agent 列表；subagent（`@explore`/`@general`/`@doc-writer`）在输入框 `@` 触发。Tab 与输入补全的冲突已在全局 `tui.json` 解决（补全改 `Ctrl+Space`）。
 - **模型切换**：`Ctrl+X 然后 M` 打开模型列表（Go 套餐内 DeepSeek V4 Flash/Pro、GLM 等）。
 - **个人终端偏好**（tui.json 键位等）放全局 `~/.config/opencode/tui.json`，不入仓库；换机器后需重配（重配内容：`prompt.autocomplete.complete` 改 `ctrl+space`，保 Tab 切换 agent）。
-- **视觉 MCP（vision）**：审查 UI 截图/设计稿时用 `vision describe_image <截图路径>`。提供者默认 **opencode-go 的 minimax-m3**（实测支持视觉，自动读 `~/.local/share/opencode/auth.json`，**零 key 配置**）；备选智谱 GLM（key 放 `.opencode/mcp/vision/keys.local.json`，gitignore）或本地 Ollama（`OLLAMA_VISION_MODEL`）。服务器在 `.opencode/mcp/vision/server.mjs`，改后重启 opencode 生效。
+- **视觉 MCP（vision）**：审查 UI 截图/设计稿时用 `vision describe_image <截图路径>`。提供者默认 **opencode-go 的 mimo-v2.5**（自动读 `~/.local/share/opencode/auth.json`，**零 key 配置**；`VISION_MODEL` 环境变量可覆盖）；备选智谱 GLM（key 放 `.opencode/mcp/vision/keys.local.json`，gitignore）或本地 Ollama（`OLLAMA_VISION_MODEL`）。服务器在 `.opencode/mcp/vision/server.mjs`，改后重启 opencode 生效。
 - **grep/glob/skill 工具报 `Expand-Archive ... CouldNotAutoloadMatchingModule`（必踩，2026-08-18）**：opencode（Bun 编译）内部工具走 ripgrep，系统无 `rg` 时它下载 zip 用 PowerShell 解压，但 Bun 子进程加载不了 `Microsoft.PowerShell.Archive` 模块（anomalyco/opencode#24291，上游未修）。**修复：预装 ripgrep**——本机已装 `C:\home\sr291\.npm-global\rg.exe`（14.1.1，PATH 内）；换机器后若再遇此错，装 rg 并重启 opencode。
 - **review agent**：`Tab` 切到 review 或 `@review`；方法论在 `.opencode/prompts/review.md`。**只读红线**：不能改源码（edit deny + 写命令 deny），但可跑审查类命令——`ctest -R` 单测、`cmake --build`、启动应用（Start-Process）、进程管理、`Select-String`/`git grep` 搜索、只读 git、截图脚本（`.opencode/scripts/screenshot.ps1`）。**UI 审查它会主动截图**；看图方式：模型原生视觉（如切 minimax-m3）直接读图，否则走 vision MCP。给它截图路径最快。
 

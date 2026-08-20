@@ -1,0 +1,4279 @@
+{
+  "meta": {
+    "project": "Translex",
+    "date": "2026-08-20",
+    "generatedBy": "visualisation/data",
+    "purpose": "全链路递归依赖数据（源码 → 三方库 → Qt 模块 → 内嵌库 → 工具链 → 测试 → 打包 → 运行时系统依赖）",
+    "sources": [
+      "CMakeLists.txt / tests/CMakeLists.txt / CMakePresets.json",
+      "src/services/** 的 #include（源码级引用）",
+      "qml/** 的 import（QML 依赖）",
+      "third_party/FluentUI, quazip, zlib（git 子模块 + 本地补丁）",
+      "D:/Software/Qt/6.11.1/msvc2022_64/lib/cmake/*/*Dependencies.cmake（Qt 模块传递依赖矩阵）",
+      "Qt 6.11.0 官方 licenses-used-in-qt.html（Qt 源码内嵌第三方库清单）",
+      "GitHub qt/qtbase、qt/qtmultimedia、qt/qtspeech、qt/qtwebengine 源码（Windows 系统库链接）",
+      "build-vs2026-x64/Debug/*.dll + 各插件子目录（windeployqt 部署的真实运行时清单）"
+    ],
+    "edgeTypes": {
+      "source": "源码引用（#include / import）",
+      "build": "编译期链接（CMake target_link_libraries）",
+      "runtime": "运行期加载（DLL / 系统库）",
+      "tool": "工具链（构建/部署工具）",
+      "test": "测试关系",
+      "package": "打包/部署产物"
+    }
+  },
+  "layers": [
+    {
+      "id": 0,
+      "name": "L0 应用产物",
+      "color": "#0F7B0F",
+      "desc": "最终交付物（exe / dll）"
+    },
+    {
+      "id": 1,
+      "name": "L1 源码",
+      "color": "#0078D4",
+      "desc": "src/services 服务层、QML 界面、插件、测试"
+    },
+    {
+      "id": 2,
+      "name": "L2 三方库",
+      "color": "#9D5D00",
+      "desc": "git 子模块 + 自研 SDK（含本地补丁）"
+    },
+    {
+      "id": 3,
+      "name": "L3 Qt 模块",
+      "color": "#744DA9",
+      "desc": "Qt 6.11.1 直接依赖 + 递归传递依赖"
+    },
+    {
+      "id": 4,
+      "name": "L4 内嵌子库",
+      "color": "#C42B1C",
+      "desc": "内嵌子库：FluentUI 内嵌（qhotkey/qrencode/qcustomplot）+ Qt 源码内嵌第三方库（PCRE2/FreeType/HarfBuzz/PDFium…）"
+    },
+    {
+      "id": 5,
+      "name": "L5 编译工具链",
+      "color": "#006666",
+      "desc": "CMake / 编译器 / 部署工具"
+    },
+    {
+      "id": 6,
+      "name": "L6 测试",
+      "color": "#0078D4",
+      "desc": "CTest / Qt Test"
+    },
+    {
+      "id": 7,
+      "name": "L7 打包部署",
+      "color": "#D13438",
+      "desc": "NSIS / CPack / windeployqt"
+    },
+    {
+      "id": 8,
+      "name": "L8 运行时系统依赖",
+      "color": "#5D5D5D",
+      "desc": "Windows 系统组件（D3D 族 / Media Foundation / WASAPI / SAPI / DirectWrite / 平台插件系统库）+ CRT + FFmpeg"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "translex",
+      "label": "translex.exe",
+      "layer": 0,
+      "kind": "exe",
+      "version": "1.1.0-qml",
+      "desc": "Translex QML 主程序（Qt 6.11.1 + FluentUI 1.7.7）",
+      "owner": "translex"
+    },
+    {
+      "id": "example_plugin",
+      "label": "example_translation_plugin.dll",
+      "layer": 0,
+      "kind": "dll",
+      "desc": "示例插件（回显后端 translation.echo + 侧边栏面板），验证插件全链路",
+      "owner": "translex"
+    },
+    {
+      "id": "main_qml",
+      "label": "src/main_qml.cpp",
+      "layer": 1,
+      "kind": "source",
+      "desc": "QML 版入口：注册全部 service 到 ServiceRegistry，setContextProperty 暴露给 QML",
+      "owner": "translex"
+    },
+    {
+      "id": "driver_service",
+      "label": "src/driver_service.*",
+      "layer": 1,
+      "kind": "source",
+      "desc": "UI 驱动桥（测试钩子，TRANSLEX_UI_DRIVER=1 时启用）",
+      "owner": "translex"
+    },
+    {
+      "id": "appguard",
+      "label": "appguard",
+      "layer": 1,
+      "kind": "service",
+      "desc": "稳定性：全局日志（AppData/sr291/Translex）+ 崩溃诊断",
+      "owner": "translex"
+    },
+    {
+      "id": "documentmodel",
+      "label": "documentmodel",
+      "layer": 1,
+      "kind": "service",
+      "desc": "懒加载文档行模型（ListView 虚拟化，大文件性能核心），应用级单例",
+      "owner": "translex"
+    },
+    {
+      "id": "securestorage",
+      "label": "securestorage",
+      "layer": 1,
+      "kind": "service",
+      "desc": "敏感信息加密存储（机器指纹密钥 + 随机盐 + 校验），写入 %APPDATA%/secure.ini",
+      "owner": "translex"
+    },
+    {
+      "id": "serviceregistry",
+      "label": "serviceregistry",
+      "layer": 1,
+      "kind": "service",
+      "desc": "服务注册表：注册/查询/健康度聚合/插件扫描（QPluginLoader）",
+      "owner": "translex"
+    },
+    {
+      "id": "translationbackend",
+      "label": "translationbackend",
+      "layer": 1,
+      "kind": "service",
+      "desc": "三翻译后端：Ollama / 云翻译 / 网络大模型 API（OpenAI 风格）",
+      "owner": "translex"
+    },
+    {
+      "id": "translationcache",
+      "label": "translationcache",
+      "layer": 1,
+      "kind": "service",
+      "desc": "翻译缓存（内存 + 磁盘，SHA-256 key）",
+      "owner": "translex"
+    },
+    {
+      "id": "translationservice",
+      "label": "translationservice",
+      "layer": 1,
+      "kind": "service",
+      "desc": "翻译编排：上下文/智能分块/失败降级/质量门/缓存",
+      "owner": "translex"
+    },
+    {
+      "id": "termglossary",
+      "label": "termglossary",
+      "layer": 1,
+      "kind": "service",
+      "desc": "术语表（术语一致性校验）",
+      "owner": "translex"
+    },
+    {
+      "id": "qualitygate",
+      "label": "qualitygate",
+      "layer": 1,
+      "kind": "service",
+      "desc": "质量自检：回显拦截/长度/token 保留/术语（Levenshtein 编辑距离）",
+      "owner": "translex"
+    },
+    {
+      "id": "configservice",
+      "label": "configservice",
+      "layer": 1,
+      "kind": "service",
+      "desc": "配置服务（schema 驱动：ui/translation/tts JSON），持久化 + 加密",
+      "owner": "translex"
+    },
+    {
+      "id": "commentservice",
+      "label": "commentservice",
+      "layer": 1,
+      "kind": "service",
+      "desc": "批注单一数据源（provider 委托）",
+      "owner": "translex"
+    },
+    {
+      "id": "documentmanager",
+      "label": "documentmanager",
+      "layer": 1,
+      "kind": "service",
+      "desc": "文档打开/保存/新建/最近文件，格式分发（txt/trx/docx/pdf）",
+      "owner": "translex"
+    },
+    {
+      "id": "chapterservice",
+      "label": "chapterservice",
+      "layer": 1,
+      "kind": "service",
+      "desc": "章节识别（第X章/Markdown #）与跳转",
+      "owner": "translex"
+    },
+    {
+      "id": "findservice",
+      "label": "findservice",
+      "layer": 1,
+      "kind": "service",
+      "desc": "全文查找/替换（大小写/整词/模糊开关）",
+      "owner": "translex"
+    },
+    {
+      "id": "trxparser",
+      "label": "trxparser",
+      "layer": 1,
+      "kind": "service",
+      "desc": ".trx 格式读写（显示层：富文本/图片往返）",
+      "owner": "translex"
+    },
+    {
+      "id": "docxparser",
+      "label": "docxparser",
+      "layer": 1,
+      "kind": "service",
+      "desc": ".docx 导入（图文混排，QuaZip 解压）",
+      "owner": "translex"
+    },
+    {
+      "id": "pdfparser",
+      "label": "pdfparser",
+      "layer": 1,
+      "kind": "service",
+      "desc": ".pdf 导入/导出（QPdfDocument/QPdfWriter，每行一页）",
+      "owner": "translex"
+    },
+    {
+      "id": "texttospeechservice",
+      "label": "texttospeechservice",
+      "layer": 1,
+      "kind": "service",
+      "desc": "TTS 朗读（可选功能，无引擎时优雅降级）",
+      "owner": "translex"
+    },
+    {
+      "id": "translationhistoryservice",
+      "label": "translationhistoryservice",
+      "layer": 1,
+      "kind": "service",
+      "desc": "翻译历史（内存环形缓冲）",
+      "owner": "translex"
+    },
+    {
+      "id": "config_schemas",
+      "label": "config/*.json",
+      "layer": 1,
+      "kind": "data",
+      "desc": "配置 schema：ui.json / translation.json / translation.ollama.json / translation.network_model.json / textToSpeech.json",
+      "owner": "translex"
+    },
+    {
+      "id": "qml_ui",
+      "label": "qml/（界面层）",
+      "layer": 1,
+      "kind": "source",
+      "desc": "Main.qml（Outlook 式主窗口）+ TranslateHomePage + TranslateSettingsPage + panels/*（10+ 文件，FluentUI）",
+      "owner": "translex"
+    },
+    {
+      "id": "plugin_src",
+      "label": "plugins/（插件源码）",
+      "layer": 1,
+      "kind": "source",
+      "desc": "example_translation_plugin：EchoBackend + ExamplePanel.qml",
+      "owner": "translex"
+    },
+    {
+      "id": "tests",
+      "label": "tests/（16 个测试）",
+      "layer": 1,
+      "kind": "source",
+      "desc": "tst_documentmodel/securestorage/performance/translation/quality/configservice/comment/documentmanager/chapter/find/trx/docx/pdf/texttospeech/history/registry",
+      "owner": "translex"
+    },
+    {
+      "id": "translex_services",
+      "label": "translex_services（测试静态库）",
+      "layer": 1,
+      "kind": "build",
+      "desc": "tests/CMakeLists.txt 把全部 service 源码抽为静态库，16 个测试共享编译",
+      "owner": "translex"
+    },
+    {
+      "id": "fluentui",
+      "label": "FluentUI",
+      "layer": 2,
+      "kind": "lib",
+      "version": "1.7.7",
+      "license": "BSD-3-Clause",
+      "desc": "Fluent 设计语言 QML 组件库（git 子模块 + 本地补丁：FluWindow appBar z:1 等）",
+      "url": "https://github.com/zhuzichu520/FluentUI",
+      "owner": "fluentui"
+    },
+    {
+      "id": "quazip",
+      "label": "QuaZip",
+      "layer": 2,
+      "kind": "lib",
+      "version": "1.7.2",
+      "license": "LGPL-2.1",
+      "desc": "Qt 的 ZIP 包装库（docx 导入解压，git 子模块 + 本地补丁）",
+      "url": "https://github.com/stachenov/quazip",
+      "owner": "quazip"
+    },
+    {
+      "id": "zlib",
+      "label": "zlib",
+      "layer": 2,
+      "kind": "lib",
+      "version": "1.3.2.1",
+      "license": "zlib License",
+      "desc": "通用无损压缩库（QuaZip 依赖，静态编译，git 子模块 + 本地补丁）",
+      "url": "https://github.com/madler/zlib",
+      "owner": "zlib"
+    },
+    {
+      "id": "translex_sdk",
+      "label": "Translex_sdk",
+      "layer": 2,
+      "kind": "lib",
+      "version": "1.0",
+      "license": "MIT",
+      "desc": "插件化公共接口（iservice.h / itranslationbackend.h / itranslationplugin.h / serviceregistry.h），INTERFACE 库",
+      "owner": "translex"
+    },
+    {
+      "id": "qt_core",
+      "label": "Qt6 Core",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "核心非 GUI 功能（QString/QSettings/QProcess/QCryptographicHash）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_gui",
+      "label": "Qt6 Gui",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "GUI 基础（QPainter/QFontMetrics/QPdfDocument 依赖）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_widgets",
+      "label": "Qt6 Widgets",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "Widgets（QApplication/QuickWidgets 依赖）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_concurrent",
+      "label": "Qt6 Concurrent",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "并行（translationservice 智能分块/翻译回调）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_network",
+      "label": "Qt6 Network",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "网络（三翻译后端 HTTP）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_qml",
+      "label": "Qt6 Qml",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "QML 引擎（QQmlApplicationEngine）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_quick",
+      "label": "Qt6 Quick",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "Qt Quick 渲染（ListView 虚拟化编辑器）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_quickwidgets",
+      "label": "Qt6 QuickWidgets",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "QML 嵌入 Widgets 容器",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_svg",
+      "label": "Qt6 Svg",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "SVG 渲染（图标）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_shadertools",
+      "label": "Qt6 ShaderTools",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "着色器工具（Quick 渲染所需）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_printsupport",
+      "label": "Qt6 PrintSupport",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "打印支持（PDF 导出/打印）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_pdf",
+      "label": "Qt6 Pdf",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "PDF 解析/生成（pdfparser，核心功能硬性要求）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_texttospeech",
+      "label": "Qt6 TextToSpeech",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "TTS 朗读（可选，TRANSLEX_HAS_TTS）；Windows 带 SAPI + WinRT 双后端插件",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_test",
+      "label": "Qt6 Test",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "单元测试框架（16 个测试目标）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_qmlintegration",
+      "label": "Qt6 QmlIntegration",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "QML 集成（Qml 传递依赖）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_qmlmodels",
+      "label": "Qt6 QmlModels",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "QML 模型（Quick 传递依赖）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_qmlmeta",
+      "label": "Qt6 QmlMeta",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "QML 元类型（Quick 传递依赖）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_qmlworkerscript",
+      "label": "Qt6 QmlWorkerScript",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "QML WorkerScript（QmlMeta 传递依赖）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_opengl",
+      "label": "Qt6 OpenGL",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "OpenGL（Quick 渲染后端）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_quickcontrols2",
+      "label": "Qt6 QuickControls2",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "Quick Controls 2（QML 控件）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_quicktemplates2",
+      "label": "Qt6 QuickTemplates2",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "Quick Controls 模板（QuickControls2 传递依赖）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_quickcontrols2impl",
+      "label": "Qt6 QuickControls2Impl",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "Quick Controls 2 实现（样式基础）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_quicklayouts",
+      "label": "Qt6 QuickLayouts",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "QML 布局（设置页卡片布局）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_quickdialogs2",
+      "label": "Qt6 QuickDialogs2",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "QML 对话框",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_quickdialogs2utils",
+      "label": "Qt6 QuickDialogs2Utils",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "对话框工具",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_quickdialogs2quickimpl",
+      "label": "Qt6 QuickDialogs2QuickImpl",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "对话框 Quick 实现",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_quickshapes",
+      "label": "Qt6 QuickShapes",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "Quick 矢量形状",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_quickeffects",
+      "label": "Qt6 QuickEffects",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "Quick 特效",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_quickvectorimage",
+      "label": "Qt6 QuickVectorImage",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "Quick 矢量图（依赖 Svg）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_multimedia",
+      "label": "Qt6 Multimedia",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "多媒体（TextToSpeech / Pdf 传递依赖；FFmpeg 后端）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_core5compat",
+      "label": "Qt6 Core5Compat",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "Qt5 兼容（QuaZip QTextCodec 需要）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_labsfolderlistmodel",
+      "label": "Qt6 LabsFolderListModel",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "文件夹列表模型（windeployqt 部署，Quick 运行时）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_lottie",
+      "label": "Qt6 Lottie",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "Lottie 动画（FluentUI/部署依赖）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_quick3dutils",
+      "label": "Qt6 Quick3DUtils",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "Quick3D 工具（部署依赖）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_virtualkeyboard",
+      "label": "Qt6 VirtualKeyboard",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "虚拟键盘（windeployqt 自动部署）",
+      "owner": "qt"
+    },
+    {
+      "id": "qt_entrypointprivate",
+      "label": "Qt6 EntryPointPrivate",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "desc": "入口点（Core 传递依赖，winmain）",
+      "owner": "qt"
+    },
+    {
+      "id": "fluentui_qhotkey",
+      "label": "qhotkey（FluentUI 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "desc": "全局快捷键（Win：RegisterHotKey）",
+      "owner": "fluentui"
+    },
+    {
+      "id": "fluentui_qrcode",
+      "label": "qrcode / qrencode（FluentUI 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "desc": "二维码生成（内嵌 qrencode C 库）",
+      "owner": "fluentui"
+    },
+    {
+      "id": "fluentui_qmlcustomplot",
+      "label": "qmlcustomplot / qcustomplot（FluentUI 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "desc": "图表绘制（内嵌 qcustomplot）",
+      "url": "https://www.qcustomplot.com/",
+      "owner": "fluentui"
+    },
+    {
+      "id": "cmake",
+      "label": "CMake",
+      "layer": 5,
+      "kind": "tool",
+      "version": "3.21+",
+      "desc": "构建系统（qt_add_executable/qt_add_qml_module/CPack）",
+      "owner": "kitware"
+    },
+    {
+      "id": "msvc",
+      "label": "MSVC（VS 2026 x64）",
+      "layer": 5,
+      "kind": "tool",
+      "desc": "主编译器 cl.exe/link.exe（Visual Studio 18 2026 生成器，build-vs2026-x64）",
+      "owner": "microsoft"
+    },
+    {
+      "id": "clangcl",
+      "label": "clang-cl + Ninja",
+      "layer": 5,
+      "kind": "tool",
+      "desc": "交叉编译验证（build-clang，MSVC ABI）",
+      "owner": "llvm"
+    },
+    {
+      "id": "mingw",
+      "label": "MinGW g++ + Ninja",
+      "layer": 5,
+      "kind": "tool",
+      "desc": "交叉编译验证（build-mingw）",
+      "owner": "gcc"
+    },
+    {
+      "id": "ninja",
+      "label": "Ninja",
+      "layer": 5,
+      "kind": "tool",
+      "desc": "clang-cl/MinGW 的生成器",
+      "owner": "kitware"
+    },
+    {
+      "id": "windeployqt",
+      "label": "windeployqt",
+      "layer": 5,
+      "kind": "tool",
+      "desc": "Qt 运行时部署（post-build，拷贝 DLL + QML 模块）",
+      "owner": "translex"
+    },
+    {
+      "id": "qt_tools",
+      "label": "moc / rcc / uic / lupdate / lrelease",
+      "layer": 5,
+      "kind": "tool",
+      "desc": "Qt 构建工具（AUTOMOC/AUTORCC/AUTOUIC；FluentUI i18n）",
+      "owner": "qt"
+    },
+    {
+      "id": "vswhere",
+      "label": "vswhere",
+      "layer": 5,
+      "kind": "tool",
+      "desc": "探测 VS 安装路径（设置 VCINSTALLDIR 消除 windeployqt 警告）",
+      "owner": "microsoft"
+    },
+    {
+      "id": "ctest",
+      "label": "CTest",
+      "layer": 6,
+      "kind": "tool",
+      "desc": "测试驱动（ctest --test-dir build-vs2026-x64）",
+      "owner": "kitware"
+    },
+    {
+      "id": "nsis",
+      "label": "NSIS（makensis）",
+      "layer": 7,
+      "kind": "tool",
+      "desc": "Windows 安装包生成",
+      "owner": "nsis"
+    },
+    {
+      "id": "cpack",
+      "label": "CPack / ZIP",
+      "layer": 7,
+      "kind": "tool",
+      "desc": "打包（无 NSIS 时回退 ZIP）",
+      "owner": "kitware"
+    },
+    {
+      "id": "win_system",
+      "label": "Windows 系统 DLL",
+      "layer": 8,
+      "kind": "runtime",
+      "desc": "kernel32 / advapi32 / shell32 / ole32 / oleaut32 / comdlg32 / winspool / crypt32 / ws2_32 / bcrypt / secur32（Qt 运行时）",
+      "owner": "microsoft"
+    },
+    {
+      "id": "win_user32",
+      "label": "user32",
+      "layer": 8,
+      "kind": "runtime",
+      "desc": "FluentUI 无边框（HTCAPTION 拖拽）+ qhotkey（RegisterHotKey）直接调用",
+      "owner": "microsoft"
+    },
+    {
+      "id": "win_dwmapi",
+      "label": "dwmapi",
+      "layer": 8,
+      "kind": "runtime",
+      "desc": "FluentUI 无边框窗口（DwmExtendFrameIntoClientArea）",
+      "owner": "microsoft"
+    },
+    {
+      "id": "win_graphics",
+      "label": "图形/DirectX",
+      "layer": 8,
+      "kind": "runtime",
+      "desc": "图形/DirectX 聚合（子节点：d3d11/d3d12/dxgi/dwrite/d2d/d3d9/dcomp/opengl/D3Dcompiler）",
+      "owner": "microsoft"
+    },
+    {
+      "id": "msvc_runtime",
+      "label": "MSVC CRT",
+      "layer": 8,
+      "kind": "runtime",
+      "desc": "msvcp140 / vcruntime140 / concrt140 / vccorlib140（Debug 带 d 后缀）",
+      "owner": "microsoft"
+    },
+    {
+      "id": "ffmpeg",
+      "label": "FFmpeg（QtMultimedia 后端）",
+      "layer": 8,
+      "kind": "runtime",
+      "desc": "FFmpeg 7.1.3（QtMultimedia FFmpeg 后端）：avcodec-61 / avformat-61 / avutil-59 / swresample-5 / swscale-8（Qt 6.11 内嵌打包，windeployqt 部署）",
+      "owner": "ffmpeg",
+      "version": "7.1.3"
+    },
+    {
+      "id": "qt_qwindows",
+      "label": "Qt 平台插件 (qwindows)",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "Windows 平台集成插件（platforms/qwindows.dll），Qt GUI 运行必需；链接 gdi32/dwrite/d3d9/imm32/setupapi 等 17 个系统库"
+    },
+    {
+      "id": "qt_schannel",
+      "label": "Qt TLS 后端 (Schannel)",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "Windows Schannel TLS 后端（tls/qschannelbackend.dll），HTTPS 用系统证书存储"
+    },
+    {
+      "id": "qt_ffmpeg_plugin",
+      "label": "Qt 多媒体后端 (FFmpeg)",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "multimedia/ffmpegmediaplugin.dll（QtMultimedia FFmpeg 后端插件）"
+    },
+    {
+      "id": "qt_wmf_plugin",
+      "label": "Qt 多媒体后端 (WMF)",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "multimedia/windowsmediaplugin.dll（Windows Media Foundation 后端）"
+    },
+    {
+      "id": "qt_imageformats",
+      "label": "Qt 图片格式插件",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "imageformats/：gif / icns / ico / jpeg / pdf / svg / tga / tiff / wbmp / webp（内嵌 libtiff + libwebp）"
+    },
+    {
+      "id": "fluentui_assets",
+      "label": "FluentIcons 字体 + i18n",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "fluentui",
+      "desc": "FluentIcons.ttf 图标字体 + fluentui_en_US/zh_CN.qm 翻译资源（内嵌 qrc）"
+    },
+    {
+      "id": "qt_quickcontrols2basic",
+      "label": "Qt6 QuickControls2 Basic",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "QuickControls2 基础样式（Basic Style），windeployqt 全量部署"
+    },
+    {
+      "id": "qt_quickcontrols2basicstyleimpl",
+      "label": "Qt6 QuickControls2 BasicStyleImpl",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "Basic 样式实现（StyleImpl，样式基座）"
+    },
+    {
+      "id": "qt_quickcontrols2fusion",
+      "label": "Qt6 QuickControls2 Fusion",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "Fusion 样式（跨平台桌面风格）"
+    },
+    {
+      "id": "qt_quickcontrols2fusionstyleimpl",
+      "label": "Qt6 QuickControls2 FusionStyleImpl",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "Fusion 样式实现"
+    },
+    {
+      "id": "qt_quickcontrols2imagine",
+      "label": "Qt6 QuickControls2 Imagine",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "Imagine 样式（资源驱动皮肤）"
+    },
+    {
+      "id": "qt_quickcontrols2imaginestyleimpl",
+      "label": "Qt6 QuickControls2 ImagineStyleImpl",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "Imagine 样式实现"
+    },
+    {
+      "id": "qt_quickcontrols2material",
+      "label": "Qt6 QuickControls2 Material",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "Material 样式（Google Material 设计）"
+    },
+    {
+      "id": "qt_quickcontrols2materialstyleimpl",
+      "label": "Qt6 QuickControls2 MaterialStyleImpl",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "Material 样式实现"
+    },
+    {
+      "id": "qt_quickcontrols2universal",
+      "label": "Qt6 QuickControls2 Universal",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "Universal 样式（Windows 通用设计）"
+    },
+    {
+      "id": "qt_quickcontrols2universalstyleimpl",
+      "label": "Qt6 QuickControls2 UniversalStyleImpl",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "Universal 样式实现"
+    },
+    {
+      "id": "qt_quickcontrols2windowsstyleimpl",
+      "label": "Qt6 QuickControls2 WindowsStyleImpl",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "Windows 原生样式实现（qmodernwindowsstyled.dll 依赖）"
+    },
+    {
+      "id": "qt_quickvectorimagegenerator",
+      "label": "Qt6 QuickVectorImageGenerator",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "QtQuick.VectorImage 模块的矢量图生成器（依赖 QuickVectorImage + Svg）"
+    },
+    {
+      "id": "qt_lottievectorimagegenerator",
+      "label": "Qt6 LottieVectorImageGenerator",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "Lottie 矢量图生成器（依赖 Lottie + LottieVectorImageHelpers，vectorimageformats 插件载体）"
+    },
+    {
+      "id": "qt_certonly",
+      "label": "Qt TLS 后端 (CertOnly)",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "tls/qcertonlybackend.dll：仅证书校验 TLS 后端（与 Schannel 并存）"
+    },
+    {
+      "id": "qt_windowsstyle",
+      "label": "Qt Windows 样式 (Modern)",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "styles/qmodernwindowsstyled.dll：Windows 11 现代原生样式"
+    },
+    {
+      "id": "qt_networkinfo",
+      "label": "Qt 网络信息 (Windows)",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "networkinformation/qnetworklistmanagerd.dll：Windows 网络连接状态后端"
+    },
+    {
+      "id": "qt_tts_sapi",
+      "label": "Qt TTS 后端 (SAPI)",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "texttospeech/qtexttospeech_sapid.dll：Windows SAPI5 语音合成（ISpVoice COM）"
+    },
+    {
+      "id": "qt_tts_winrt",
+      "label": "Qt TTS 后端 (WinRT)",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "texttospeech/qtexttospeech_winrtd.dll：Windows.Media.SpeechSynthesis 语音合成"
+    },
+    {
+      "id": "qt_tts_mock",
+      "label": "Qt TTS 后端 (Mock)",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "texttospeech/qtexttospeech_mockd.dll：测试用模拟引擎"
+    },
+    {
+      "id": "qt_svgicon",
+      "label": "Qt 图标引擎 (SVG)",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "iconengines/qsvgicond.dll：SVG 图标引擎"
+    },
+    {
+      "id": "qt_uiotouch",
+      "label": "Qt 通用插件 (UIO Touch)",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "generic/qtuiotouchplugind.dll：UIO 触摸输入桥接（模拟器/调试）"
+    },
+    {
+      "id": "qt_vkeyboard_plugin",
+      "label": "Qt 虚拟键盘输入法插件",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "platforminputcontexts/qtvirtualkeyboardplugind.dll：Qt VirtualKeyboard 输入上下文插件"
+    },
+    {
+      "id": "qt_lottie_vectorimage",
+      "label": "Qt Lottie 矢量图格式",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "vectorimageformats/qlottievectorimaged.dll：QML 矢量图格式后端（.qml 导出 SVG 路径）"
+    },
+    {
+      "id": "qt_qmltooling",
+      "label": "Qt QML 调试工具集",
+      "layer": 3,
+      "kind": "qt",
+      "version": "6.11.1",
+      "owner": "qt",
+      "desc": "qmltooling/：qmldbg_server / tcp / debugger / inspector / profiler / quickprofiler / messages / local / native / nativedebugger / preview / quick3dprofiler / quickeventreplay（11+ 插件，QML 远程调试）"
+    },
+    {
+      "id": "qt_emb_pcre2",
+      "label": "PCRE2（QtCore 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "10.47",
+      "license": "BSD-2/BSD-3",
+      "desc": "正则表达式引擎（QRegularExpression），qtbase/src/3rdparty/pcre2"
+    },
+    {
+      "id": "qt_emb_zlib",
+      "label": "zlib（QtCore 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "1.3.2",
+      "license": "zlib License",
+      "desc": "数据压缩（QByteArray/qCompress，Qt 自备一份与 QuaZip 分离）"
+    },
+    {
+      "id": "qt_emb_tinycbor",
+      "label": "TinyCBOR（QtCore 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "7.0",
+      "license": "MIT",
+      "desc": "CBOR 二进制序列化（QCborValue/QCborArray/QCborMap）"
+    },
+    {
+      "id": "qt_emb_doubleconversion",
+      "label": "double-conversion（QtCore 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "3.4.0",
+      "license": "BSD-3",
+      "desc": "IEEE 双精度浮点高效二进制/十进制转换（QString 数字格式化）"
+    },
+    {
+      "id": "qt_emb_hash",
+      "label": "哈希算法集（QtCore 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "—",
+      "license": "CC0/Public Domain/BSD",
+      "desc": "BLAKE2 + MD4 + MD5 + SHA-1 + SHA-3(Keccak) + SipHash + SHA-384/512(rfc6234)，QCryptographicHash 后端"
+    },
+    {
+      "id": "qt_emb_easing",
+      "label": "Easing Equations（QtCore 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "—",
+      "license": "BSD-3",
+      "desc": "Robert Penner 缓动函数（QEasingCurve 动画）"
+    },
+    {
+      "id": "qt_emb_clrd",
+      "label": "Unicode CLDR + UCD（QtCore 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "v48.1 / 36",
+      "license": "Unicode License",
+      "desc": "Unicode 通用语言数据仓库 + 字符数据库（QLocale/QString 本地化）"
+    },
+    {
+      "id": "qt_emb_freetype",
+      "label": "FreeType（QtGui 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "2.14.1",
+      "license": "FTL / GPL-2",
+      "desc": "字体光栅化引擎（QFont 渲染核心）"
+    },
+    {
+      "id": "qt_emb_harfbuzz",
+      "label": "HarfBuzz-NG（QtGui 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "12.3.2",
+      "license": "MIT",
+      "desc": "复杂文字整形引擎（中东/南亚/东亚文字正确排布）"
+    },
+    {
+      "id": "qt_emb_libpng",
+      "label": "LibPNG（QtGui 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "1.6.55",
+      "license": "Libpng License",
+      "desc": "PNG 编解码（QImage PNG 格式）"
+    },
+    {
+      "id": "qt_emb_libjpeg",
+      "label": "LibJPEG-turbo（QtGui 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "3.1.3",
+      "license": "IJG / BSD-3",
+      "desc": "JPEG 编解码（SIMD 加速）"
+    },
+    {
+      "id": "qt_emb_md4c",
+      "label": "MD4C（QtGui 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "0.5.2",
+      "license": "MIT",
+      "desc": "Markdown 解析（QTextMarkdownImporter/Exporter）"
+    },
+    {
+      "id": "qt_emb_pixman",
+      "label": "Pixman（QtGui 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "0.17.12",
+      "license": "MIT",
+      "desc": "像素操作与光栅化库（QImage 合成/变换）"
+    },
+    {
+      "id": "qt_emb_d3d12ma",
+      "label": "D3D12 Memory Allocator（QtGui 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "f128d39",
+      "license": "MIT",
+      "desc": "Direct3D 12 显存分配器（Qt RHI 后端）"
+    },
+    {
+      "id": "qt_emb_vma",
+      "label": "Vulkan Memory Allocator（QtGui 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "3.2.1",
+      "license": "MIT",
+      "desc": "Vulkan 显存分配器（Qt RHI Vulkan 后端）"
+    },
+    {
+      "id": "qt_emb_vulkanheaders",
+      "label": "Vulkan API Registry（QtGui 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "1.4.308",
+      "license": "Apache-2 / MIT",
+      "desc": "Vulkan 头文件（WrapVulkanHeaders，RHI 编译所需）"
+    },
+    {
+      "id": "qt_emb_openglheaders",
+      "label": "OpenGL / GLES2 Headers（QtGui 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "rev 27684",
+      "license": "MIT",
+      "desc": "OpenGL / OpenGL ES 2 头文件（RHI GL 后端编译所需）"
+    },
+    {
+      "id": "qt_emb_emoji_segmenter",
+      "label": "Emoji Segmenter（QtGui 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "0.4.0",
+      "license": "Apache-2",
+      "desc": "Emoji 序列分段（文本渲染）"
+    },
+    {
+      "id": "qt_emb_libtiff",
+      "label": "libtiff（Qt 图片格式内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "4.7.1",
+      "license": "Libtiff License",
+      "desc": "TIFF 编解码（imageformats/qtiff）"
+    },
+    {
+      "id": "qt_emb_libwebp",
+      "label": "libwebp（Qt 图片格式内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "1.6.0",
+      "license": "BSD-3",
+      "desc": "WebP 编解码（imageformats/qwebp）"
+    },
+    {
+      "id": "qt_emb_drlibs",
+      "label": "DR Libs（QtMultimedia 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "0.14.4",
+      "license": "Unlicense / MIT",
+      "desc": "音频重采样（DR_WAV/DR_MP3，FFmpeg 后端解码）"
+    },
+    {
+      "id": "qt_emb_signalsmith",
+      "label": "Signalsmith Stretch（QtMultimedia 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "1.0.0",
+      "license": "MIT",
+      "desc": "高质量音频变速变调（音高/速率独立控制）"
+    },
+    {
+      "id": "qt_emb_tlsf",
+      "label": "Two-Level Segregated Fit（QtMultimedia 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "v3.1",
+      "license": "BSD-3",
+      "desc": "实时内存分配器（音频缓冲）"
+    },
+    {
+      "id": "qt_emb_libpsl",
+      "label": "libpsl + Public Suffix List（QtNetwork 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "PSL 2026-01-16",
+      "license": "BSD-3 / MPL-2",
+      "desc": "公共后缀列表解析（cookie 域/安全域判定）"
+    },
+    {
+      "id": "qt_emb_pdfium",
+      "label": "PDFium（QtPdf 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "Chromium PDFium",
+      "license": "BSD-3",
+      "desc": "Chromium 的 PDF 引擎（QPdfDocument/QPdfPageRenderer 核心，静态编入 Qt6Pdf）"
+    },
+    {
+      "id": "qt_emb_jscore_macro",
+      "label": "JavaScriptCore Macro Assembler（QtQml 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "—",
+      "license": "BSD-2",
+      "desc": "JIT 宏汇编器（QML JS 引擎 V4 编译后端）"
+    },
+    {
+      "id": "qt_emb_yoga",
+      "label": "Yoga（QtQuick 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "2.0.1",
+      "license": "MIT",
+      "desc": "Flexbox 布局引擎（QtQuick.Layouts / 布局计算）"
+    },
+    {
+      "id": "qt_emb_spirv_cross",
+      "label": "SPIRV-Cross（QtShaderTools 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "—",
+      "license": "Apache-2 / MIT",
+      "desc": "SPIR-V 反射与跨后端转换（rhi 着色器处理）"
+    },
+    {
+      "id": "qt_emb_glslang",
+      "label": "glslang（QtShaderTools 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "16.1.0",
+      "license": "BSD-3 / MIT / Apache-2",
+      "desc": "GLSL/HLSL → SPIR-V 编译器（qsb 工具链）"
+    },
+    {
+      "id": "qt_emb_openwnn",
+      "label": "OpenWnn（QtVirtualKeyboard 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "—",
+      "license": "Apache-2",
+      "desc": "日语输入法（假名 → 汉字转换）"
+    },
+    {
+      "id": "qt_emb_pinyinime",
+      "label": "PinyinIME（QtVirtualKeyboard 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "—",
+      "license": "Apache-2",
+      "desc": "拼音输入法（汉字候选）"
+    },
+    {
+      "id": "qt_emb_tcime",
+      "label": "tcime（QtVirtualKeyboard 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "—",
+      "license": "Apache-2 / BSD-3",
+      "desc": "繁体中文注音输入法"
+    },
+    {
+      "id": "qt_emb_catch2",
+      "label": "Catch2（QtTest 内嵌）",
+      "layer": 4,
+      "kind": "embedded",
+      "owner": "qt",
+      "version": "2.13.10",
+      "license": "BSL-1.0",
+      "desc": "测试断言库（QtTest 内部使用）"
+    },
+    {
+      "id": "win_d3d11",
+      "label": "d3d11 (Direct3D 11)",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "Direct3D 11（Qt RHI 主渲染后端 + WMF/EVR 呈现 + FFmpeg 硬件解码）"
+    },
+    {
+      "id": "win_d3d12",
+      "label": "d3d12 + dxcompiler + dxil",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "Direct3D 12（Qt RHI D3D12 后端；dxcompiler/dxil 为 HLSL→DXIL 编译器，windeployqt 部署）"
+    },
+    {
+      "id": "win_dxgi",
+      "label": "dxgi + dxguid",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "DXGI 图形基础设施（适配器/交换链；dxguid 为 GUID 定义库）"
+    },
+    {
+      "id": "win_directwrite",
+      "label": "dwrite (DirectWrite)",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "DirectWrite 文字排版（qwindows 平台插件字体渲染）"
+    },
+    {
+      "id": "win_direct2d",
+      "label": "d2d1 (Direct2D)",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "Direct2D（qwindows 可选 Direct2D 呈现路径）"
+    },
+    {
+      "id": "win_d3d9",
+      "label": "d3d9 (Direct3D 9)",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "Direct3D 9（qwindows 旧版 GL 测试/回退）"
+    },
+    {
+      "id": "win_dcomp",
+      "label": "dcomp (DirectComposition)",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "DirectComposition 桌面合成（Qt Quick RHI 窗口合成）"
+    },
+    {
+      "id": "win_opengl",
+      "label": "opengl32 + opengl32sw",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "OpenGL 系统库 + opengl32sw.dll 软件渲染回退（无 GPU 时）"
+    },
+    {
+      "id": "win_d3dcompiler",
+      "label": "D3Dcompiler_47",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "Direct3D HLSL 编译器（RHI 着色器编译，windeployqt 部署）"
+    },
+    {
+      "id": "win_mediafoundation",
+      "label": "Media Foundation",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "Windows Media Foundation：Mfplat.dll / Mf.dll / Mfreadwrite.dll（MFStartup/MFCreateSourceReader…，WMF 多媒体后端核心）"
+    },
+    {
+      "id": "win_wasapi",
+      "label": "WASAPI 音频",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "mmdeviceapi.dll + audioclient.dll（Windows 音频会话 API，音频输出/输入）"
+    },
+    {
+      "id": "win_evr",
+      "label": "EVR (evr.dll)",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "增强视频渲染器（WMF 后端视频呈现，D3D11 交换链）"
+    },
+    {
+      "id": "win_sapi",
+      "label": "SAPI (sapi.dll)",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "Speech API 5（qtexttospeech_sapi 后端：ISpVoice COM 语音合成）"
+    },
+    {
+      "id": "win_winrt",
+      "label": "Windows Runtime",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "WinRT 运行时（runtimeobject.dll；qtexttospeech_winrt 后端经 RoActivateInstance 激活 Windows.Media.SpeechSynthesis）"
+    },
+    {
+      "id": "win_wmcodecdsp",
+      "label": "wmcodecdsp",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "Windows 媒体编解码器 DSP（音频/视频 MFT 编解码）"
+    },
+    {
+      "id": "win_gdi32",
+      "label": "gdi32",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "GDI 图形设备接口（字体/绘图/DIB）"
+    },
+    {
+      "id": "win_uxtheme",
+      "label": "uxtheme",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "Windows 主题引擎（控件视觉风格）"
+    },
+    {
+      "id": "win_wintab",
+      "label": "wintab32",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "Wintab 数位板 API（qwindows 手写笔/压感，动态加载）"
+    },
+    {
+      "id": "win_imm32",
+      "label": "imm32",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "IMM32 输入法管理器（IME 组合窗口）"
+    },
+    {
+      "id": "win_setupapi",
+      "label": "setupapi",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "设备安装 API（qwindows 平台插件）"
+    },
+    {
+      "id": "win_shlwapi",
+      "label": "shlwapi",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "Shell 轻量工具（路径/注册表辅助，qwindows + WinRT TTS）"
+    },
+    {
+      "id": "win_version",
+      "label": "version.dll",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "版本资源 API（qwindows 读取系统/驱动版本）"
+    },
+    {
+      "id": "win_winmm",
+      "label": "winmm",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "Windows 多媒体（计时器/低层音频，qwindows）"
+    },
+    {
+      "id": "win_wtsapi",
+      "label": "wtsapi32",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "终端服务 API（会话/桌面监控，qwindows）"
+    },
+    {
+      "id": "win_shcore",
+      "label": "shcore",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "Shell 核心（Per-Monitor DPI 感知，qwindows）"
+    },
+    {
+      "id": "win_mscms",
+      "label": "mscms",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "Windows 颜色管理（ICC 色彩配置，qwindows）"
+    },
+    {
+      "id": "win_schannel_sys",
+      "label": "schannel",
+      "layer": 8,
+      "kind": "runtime",
+      "owner": "microsoft",
+      "desc": "Windows 安全通道（TLS/SSL 加密协议，Qt Schannel 后端底层）"
+    }
+  ],
+  "edges": [
+    {
+      "source": "translex",
+      "target": "main_qml",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "driver_service",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "qml_ui",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "config_schemas",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "appguard",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "documentmodel",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "securestorage",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "serviceregistry",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "translationbackend",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "translationcache",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "translationservice",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "termglossary",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "qualitygate",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "configservice",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "commentservice",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "documentmanager",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "chapterservice",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "findservice",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "trxparser",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "docxparser",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "pdfparser",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "texttospeechservice",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "translationhistoryservice",
+      "type": "source"
+    },
+    {
+      "source": "translex",
+      "target": "fluentui",
+      "type": "build"
+    },
+    {
+      "source": "translex",
+      "target": "quazip",
+      "type": "build"
+    },
+    {
+      "source": "translex",
+      "target": "translex_sdk",
+      "type": "build"
+    },
+    {
+      "source": "translex",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "translex",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "translex",
+      "target": "qt_widgets",
+      "type": "build"
+    },
+    {
+      "source": "translex",
+      "target": "qt_concurrent",
+      "type": "build"
+    },
+    {
+      "source": "translex",
+      "target": "qt_network",
+      "type": "build"
+    },
+    {
+      "source": "translex",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "translex",
+      "target": "qt_quick",
+      "type": "build"
+    },
+    {
+      "source": "translex",
+      "target": "qt_quickwidgets",
+      "type": "build"
+    },
+    {
+      "source": "translex",
+      "target": "qt_svg",
+      "type": "build"
+    },
+    {
+      "source": "translex",
+      "target": "qt_shadertools",
+      "type": "build"
+    },
+    {
+      "source": "translex",
+      "target": "qt_printsupport",
+      "type": "build"
+    },
+    {
+      "source": "translex",
+      "target": "qt_pdf",
+      "type": "build"
+    },
+    {
+      "source": "translex",
+      "target": "qt_texttospeech",
+      "type": "build"
+    },
+    {
+      "source": "translex",
+      "target": "qt_tools",
+      "type": "tool"
+    },
+    {
+      "source": "translex",
+      "target": "windeployqt",
+      "type": "tool"
+    },
+    {
+      "source": "translex",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "translex",
+      "target": "msvc_runtime",
+      "type": "runtime"
+    },
+    {
+      "source": "translex",
+      "target": "win_graphics",
+      "type": "runtime"
+    },
+    {
+      "source": "translex",
+      "target": "example_plugin",
+      "type": "package"
+    },
+    {
+      "source": "main_qml",
+      "target": "appguard",
+      "type": "source"
+    },
+    {
+      "source": "main_qml",
+      "target": "serviceregistry",
+      "type": "source"
+    },
+    {
+      "source": "main_qml",
+      "target": "documentmodel",
+      "type": "source"
+    },
+    {
+      "source": "main_qml",
+      "target": "translationservice",
+      "type": "source"
+    },
+    {
+      "source": "main_qml",
+      "target": "configservice",
+      "type": "source"
+    },
+    {
+      "source": "main_qml",
+      "target": "commentservice",
+      "type": "source"
+    },
+    {
+      "source": "main_qml",
+      "target": "documentmanager",
+      "type": "source"
+    },
+    {
+      "source": "main_qml",
+      "target": "chapterservice",
+      "type": "source"
+    },
+    {
+      "source": "main_qml",
+      "target": "findservice",
+      "type": "source"
+    },
+    {
+      "source": "main_qml",
+      "target": "texttospeechservice",
+      "type": "source"
+    },
+    {
+      "source": "main_qml",
+      "target": "translationhistoryservice",
+      "type": "source"
+    },
+    {
+      "source": "main_qml",
+      "target": "driver_service",
+      "type": "source"
+    },
+    {
+      "source": "qml_ui",
+      "target": "fluentui",
+      "type": "build"
+    },
+    {
+      "source": "qml_ui",
+      "target": "qt_quick",
+      "type": "build"
+    },
+    {
+      "source": "qml_ui",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "qml_ui",
+      "target": "qt_quickcontrols2",
+      "type": "build"
+    },
+    {
+      "source": "qml_ui",
+      "target": "qt_quicklayouts",
+      "type": "build"
+    },
+    {
+      "source": "chapterservice",
+      "target": "documentmodel",
+      "type": "source"
+    },
+    {
+      "source": "configservice",
+      "target": "securestorage",
+      "type": "source"
+    },
+    {
+      "source": "configservice",
+      "target": "config_schemas",
+      "type": "source"
+    },
+    {
+      "source": "documentmanager",
+      "target": "commentservice",
+      "type": "source"
+    },
+    {
+      "source": "documentmanager",
+      "target": "configservice",
+      "type": "source"
+    },
+    {
+      "source": "documentmanager",
+      "target": "documentmodel",
+      "type": "source"
+    },
+    {
+      "source": "documentmanager",
+      "target": "docxparser",
+      "type": "source"
+    },
+    {
+      "source": "documentmanager",
+      "target": "pdfparser",
+      "type": "source"
+    },
+    {
+      "source": "documentmanager",
+      "target": "trxparser",
+      "type": "source"
+    },
+    {
+      "source": "documentmodel",
+      "target": "commentservice",
+      "type": "source"
+    },
+    {
+      "source": "docxparser",
+      "target": "commentservice",
+      "type": "source"
+    },
+    {
+      "source": "docxparser",
+      "target": "documentmodel",
+      "type": "source"
+    },
+    {
+      "source": "findservice",
+      "target": "documentmodel",
+      "type": "source"
+    },
+    {
+      "source": "pdfparser",
+      "target": "commentservice",
+      "type": "source"
+    },
+    {
+      "source": "pdfparser",
+      "target": "documentmodel",
+      "type": "source"
+    },
+    {
+      "source": "serviceregistry",
+      "target": "translex_sdk",
+      "type": "source"
+    },
+    {
+      "source": "texttospeechservice",
+      "target": "configservice",
+      "type": "source"
+    },
+    {
+      "source": "translationbackend",
+      "target": "serviceregistry",
+      "type": "source"
+    },
+    {
+      "source": "translationservice",
+      "target": "configservice",
+      "type": "source"
+    },
+    {
+      "source": "translationservice",
+      "target": "serviceregistry",
+      "type": "source"
+    },
+    {
+      "source": "translationservice",
+      "target": "translationbackend",
+      "type": "source"
+    },
+    {
+      "source": "translationservice",
+      "target": "translationcache",
+      "type": "source"
+    },
+    {
+      "source": "docxparser",
+      "target": "quazip",
+      "type": "build"
+    },
+    {
+      "source": "pdfparser",
+      "target": "qt_pdf",
+      "type": "build"
+    },
+    {
+      "source": "pdfparser",
+      "target": "qt_printsupport",
+      "type": "build"
+    },
+    {
+      "source": "pdfparser",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "translationbackend",
+      "target": "qt_network",
+      "type": "build"
+    },
+    {
+      "source": "translationservice",
+      "target": "qt_concurrent",
+      "type": "build"
+    },
+    {
+      "source": "translationservice",
+      "target": "qt_network",
+      "type": "build"
+    },
+    {
+      "source": "texttospeechservice",
+      "target": "qt_texttospeech",
+      "type": "build"
+    },
+    {
+      "source": "documentmodel",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "documentmodel",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "securestorage",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "configservice",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "quazip",
+      "target": "zlib",
+      "type": "build"
+    },
+    {
+      "source": "quazip",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "quazip",
+      "target": "qt_core5compat",
+      "type": "build"
+    },
+    {
+      "source": "fluentui",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "fluentui",
+      "target": "qt_quick",
+      "type": "build"
+    },
+    {
+      "source": "fluentui",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "fluentui",
+      "target": "qt_widgets",
+      "type": "build"
+    },
+    {
+      "source": "fluentui",
+      "target": "qt_printsupport",
+      "type": "build"
+    },
+    {
+      "source": "fluentui",
+      "target": "fluentui_qhotkey",
+      "type": "source"
+    },
+    {
+      "source": "fluentui",
+      "target": "fluentui_qrcode",
+      "type": "source"
+    },
+    {
+      "source": "fluentui",
+      "target": "fluentui_qmlcustomplot",
+      "type": "source"
+    },
+    {
+      "source": "fluentui",
+      "target": "win_user32",
+      "type": "runtime"
+    },
+    {
+      "source": "fluentui",
+      "target": "win_dwmapi",
+      "type": "runtime"
+    },
+    {
+      "source": "fluentui_qhotkey",
+      "target": "win_user32",
+      "type": "runtime"
+    },
+    {
+      "source": "example_plugin",
+      "target": "translex_sdk",
+      "type": "build"
+    },
+    {
+      "source": "example_plugin",
+      "target": "plugin_src",
+      "type": "source"
+    },
+    {
+      "source": "tests",
+      "target": "translex_services",
+      "type": "build"
+    },
+    {
+      "source": "tests",
+      "target": "qt_test",
+      "type": "build"
+    },
+    {
+      "source": "tests",
+      "target": "ctest",
+      "type": "test"
+    },
+    {
+      "source": "translex_services",
+      "target": "documentmodel",
+      "type": "source"
+    },
+    {
+      "source": "translex_services",
+      "target": "translationservice",
+      "type": "source"
+    },
+    {
+      "source": "translex_services",
+      "target": "configservice",
+      "type": "source"
+    },
+    {
+      "source": "translex_services",
+      "target": "pdfparser",
+      "type": "source"
+    },
+    {
+      "source": "translex_services",
+      "target": "docxparser",
+      "type": "source"
+    },
+    {
+      "source": "translex_services",
+      "target": "quazip",
+      "type": "build"
+    },
+    {
+      "source": "qt_gui",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_network",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_concurrent",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_widgets",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_widgets",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_printsupport",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_printsupport",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_printsupport",
+      "target": "qt_widgets",
+      "type": "build"
+    },
+    {
+      "source": "qt_svg",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_svg",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_shadertools",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_shadertools",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_qml",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_qml",
+      "target": "qt_qmlintegration",
+      "type": "build"
+    },
+    {
+      "source": "qt_qml",
+      "target": "qt_network",
+      "type": "build"
+    },
+    {
+      "source": "qt_qmlmodels",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_qmlmodels",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "qt_qmlmeta",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "qt_qmlmeta",
+      "target": "qt_qmlmodels",
+      "type": "build"
+    },
+    {
+      "source": "qt_qmlmeta",
+      "target": "qt_qmlworkerscript",
+      "type": "build"
+    },
+    {
+      "source": "qt_qmlworkerscript",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_qmlworkerscript",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "qt_opengl",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_opengl",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_quick",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_quick",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_quick",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "qt_quick",
+      "target": "qt_qmlmodels",
+      "type": "build"
+    },
+    {
+      "source": "qt_quick",
+      "target": "qt_qmlmeta",
+      "type": "build"
+    },
+    {
+      "source": "qt_quick",
+      "target": "qt_network",
+      "type": "build"
+    },
+    {
+      "source": "qt_quick",
+      "target": "qt_opengl",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickwidgets",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickwidgets",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickwidgets",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickwidgets",
+      "target": "qt_quick",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickwidgets",
+      "target": "qt_widgets",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2",
+      "target": "qt_quick",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2",
+      "target": "qt_quicktemplates2",
+      "type": "build"
+    },
+    {
+      "source": "qt_quicktemplates2",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_quicktemplates2",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_quicktemplates2",
+      "target": "qt_quick",
+      "type": "build"
+    },
+    {
+      "source": "qt_quicktemplates2",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "qt_quicktemplates2",
+      "target": "qt_qmlmodels",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2impl",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2impl",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2impl",
+      "target": "qt_quick",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2impl",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2impl",
+      "target": "qt_quicktemplates2",
+      "type": "build"
+    },
+    {
+      "source": "qt_quicklayouts",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_quicklayouts",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "qt_quicklayouts",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_quicklayouts",
+      "target": "qt_quick",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickdialogs2",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickdialogs2",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickdialogs2",
+      "target": "qt_quick",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickdialogs2",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickdialogs2",
+      "target": "qt_quickcontrols2impl",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickdialogs2",
+      "target": "qt_quickdialogs2utils",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickdialogs2",
+      "target": "qt_quickdialogs2quickimpl",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickdialogs2",
+      "target": "qt_quicktemplates2",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickdialogs2utils",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickdialogs2utils",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickdialogs2quickimpl",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickdialogs2quickimpl",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickdialogs2quickimpl",
+      "target": "qt_quick",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickdialogs2quickimpl",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickdialogs2quickimpl",
+      "target": "qt_quickcontrols2impl",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickdialogs2quickimpl",
+      "target": "qt_quickdialogs2utils",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickdialogs2quickimpl",
+      "target": "qt_quicktemplates2",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickshapes",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickshapes",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickshapes",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickshapes",
+      "target": "qt_quick",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickeffects",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickeffects",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickeffects",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickeffects",
+      "target": "qt_quick",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickvectorimage",
+      "target": "qt_quick",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickvectorimage",
+      "target": "qt_svg",
+      "type": "build"
+    },
+    {
+      "source": "qt_multimedia",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_multimedia",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_multimedia",
+      "target": "qt_concurrent",
+      "type": "build"
+    },
+    {
+      "source": "qt_multimedia",
+      "target": "qt_network",
+      "type": "build"
+    },
+    {
+      "source": "qt_texttospeech",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_texttospeech",
+      "target": "qt_multimedia",
+      "type": "build"
+    },
+    {
+      "source": "qt_pdf",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_pdf",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_pdf",
+      "target": "qt_network",
+      "type": "build"
+    },
+    {
+      "source": "qt_core5compat",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_labsfolderlistmodel",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_labsfolderlistmodel",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "qt_labsfolderlistmodel",
+      "target": "qt_qmlmodels",
+      "type": "build"
+    },
+    {
+      "source": "qt_lottie",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_lottie",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_lottie",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "qt_lottie",
+      "target": "qt_quick",
+      "type": "build"
+    },
+    {
+      "source": "qt_quick3dutils",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_quick3dutils",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_quick3dutils",
+      "target": "qt_quick",
+      "type": "build"
+    },
+    {
+      "source": "qt_virtualkeyboard",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qt_virtualkeyboard",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "qt_virtualkeyboard",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "qt_virtualkeyboard",
+      "target": "qt_quick",
+      "type": "build"
+    },
+    {
+      "source": "qt_core",
+      "target": "qt_entrypointprivate",
+      "type": "build"
+    },
+    {
+      "source": "qt_multimedia",
+      "target": "ffmpeg",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_quick",
+      "target": "win_graphics",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_gui",
+      "target": "win_graphics",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_core",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_network",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_gui",
+      "target": "win_user32",
+      "type": "runtime"
+    },
+    {
+      "source": "msvc_runtime",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "cmake",
+      "target": "msvc",
+      "type": "tool"
+    },
+    {
+      "source": "cmake",
+      "target": "clangcl",
+      "type": "tool"
+    },
+    {
+      "source": "cmake",
+      "target": "mingw",
+      "type": "tool"
+    },
+    {
+      "source": "clangcl",
+      "target": "ninja",
+      "type": "tool"
+    },
+    {
+      "source": "mingw",
+      "target": "ninja",
+      "type": "tool"
+    },
+    {
+      "source": "cmake",
+      "target": "qt_tools",
+      "type": "tool"
+    },
+    {
+      "source": "cmake",
+      "target": "ctest",
+      "type": "tool"
+    },
+    {
+      "source": "cmake",
+      "target": "cpack",
+      "type": "tool"
+    },
+    {
+      "source": "windeployqt",
+      "target": "vswhere",
+      "type": "tool"
+    },
+    {
+      "source": "cpack",
+      "target": "nsis",
+      "type": "tool"
+    },
+    {
+      "source": "translex",
+      "target": "cpack",
+      "type": "package"
+    },
+    {
+      "source": "translex",
+      "target": "nsis",
+      "type": "package"
+    },
+    {
+      "source": "qt_gui",
+      "target": "qt_qwindows",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qwindows",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_network",
+      "target": "qt_schannel",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_schannel",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_multimedia",
+      "target": "qt_ffmpeg_plugin",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_ffmpeg_plugin",
+      "target": "ffmpeg",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_multimedia",
+      "target": "qt_wmf_plugin",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_wmf_plugin",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_gui",
+      "target": "qt_imageformats",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_imageformats",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "fluentui",
+      "target": "fluentui_assets",
+      "type": "source"
+    },
+    {
+      "source": "qt_quickcontrols2basic",
+      "target": "qt_quickcontrols2basicstyleimpl",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2basic",
+      "target": "qt_quickcontrols2",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2basicstyleimpl",
+      "target": "qt_quickcontrols2impl",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2fusion",
+      "target": "qt_quickcontrols2fusionstyleimpl",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2fusion",
+      "target": "qt_quickcontrols2",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2fusion",
+      "target": "qt_quickcontrols2basic",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2fusionstyleimpl",
+      "target": "qt_quickcontrols2impl",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2imagine",
+      "target": "qt_quickcontrols2imaginestyleimpl",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2imagine",
+      "target": "qt_quickcontrols2",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2imagine",
+      "target": "qt_quickcontrols2impl",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2imagine",
+      "target": "qt_quickcontrols2basic",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2imaginestyleimpl",
+      "target": "qt_quickcontrols2impl",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2material",
+      "target": "qt_quickcontrols2materialstyleimpl",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2material",
+      "target": "qt_quickcontrols2",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2material",
+      "target": "qt_quickcontrols2impl",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2material",
+      "target": "qt_quickcontrols2basic",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2materialstyleimpl",
+      "target": "qt_quickcontrols2impl",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2universal",
+      "target": "qt_quickcontrols2universalstyleimpl",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2universal",
+      "target": "qt_quickcontrols2",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2universal",
+      "target": "qt_quickcontrols2impl",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2universal",
+      "target": "qt_quickcontrols2basic",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2universalstyleimpl",
+      "target": "qt_quickcontrols2impl",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickcontrols2windowsstyleimpl",
+      "target": "qt_quickcontrols2impl",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickvectorimagegenerator",
+      "target": "qt_quickvectorimage",
+      "type": "build"
+    },
+    {
+      "source": "qt_quickvectorimagegenerator",
+      "target": "qt_svg",
+      "type": "build"
+    },
+    {
+      "source": "qt_lottievectorimagegenerator",
+      "target": "qt_lottie",
+      "type": "build"
+    },
+    {
+      "source": "qt_network",
+      "target": "qt_certonly",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_quickcontrols2",
+      "target": "qt_windowsstyle",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_network",
+      "target": "qt_networkinfo",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_texttospeech",
+      "target": "qt_tts_sapi",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_texttospeech",
+      "target": "qt_tts_winrt",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_texttospeech",
+      "target": "qt_tts_mock",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_gui",
+      "target": "qt_svgicon",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_gui",
+      "target": "qt_uiotouch",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_gui",
+      "target": "qt_vkeyboard_plugin",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_virtualkeyboard",
+      "target": "qt_vkeyboard_plugin",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_gui",
+      "target": "qt_lottie_vectorimage",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_quickvectorimage",
+      "target": "qt_lottie_vectorimage",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qml",
+      "target": "qt_qmltooling",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_core",
+      "target": "qt_emb_pcre2",
+      "type": "build"
+    },
+    {
+      "source": "qt_core",
+      "target": "qt_emb_zlib",
+      "type": "build"
+    },
+    {
+      "source": "qt_core",
+      "target": "qt_emb_tinycbor",
+      "type": "build"
+    },
+    {
+      "source": "qt_core",
+      "target": "qt_emb_doubleconversion",
+      "type": "build"
+    },
+    {
+      "source": "qt_core",
+      "target": "qt_emb_hash",
+      "type": "build"
+    },
+    {
+      "source": "qt_core",
+      "target": "qt_emb_easing",
+      "type": "build"
+    },
+    {
+      "source": "qt_core",
+      "target": "qt_emb_clrd",
+      "type": "build"
+    },
+    {
+      "source": "qt_gui",
+      "target": "qt_emb_freetype",
+      "type": "build"
+    },
+    {
+      "source": "qt_gui",
+      "target": "qt_emb_harfbuzz",
+      "type": "build"
+    },
+    {
+      "source": "qt_gui",
+      "target": "qt_emb_libpng",
+      "type": "build"
+    },
+    {
+      "source": "qt_gui",
+      "target": "qt_emb_libjpeg",
+      "type": "build"
+    },
+    {
+      "source": "qt_gui",
+      "target": "qt_emb_md4c",
+      "type": "build"
+    },
+    {
+      "source": "qt_gui",
+      "target": "qt_emb_pixman",
+      "type": "build"
+    },
+    {
+      "source": "qt_gui",
+      "target": "qt_emb_d3d12ma",
+      "type": "build"
+    },
+    {
+      "source": "qt_gui",
+      "target": "qt_emb_vma",
+      "type": "build"
+    },
+    {
+      "source": "qt_gui",
+      "target": "qt_emb_vulkanheaders",
+      "type": "build"
+    },
+    {
+      "source": "qt_gui",
+      "target": "qt_emb_openglheaders",
+      "type": "build"
+    },
+    {
+      "source": "qt_gui",
+      "target": "qt_emb_emoji_segmenter",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_freetype",
+      "target": "qt_emb_libpng",
+      "type": "build"
+    },
+    {
+      "source": "qt_imageformats",
+      "target": "qt_emb_libtiff",
+      "type": "build"
+    },
+    {
+      "source": "qt_imageformats",
+      "target": "qt_emb_libwebp",
+      "type": "build"
+    },
+    {
+      "source": "qt_multimedia",
+      "target": "qt_emb_drlibs",
+      "type": "build"
+    },
+    {
+      "source": "qt_multimedia",
+      "target": "qt_emb_signalsmith",
+      "type": "build"
+    },
+    {
+      "source": "qt_multimedia",
+      "target": "qt_emb_tlsf",
+      "type": "build"
+    },
+    {
+      "source": "qt_network",
+      "target": "qt_emb_libpsl",
+      "type": "build"
+    },
+    {
+      "source": "qt_pdf",
+      "target": "qt_emb_pdfium",
+      "type": "build"
+    },
+    {
+      "source": "qt_qml",
+      "target": "qt_emb_jscore_macro",
+      "type": "build"
+    },
+    {
+      "source": "qt_quick",
+      "target": "qt_emb_yoga",
+      "type": "build"
+    },
+    {
+      "source": "qt_shadertools",
+      "target": "qt_emb_spirv_cross",
+      "type": "build"
+    },
+    {
+      "source": "qt_shadertools",
+      "target": "qt_emb_glslang",
+      "type": "build"
+    },
+    {
+      "source": "qt_virtualkeyboard",
+      "target": "qt_emb_openwnn",
+      "type": "build"
+    },
+    {
+      "source": "qt_virtualkeyboard",
+      "target": "qt_emb_pinyinime",
+      "type": "build"
+    },
+    {
+      "source": "qt_virtualkeyboard",
+      "target": "qt_emb_tcime",
+      "type": "build"
+    },
+    {
+      "source": "qt_test",
+      "target": "qt_emb_catch2",
+      "type": "build"
+    },
+    {
+      "source": "win_graphics",
+      "target": "win_d3d11",
+      "type": "runtime"
+    },
+    {
+      "source": "win_graphics",
+      "target": "win_d3d12",
+      "type": "runtime"
+    },
+    {
+      "source": "win_graphics",
+      "target": "win_dxgi",
+      "type": "runtime"
+    },
+    {
+      "source": "win_graphics",
+      "target": "win_directwrite",
+      "type": "runtime"
+    },
+    {
+      "source": "win_graphics",
+      "target": "win_direct2d",
+      "type": "runtime"
+    },
+    {
+      "source": "win_graphics",
+      "target": "win_d3d9",
+      "type": "runtime"
+    },
+    {
+      "source": "win_graphics",
+      "target": "win_dcomp",
+      "type": "runtime"
+    },
+    {
+      "source": "win_graphics",
+      "target": "win_opengl",
+      "type": "runtime"
+    },
+    {
+      "source": "win_graphics",
+      "target": "win_d3dcompiler",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_quick",
+      "target": "win_d3d11",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_quick",
+      "target": "win_d3d12",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_quick",
+      "target": "win_dxgi",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_quick",
+      "target": "win_dcomp",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_gui",
+      "target": "win_d3d11",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_gui",
+      "target": "win_dxgi",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_gui",
+      "target": "win_gdi32",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_gui",
+      "target": "win_uxtheme",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qwindows",
+      "target": "win_directwrite",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qwindows",
+      "target": "win_direct2d",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qwindows",
+      "target": "win_d3d9",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qwindows",
+      "target": "win_gdi32",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qwindows",
+      "target": "win_uxtheme",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qwindows",
+      "target": "win_wintab",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qwindows",
+      "target": "win_imm32",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qwindows",
+      "target": "win_setupapi",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qwindows",
+      "target": "win_shlwapi",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qwindows",
+      "target": "win_version",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qwindows",
+      "target": "win_winmm",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qwindows",
+      "target": "win_wtsapi",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qwindows",
+      "target": "win_shcore",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qwindows",
+      "target": "win_mscms",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_wmf_plugin",
+      "target": "win_mediafoundation",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_wmf_plugin",
+      "target": "win_wasapi",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_wmf_plugin",
+      "target": "win_evr",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_wmf_plugin",
+      "target": "win_wmcodecdsp",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_wmf_plugin",
+      "target": "win_d3d11",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_ffmpeg_plugin",
+      "target": "win_d3d11",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_ffmpeg_plugin",
+      "target": "win_dxgi",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_tts_sapi",
+      "target": "win_sapi",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_tts_winrt",
+      "target": "win_winrt",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_schannel",
+      "target": "win_schannel_sys",
+      "type": "runtime"
+    },
+    {
+      "source": "win_d3d11",
+      "target": "win_dxgi",
+      "type": "runtime"
+    },
+    {
+      "source": "win_d3d12",
+      "target": "win_dxgi",
+      "type": "runtime"
+    },
+    {
+      "source": "win_direct2d",
+      "target": "win_d3d11",
+      "type": "runtime"
+    },
+    {
+      "source": "win_direct2d",
+      "target": "win_dxgi",
+      "type": "runtime"
+    },
+    {
+      "source": "win_dcomp",
+      "target": "win_dxgi",
+      "type": "runtime"
+    },
+    {
+      "source": "win_evr",
+      "target": "win_d3d11",
+      "type": "runtime"
+    },
+    {
+      "source": "win_evr",
+      "target": "win_dxgi",
+      "type": "runtime"
+    },
+    {
+      "source": "win_directwrite",
+      "target": "win_gdi32",
+      "type": "runtime"
+    },
+    {
+      "source": "win_wasapi",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_mediafoundation",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_winrt",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_sapi",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "driver_service",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "driver_service",
+      "target": "qt_qml",
+      "type": "build"
+    },
+    {
+      "source": "appguard",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "translationcache",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "termglossary",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "qualitygate",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "commentservice",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "trxparser",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "translationhistoryservice",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "translex_sdk",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "plugin_src",
+      "target": "translex_sdk",
+      "type": "source"
+    },
+    {
+      "source": "zlib",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_entrypointprivate",
+      "target": "win_system",
+      "type": "build"
+    },
+    {
+      "source": "qt_certonly",
+      "target": "qt_core",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_certonly",
+      "target": "qt_network",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_windowsstyle",
+      "target": "qt_core",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_windowsstyle",
+      "target": "qt_widgets",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_windowsstyle",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_windowsstyle",
+      "target": "win_uxtheme",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_networkinfo",
+      "target": "qt_core",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_networkinfo",
+      "target": "qt_network",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_networkinfo",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_tts_mock",
+      "target": "qt_core",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_tts_mock",
+      "target": "qt_texttospeech",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_svgicon",
+      "target": "qt_core",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_svgicon",
+      "target": "qt_gui",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_svgicon",
+      "target": "qt_svg",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_uiotouch",
+      "target": "qt_core",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_uiotouch",
+      "target": "qt_gui",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_vkeyboard_plugin",
+      "target": "qt_core",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_vkeyboard_plugin",
+      "target": "qt_qml",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_vkeyboard_plugin",
+      "target": "qt_quick",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_vkeyboard_plugin",
+      "target": "qt_virtualkeyboard",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_vkeyboard_plugin",
+      "target": "win_imm32",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_lottie_vectorimage",
+      "target": "qt_core",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_lottie_vectorimage",
+      "target": "qt_lottie",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_lottie_vectorimage",
+      "target": "qt_svg",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qmltooling",
+      "target": "qt_core",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qmltooling",
+      "target": "qt_qml",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_qmltooling",
+      "target": "qt_network",
+      "type": "runtime"
+    },
+    {
+      "source": "qt_emb_pcre2",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_zlib",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_tinycbor",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_doubleconversion",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_hash",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_easing",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_clrd",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_harfbuzz",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_libpng",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_libjpeg",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_md4c",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_pixman",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_d3d12ma",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_vma",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_emoji_segmenter",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_libtiff",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_libwebp",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_drlibs",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_signalsmith",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_tlsf",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_libpsl",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_pdfium",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_jscore_macro",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_yoga",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_spirv_cross",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_glslang",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_openwnn",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_pinyinime",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_tcime",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_catch2",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_libpng",
+      "target": "qt_emb_zlib",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_libtiff",
+      "target": "qt_emb_zlib",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_libtiff",
+      "target": "qt_emb_libjpeg",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_pdfium",
+      "target": "qt_emb_freetype",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_pdfium",
+      "target": "qt_emb_libjpeg",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_pdfium",
+      "target": "qt_emb_libpng",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_pdfium",
+      "target": "qt_emb_zlib",
+      "type": "build"
+    },
+    {
+      "source": "qt_emb_pdfium",
+      "target": "win_system",
+      "type": "build"
+    },
+    {
+      "source": "fluentui_qrcode",
+      "target": "msvc_runtime",
+      "type": "build"
+    },
+    {
+      "source": "fluentui_qmlcustomplot",
+      "target": "qt_core",
+      "type": "build"
+    },
+    {
+      "source": "fluentui_qmlcustomplot",
+      "target": "qt_gui",
+      "type": "build"
+    },
+    {
+      "source": "fluentui_qmlcustomplot",
+      "target": "qt_widgets",
+      "type": "build"
+    },
+    {
+      "source": "msvc",
+      "target": "msvc_runtime",
+      "type": "tool"
+    },
+    {
+      "source": "ninja",
+      "target": "msvc_runtime",
+      "type": "tool"
+    },
+    {
+      "source": "vswhere",
+      "target": "msvc_runtime",
+      "type": "tool"
+    },
+    {
+      "source": "ctest",
+      "target": "msvc_runtime",
+      "type": "tool"
+    },
+    {
+      "source": "nsis",
+      "target": "msvc_runtime",
+      "type": "tool"
+    },
+    {
+      "source": "qt_tools",
+      "target": "qt_core",
+      "type": "tool"
+    },
+    {
+      "source": "qt_tools",
+      "target": "msvc_runtime",
+      "type": "tool"
+    },
+    {
+      "source": "ffmpeg",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "ffmpeg",
+      "target": "win_user32",
+      "type": "runtime"
+    },
+    {
+      "source": "win_user32",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_dwmapi",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_gdi32",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_gdi32",
+      "target": "win_user32",
+      "type": "runtime"
+    },
+    {
+      "source": "win_dxgi",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_d3d9",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_d3d9",
+      "target": "win_user32",
+      "type": "runtime"
+    },
+    {
+      "source": "win_d3d9",
+      "target": "win_gdi32",
+      "type": "runtime"
+    },
+    {
+      "source": "win_opengl",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_opengl",
+      "target": "win_user32",
+      "type": "runtime"
+    },
+    {
+      "source": "win_opengl",
+      "target": "win_gdi32",
+      "type": "runtime"
+    },
+    {
+      "source": "win_d3dcompiler",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_d3dcompiler",
+      "target": "win_user32",
+      "type": "runtime"
+    },
+    {
+      "source": "win_wmcodecdsp",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_wmcodecdsp",
+      "target": "win_mediafoundation",
+      "type": "runtime"
+    },
+    {
+      "source": "win_uxtheme",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_uxtheme",
+      "target": "win_user32",
+      "type": "runtime"
+    },
+    {
+      "source": "win_uxtheme",
+      "target": "win_gdi32",
+      "type": "runtime"
+    },
+    {
+      "source": "win_wintab",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_wintab",
+      "target": "win_user32",
+      "type": "runtime"
+    },
+    {
+      "source": "win_imm32",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_imm32",
+      "target": "win_user32",
+      "type": "runtime"
+    },
+    {
+      "source": "win_setupapi",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_setupapi",
+      "target": "win_user32",
+      "type": "runtime"
+    },
+    {
+      "source": "win_shlwapi",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_shlwapi",
+      "target": "win_user32",
+      "type": "runtime"
+    },
+    {
+      "source": "win_version",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_winmm",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_winmm",
+      "target": "win_user32",
+      "type": "runtime"
+    },
+    {
+      "source": "win_wtsapi",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_shcore",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_shcore",
+      "target": "win_user32",
+      "type": "runtime"
+    },
+    {
+      "source": "win_mscms",
+      "target": "win_system",
+      "type": "runtime"
+    },
+    {
+      "source": "win_mscms",
+      "target": "win_user32",
+      "type": "runtime"
+    },
+    {
+      "source": "win_mscms",
+      "target": "win_gdi32",
+      "type": "runtime"
+    },
+    {
+      "source": "win_schannel_sys",
+      "target": "win_system",
+      "type": "runtime"
+    }
+  ],
+  "owners": [
+    {
+      "id": "translex",
+      "name": "本项目 (Translex)",
+      "color": "#4FC1FF",
+      "desc": "Translex 仓库（QML + services + 测试）"
+    },
+    {
+      "id": "qt",
+      "name": "Qt (The Qt Company)",
+      "color": "#744DA9",
+      "desc": "Qt 6.11.1 模块 / 运行时 / 插件"
+    },
+    {
+      "id": "fluentui",
+      "name": "FluentUI (zhuzichu520)",
+      "color": "#E6008D",
+      "desc": "FluentUI 1.7.7 组件库 + 内嵌子库"
+    },
+    {
+      "id": "quazip",
+      "name": "QuaZip (S. Tachenov)",
+      "color": "#C586C0",
+      "desc": "QuaZip 1.7.2"
+    },
+    {
+      "id": "zlib",
+      "name": "zlib (madler)",
+      "color": "#B5CEA8",
+      "desc": "zlib 1.3.2.1"
+    },
+    {
+      "id": "kitware",
+      "name": "Kitware",
+      "color": "#CE9178",
+      "desc": "CMake / CTest / CPack / Ninja"
+    },
+    {
+      "id": "microsoft",
+      "name": "Microsoft",
+      "color": "#0078D4",
+      "desc": "MSVC / VS 2026 / Windows 系统 / DirectX"
+    },
+    {
+      "id": "llvm",
+      "name": "LLVM",
+      "color": "#9CDCFE",
+      "desc": "clang-cl"
+    },
+    {
+      "id": "gcc",
+      "name": "GCC (MinGW)",
+      "color": "#F48771",
+      "desc": "MinGW g++"
+    },
+    {
+      "id": "ffmpeg",
+      "name": "FFmpeg 项目",
+      "color": "#6CCB5F",
+      "desc": "FFmpeg 6.x 库（QtMultimedia 后端）"
+    },
+    {
+      "id": "nsis",
+      "name": "NSIS 项目",
+      "color": "#DCDCAA",
+      "desc": "Nullsoft 脚本安装系统"
+    }
+  ]
+}

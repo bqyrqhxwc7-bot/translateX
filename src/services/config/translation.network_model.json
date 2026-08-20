@@ -22,10 +22,10 @@
     {
       "key": "model",
       "displayName": "模型",
-      "description": "使用的模型名称",
+      "description": "模型名称（DeepSeek 官方：deepseek-v4-flash / deepseek-v4-pro；其他 OpenAI 兼容服务填其模型名）",
       "type": "string",
-      "default": "deepseek-chat",
-      "placeholder": "deepseek-chat",
+      "default": "deepseek-v4-flash",
+      "placeholder": "deepseek-v4-flash",
       "group": "模型"
     }
   ]

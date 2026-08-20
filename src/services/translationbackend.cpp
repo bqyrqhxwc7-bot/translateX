@@ -532,7 +532,7 @@ TranslationResult NetworkModelBackend::requestChat(
     // 模型名 trim：配置里可能带尾随空白（如粘贴的制表符），会导致 API 拒绝
     const QString model = options.model().trimmed();
     payload.insert(QStringLiteral("model"), model.isEmpty()
-        ? QStringLiteral("deepseek-chat")
+        ? QStringLiteral("deepseek-v4-flash")
         : model);
     payload.insert(QStringLiteral("temperature"), options.temperature);
     payload.insert(QStringLiteral("stream"), false);
@@ -555,7 +555,7 @@ TranslationResult NetworkModelBackend::requestChat(
     messages.append(userMessage);
     payload.insert(QStringLiteral("messages"), messages);
 
-    const int timeoutMs = options.timeoutMs > 0 ? qMin(options.timeoutMs, 90000) : 90000;
+    const int timeoutMs = options.timeoutMs > 0 ? qMin(options.timeoutMs, 60000) : 60000;
     NetworkCall call(timeoutMs);
     call.setCancelFlag(cancelFlag);
     QElapsedTimer timer;
@@ -658,8 +658,15 @@ QList<QPair<int, TranslationResult>> NetworkModelBackend::translateBatch(
 
     const TranslationResult resp = requestChat(batchPrompt, options, cancelFlag);
     if (!resp.success) {
-        // 批量请求失败 → 逐行兜底（translateBatchSync 后续仍会逐行重试）
-        return ITranslationBackend::translateBatch(sourceLines, targetLines, options, cancelFlag);
+        // 批量请求失败：返回失败结果，由 translateBatchSync 统一处理
+        //（此前在此逐行兜底会与上层重试叠加成双重重试，且不受
+        //  fallbackEnabled 开关控制——批量超时后每行再等 30-60 秒，
+        //  用户看到「翻译卡住不动」「关了降级还在重试」）
+        QList<QPair<int, TranslationResult>> failed;
+        for (int ln : targetLines) {
+            failed.append(qMakePair(ln, resp));
+        }
+        return failed;
     }
 
     // 解析 JSON 数组（容忍 Markdown 代码块包裹）

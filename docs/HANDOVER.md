@@ -52,28 +52,28 @@ git push origin main
 | --- | --- | --- |
 | 编辑器 | 虚拟化 ListView + 懒加载模型（50 万行 <100ms）、Enter 拆行、Backspace 合并、撤销/重做 | `services/documentmodel.md` |
 | 批注 | 单一数据源（CommentService）、行内直编、字号独立、跳转/清空/JSON 导入导出 | `services/comment-service.md` |
-| 翻译 | 三后端 + 上下文感知 + 回显拦截 + 质量自检 + 缓存(L1内存/L2磁盘) + 智能分块 + 失败降级 | `services/translation-service.md` |
-| 章节 | 「第X章」/ Markdown `#` 识别、上/下一章 | `services/chapter-service.md` |
+| 翻译 | 三后端 + 上下文感知 + 回显拦截 + 质量自检 + 缓存(L1内存/L2磁盘) + 智能分块 + 失败降级；**目标语言预检测通用化（2026-08-19）**：`isTargetLanguageText` 支持 zh/ja/ko/en（中文 CJK≥30%、日文假名占比、韩文谚文≥30%、英文拉丁≥80% 且无 CJK）跳过已是目标语言的行；**回显错误消息明确化**（提示检查语言设置 + 后端模型名/API）；**降级链错误透出**（主错误 +「（降级后也未成功）」，不再被「与原文相同」掩盖配置错误）；**全部跳过提示**（文档可能已是目标语言，请检查设置页）；**质量告警误报修复（2026-08-19）**（回显豁免 `hasTranslatableContent`：原文去除数字/型号/代码 token 后无实质内容——P2899R1/2025-03-14/API 等译文=原文是正确翻译，不算未翻译；长度规则短行≤8 字符或纯型号行放宽 0.1x~8x、极端 15x 仍拦截；**回显拦截始终生效但不进「质量自检复核面板」**，面板只收规则告警受 `qualityGateEnabled` 开关控制——用户关了开关不再看到「疑似未翻译」）；**翻译卡住/降级开关失效修复（2026-08-19）**（删 `NetworkModelBackend::translateBatch` 内逐行兜底——与上层重试双重重试致「15 行卡 7 分钟不动」且不受 `fallbackEnabled` 控制；批量全失败不逐行重试、只降级一次，`fallbackEnabled=false` 快速失败；批量超时 90s→60s；`maxChunkChars` 默认 14000→6000） | `services/translation-service.md` |
+| 章节 | 「第X章」/ Markdown `#` 识别、上/下一章；**富文本样式标题识别（2026-08-19）**：字号 ≥ 正文基准×1.15 或短行加粗 → 章节，数字开头+尾随页码的目录条目过滤（p2899r1.pdf「共 8 章」，之前 0） | `services/chapter-service.md` |
 | 查找 | 大小写/整词/**模糊**（子序列）、替换 | `services/find-service.md` |
 | 浮窗 | 真独立 Window（Qt.Tool+Frameless）、位置记忆、启动显示 | `ui/translate-panel.md` |
 | 设置页 | schema 驱动（`ui.json`），字号滑条、查找开关、浮窗开关 | `services/config-service.md` |
 | TTS 朗读 | **迭代3**：独立 TextToSpeechService（朗读选中行/选区、语速、停止；跨平台 Qt6TextToSpeech，无模块/引擎优雅降级） | `services/text-to-speech.md` |
 | 文档统计 | **迭代4**：`DocumentModel::stats()`（行/非空行/字/词/批注/富文本/图片行），状态栏「共 N 行 · M 字 · K 条批注」 | `services/iteration4-stats-autosave-glossary.md` |
 | 自动保存 | **迭代4**：dirty 时每 60s 写 `%LOCALAPPDATA%/sr291/Translex/autosave/<名>-<路径哈希>.autosave.trx`（完整往返含批注）；正常保存/打开/新建后清理；启动检测崩溃残留（只弹一次）→ 恢复/丢弃弹窗（恢复还原原始路径）；受限模式与 `ui.autosaveEnabled` 关闭时跳过 | `services/iteration4-stats-autosave-glossary.md` |
-| 术语自动提取 | **迭代4**：`TermGlossary::extractCandidates`（英文高频词 ≥3 次、停用词/已有术语过滤、频率降序）；设置页「从文档提取」弹窗勾选加入 | `services/iteration4-stats-autosave-glossary.md` |
+| 术语自动提取 | **迭代4**：`TermGlossary::extractCandidates`（英文高频词 ≥3 次、停用词/已有术语过滤、频率降序）；设置页「从文档提取」弹窗勾选加入；**增强（2026-08-19）**：词形扩展 `[A-Za-z0-9+#-]{2,}` 覆盖技术标识符（API/C++/P2899R1/x86-64，纯数字/符号过滤）+ 中文 2-3 字 n-gram（虚词字符过滤）+ 设置页术语列表**行内译文编辑**（updateTermTranslation 失焦保存）+ 主页 Ribbon「提取术语」按钮与弹窗（勾选/词频/行内译文/全选/添加选中，受限模式禁用）+ **候选放宽**（`extractTermCandidates` maxCount=-1 不限「达标都可候选」，0 兼容为 1，主页/设置页改 `(lines, 3, -1)`）+ **AI 建议译文**（网络大模型后端专用：`suggestTermTranslations` 按文档上下文猜测勾选术语的标准译文，逐行「术语 = 译文」、容忍多分隔符/序号/引号、自译跳过，`termSuggestionsReady` 信号回传填充候选行译文框；`termSuggestionAvailable()` 判定仅 `translation.network_model` 且已配 apiEndpoint/apiKey；**失败提示（2026-08-19）**：目标 `en` 且结果为空时追加「若文档/术语为英文请检查目标语言设置」）+ **设置页「从文档提取」弹窗升级（2026-08-19，与主页一致）**（候选行译文输入框 + AI 建议按钮，`addExtractedTerms` 用输入框译文、空 = 占位）；主页/设置页共用同一术语表单例 | `services/translation-service.md` §4.2.1、`services/iteration4-stats-autosave-glossary.md` |
 | 翻译历史 | **迭代4b**：`TranslationHistoryService`（内存环形缓冲 500 条，会话级不落盘）；主页「翻译历史」弹窗（行号/原文/译文/时间/成败，点击跳转行、清空）；QML 在 onLineTranslated 里 record | `services/iteration4b-history-markdown-guide.md` |
 | Markdown 导出 | **迭代4b**：另存为加 `*.md` filter，`writeDocument` md 分支（`# 标题` + 每行 `## 第 N 行` + 原文 + `> 译文` 引用块，空行跳过；单向导出） | `services/iteration4b-history-markdown-guide.md` |
 | 功能引导 | **迭代4b**：不默认首启弹窗；设置页「帮助与引导」卡片 + 按钮 → 静态功能清单弹窗 | `services/iteration4b-history-markdown-guide.md` |
 | **A3 .trx** | 显示层（富文本/图片）完整往返、编辑即降级 | `services/file-service.md` |
 | **B docx 导入** | DocxParser：段落→行 + 粗/斜/颜色/字号/字体 + 图片(data URI) | `services/file-service.md` |
 | **B2 docx 导出批注** | DocxParser::write：原文 + 译文批注，`docxCommentStyle: inline`（黄色高亮）/`native`（Word 原生批注，可读回） | `services/docx-comment-export.md` |
-| **C pdf 导入/导出** | PdfParser：每页一行导入（QPdfDocument）+ 文本页导出（QPdfWriter）；**导出文本层可提取**（v2 自建 ToUnicode CMap 修复 Qt 6.5.3 缺陷，2026-08-16） | `services/pdf-service.md` |
+| **C pdf 导入/导出** | PdfParser：每页一行导入（QPdfDocument）+ 文本页导出（QPdfWriter）；**导出文本层可提取**（v2 自建 ToUnicode CMap 修复 Qt 6.5.3 缺陷，2026-08-16）；**v3 富文本/图片/链接导入导出已全部完成**（2026-08-19，导入富文本/纯图行/孤岛链接 + 导出 drawContents/图片行/exportWarnings + trx 临时文件，见 `services/pdf-service.md` §9；踩坑：间接数组 Contents 同行形态须用 `PdfObject.off` 取完整字节、rich 行导出须 `drawContents` 不能用 `print`、测试夹具 FlateDecode 不能用 qCompress（非纯 zlib））；**渲染可读性改进（2026-08-19）**：字体映射（PDF 字体名→serif/sans-serif/monospace）/pt 字号/行首缩进、链接可点击（`Text.onLinkActivated`）、图文混排图片渲染（`[图片]`→`<img>`）、编辑降级清显示层；**显示修复（2026-08-19）**：无 ToUnicode 简单字体按 `/Encoding` 标准编码表解码（WinAnsi 0x80-0x9F → … – — “ ” 等，□ 根治、未映射码跳过）+ 视觉行碎片合并（PDFium 拆词残片 "uction4" → 拼接回逻辑行，p2899r1 行数 342 零回归）；踩坑补：`LinkArea` 不存在（QtQuick 无此类型，用了页面加载失败）、meta 时序（setLines 先于 meta 赋值 → QML 用 `_docVersion` 强制绑定重求值）） | `services/pdf-service.md` |
 | **D 大文件降级** | 超 5 万行 / 200MB 进受限模式：显示层回退纯文本 + 禁批注编辑/翻译，编辑/查找/章节保留；顶部提示条 | `services/large-file.md` |
 | **迭代5 插件化** | `IService` 健康度接口（serviceId/displayName/healthCheck/sidebarPanel）+ `ServiceRegistry` 单例注册/查询；L3 动态插件（`QPluginLoader` 扫 `<exe>/plugins/*.dll`，示例插件回显后端 `translation.echo` + 面板） | `services/iteration5-plugin-ui-agent.md`、`services/plugin-development.md` |
 | **迭代5 Outlook UI** | 主窗口重构：44px 图标栏（可收起）+ service 侧边栏面板（SplitView 180-400px）+ 内容区 NoStack 切换；`IconBarButton`、`panels/`（Chapter/Comment/History）；设置页新增服务调试卡片 | `docs/ARCHITECTURE.md` |
 | **迭代5 窗口修复** | 窗口按钮失效修复（appBar 悬浮层 z:1 补丁，见 §7）；浮窗跟随主窗口（最小化隐藏/恢复显示、关闭放行防进程残留） | `services/iteration5-plugin-ui-agent.md` |
 
-**测试**：16 目标全绿（MSVC + clang-cl 双编译器，含 perf 基准；`tst_registry` 插件注册表用例；`tst_docx` 10 用例：7 导入 + 3 导出（writeInline/writeNative/roundTrip，批注=译文往返保真）；`tst_pdf` 9 用例；`tst_documentmanager` 含 4 个受限模式 + 6 个自动保存 + markdownExport 用例；`tst_texttospeech` 4 用例（无 TTS 引擎环境 graceful 通过）；`tst_history` 5 用例（迭代4b）；`tst_documentmodel` 含 stats 用例；`tst_quality` 含 extractCandidates 用例）。
+**测试**：16 目标全绿（MSVC + clang-cl 双编译器，含 perf 基准；`tst_registry` 插件注册表用例；`tst_docx` 10 用例：7 导入 + 3 导出（writeInline/writeNative/roundTrip，批注=译文往返保真）；`tst_pdf` 16 用例（v3 富文本/图片/链接 + 标准编码表/碎片合并，见 `services/pdf-service.md` §9.5）；`tst_documentmanager` 含 4 个受限模式 + 6 个自动保存 + markdownExport 用例；`tst_texttospeech` 4 用例（无 TTS 引擎环境 graceful 通过）；`tst_history` 5 用例（迭代4b）；`tst_documentmodel` 含 stats 用例；`tst_quality` 含 extractCandidates + **extractCandidatesEnhanced** 用例（2026-08-19：标识符 API/C++/P2899R1/x86-64 提取 + 中文 n-gram「术语表/翻译/质量」提取 + 停用词/纯数字排除）+ **parseTermSuggestionsFormats**（AI 建议译文解析：多分隔符/序号/引号/自译排除）+ **extractCandidatesUnlimited**（maxCount=-1 达标全返回）+ **echoExemptsNonTranslatable**（2026-08-19：型号/日期/缩写回显豁免 + 含普通词回显仍拦截 + 短行长度放宽）；`tst_configservice` 断言 maxChunkChars 默认 6000）。
 
 ## 3. 路线图（下一步从这里开始）
 
@@ -86,12 +86,13 @@ git push origin main
 | ~~迭代5~~ | ~~插件化（IService 健康度 + 注册表 + L3 动态插件 + 示例插件）、Outlook 式主窗口（图标栏/侧边栏面板/NoStack）、设置页调试卡片~~ | ✅ 完成（2026-08-18，见 `services/iteration5-plugin-ui-agent.md`；含窗口按钮修复 + 浮窗跟随修复） |
 | 迭代6（规划） | **UI 底座迁移**：Qt 6.11 官方 `FluentWinUI3` QQC2 样式 + 自建轻量预制库 `translex-ui`（独立仓库 `C:/Users/sr291/Documents/projects/translex-ui`，submodule 引入）；页面从 FluentUI 1.7.7 逐步迁移（每步可构建可测试）；FluentUI 降级为过渡层，迁移完成移除 | 设计文档先行；FluentUI 在 Qt 6.11 下**实测兼容**（2026-08-18），迁移不紧迫、按节奏走 |
 | 候选 | pdf 导出文本层复查（v2 CMap hack 在 Qt 6.11 下 tst_pdf 通过；"是否可删 hack"待单独验证）、.trx 图片 external 降级（>1MB 转外置）、docx 导出 `Original` 纯原文模式、更多示例插件（对照 plugin-development.md） | 非阻塞 |
+| 待办 | **p2899r1.pdf 全文翻译**（PDF v3 富文本导入已就绪，DeepSeek 后端已配好；用 samples/p2899r1.pdf 跑全文翻译验证富文本链路） | PDF 富文本导入/导出增强的收尾验证 |
 
 > 迭代5（2026-08-18 完成）：插件化（`IService` 健康度接口 + `ServiceRegistry` + `QPluginLoader` 动态插件 + 示例回显插件 + `tst_registry`）、Outlook 式主窗口（`IconBarButton` + `panels/` 侧边栏面板 + NoStack 切换）、设置页调试卡片、窗口按钮失效修复（FluentUI `loader_app_bar z:1` 补丁）、浮窗跟随主窗口生命周期。
 
 > 迭代2（2026-08-17 完成）：docx 导出批注（`DocxParser::write` + `docxCommentStyle` 配置 + tst_docx 3 个新用例）。
 > 迭代3（2026-08-17 完成）：TTS 朗读（独立 `TextToSpeechService`，`TRANSLEX_HAS_TTS` 条件编译，无模块/引擎优雅降级；工具栏/右键菜单入口；tst_texttospeech 4 用例）。
-> 迭代4 部分（2026-08-17 完成）：文档统计（`DocumentModel::stats` + 状态栏）、自动保存（60s tick + `.autosave.trx` + 崩溃恢复弹窗 + `ui.autosaveEnabled`）、术语自动提取（`TermGlossary::extractCandidates` + 设置页弹窗勾选；仅英文，中文暂不支持）。
+> 迭代4 部分（2026-08-17 完成）：文档统计（`DocumentModel::stats` + 状态栏）、自动保存（60s tick + `.autosave.trx` + 崩溃恢复弹窗 + `ui.autosaveEnabled`）、术语自动提取（`TermGlossary::extractCandidates` + 设置页弹窗勾选；仅英文，中文暂不支持）。**2026-08-19 增强**：词形扩展覆盖技术标识符 + 中文 n-gram + 设置页行内译文编辑 + 主页 Ribbon「提取术语」入口 + 候选上限放宽（maxCount=-1 不限）+ AI 建议译文（网络大模型后端按文档上下文猜译文，`termSuggestionsReady` 回传；弹窗宽度 380 修复崩坏，见 §6 踩坑）（见功能表「术语自动提取」）。
 > 迭代4b（2026-08-18 完成）：翻译历史（`TranslationHistoryService` 内存环形缓冲 500 条 + 主页弹窗）、Markdown 导出（`writeDocument` md 分支 + 另存为 filter）、功能引导（设置页按钮弹窗，不默认首启）。
 
 > 迭代1（2026-08-17 完成）：P0 回归修复（backendCombo 残留引用）、A2 句边界分块（`sentenceAwareChunking`）、B1 后端连接测试（`testBackendConnection`）、B2 拖放打开、B3 快捷键总览（`?`）、A1 质量自检复核面板（qualityWarning 汇总+跳转）、设置页语言选择 Flow 换行修复。
@@ -104,8 +105,9 @@ git push origin main
    - **Popup 控件按场景判定**：`FluMenu` 在主页 delegate 内错位/失效（已踩），但 `FluComboBox` 在**设置页卡片内实测可用**（语言选择即用它，2026-08-17 回退自 RadioButton 组）；结论：不可一票否决 Popup，新场景先小步实测，可用则用（按"已知可用姿势"记录）
    - **`Qt.callLater` 不可靠** → 一律用 `Timer`
 2. **QML id 作用域**：子对象 `id` 不是父的属性。delegate 里直接引用顶层 `id`（如 `lineMenu`），**不能**写 `page.lineMenu`。
+   - **同坑（2026-08-19 踩过）**：`page.qualityWarnings.append()`/`page.qualityReport.visible` 同样无效——ListModel/Item 的 `id` 是文档级引用，`page.` 前缀触发 `Cannot read property 'append' of undefined`（翻译失败每条告警都刷 TypeError）。修复：直接用顶层 id（`qualityWarnings.append`/`qualityReport.visible`）。
 3. **DocumentModel 是应用级单例**：页面 `onCompleted` **仅当 `lineCount()==0`** 才 `loadDemoDocument()`，否则覆盖用户内容。
-4. **显示层（rich/image）编辑即降级**：`onTextChanged` 无条件 `setLineRich("")` + `setLineImages([])` + `setLineDisplay("plain")`。
+4. **显示层（rich/image）编辑即降级**：编辑走 `DocumentModel::updateLineText`——2026-08-19 起**模型层**同步清空显示层（`display→plain` + `rich` 清空 + `imageIds` 清空，QML `onTextChanged` 再幂等清一遍）；之前 QML 只降级 display 不清 rich，编辑后 .trx 保存再打开会显示旧样式错位。
 5. **新配置 key 必须**加 `src/services/config/` 下对应 schema JSON（`ui.json`/`translation.json`/`translation.ollama.json`/`translation.network_model.json`/`textToSpeech.json`；ConfigService 只认 schema 内 key，非 UI key 如 `docxCommentStyle` 在 translation.json）。
 6. **行号显示用 `String(index + 1)`**，勿绑 `row.model.lineNumber`（插入后不刷新）。
 7. 服务方法要能被 QML 调必须 `Q_INVOKABLE`（非虚或虚均可）；`documentModel` 等以 context property 暴露。
@@ -143,6 +145,14 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 - Popup 错位、FluMenu 按钮点不到、浮窗被页面边界裁剪 → 改独立 Window 或页面内覆盖层；**但 FluComboBox 在设置页卡片内可用**（2026-08-17 实测，语言选择已回退），不可一票否决
 - `FluMenuItem: Created graphical object was not placed in the graphics scene` → 不要在不可见 Menu 内创建 item；菜单在 `onAboutToShow` 重建（`recentMenu` 已修复）
 - 页面重建丢编辑（DocumentModel 曾页面内创建）→ 已提升应用级单例
+- **布局容器内的 Rectangle 必须显式声明 `Layout.preferredWidth`/`Layout.fillWidth`**（2026-08-19 踩过）：RowLayout/ColumnLayout 布局按子项 `implicitWidth`（Rectangle 默认 0）分配宽度，显式 `width` 绑定不驱动相邻项重排——图标栏（width 绑定 0/44 但无 preferredWidth）收起状态启动后展开时 SplitView 不右移、侧边栏挤占图标栏位置（日志铁证 `splitView x 0 | iconBar x 0 w 44 | sidebar x 0`）；IconBarButton 同理（ColumnLayout 覆盖其宽度为 0、图标挤左缘）。修复：iconBar 加 `Layout.preferredWidth: iconBarVisible ? 44 : 0`，IconBarButton 加 `Layout.fillWidth: true`
+- **SplitView 分割条持久化两坑**（2026-08-19）：① SplitHandle 附加属性信号（`onPressedChanged`/`onSplitHandlePressedChanged`）QML 解析报「不存在的属性」——用中转普通属性 `property bool dragging: SplitHandle.pressed` + `onDraggingChanged` 监听；② 启动时初始布局宽度（minimumWidth 180）先触发 `onWidthChanged`，若在此写盘会把持久化值覆盖成 180——写盘只放 handle 拖动释放（`onDraggingChanged` 且 `!dragging`）时，`onSidebarWidthChanged` 只更新内存不写盘
+- **`layer.enabled`/MultiEffect 阴影 = 离屏渲染，非整数 DPI（1.25）下文字模糊**（2026-08-19 用户实测否决）：编辑器卡片/浮窗的 MultiEffect 阴影方案已废弃（代码已还原）；`QtQuick.Effects` 虽为 Qt 6.7+ 原生模块可用，但 layer 对含滚动 ListView 的卡片每帧重绘开销也大——**QML 不做真阴影，层级靠背景色+分隔线**
+- **FluButton 无图标属性**（2026-08-19）：Ribbon 按钮加图标用 `RibbonButton.qml`（FluButton 子类覆盖 `contentItem` 为 RowLayout{FluIcon+FluText}，`normalColor/hoverColor/textColor` 属性可覆盖实现 filled 实心主按钮）；FluPivot 标签选中态加粗需改第三方 delegate（禁止）→ 放弃，自带主题色下划线已够
+- **ListView 动画与受限模式**（2026-08-19）：`add/move/displaced` Transition 的 `enabled` 绑定 `!documentModel.limitedMode`——大文件批量增删时大量 delegate 同时动画会卡死 UI（性能铁律）
+- **固定高 delegate 内多行文本溢出重叠**（2026-08-19 实测）：`FluText` 的 `elide` 只对单行生效，**不加 `maximumLineCount: 1` 时长文本照常换行**，内容画到相邻 delegate 上（批注列表"这是被翻译的句子"与下一项重叠）；修复：`maximumLineCount: 1` + `elide: Text.ElideRight`
+- **FluContentDialog 内容宽度必须 < 对话框 implicitWidth（400）**（2026-08-19 踩过）：`contentDelegate` 宽 420 → 内容溢出被裁剪崩坏（提取术语弹窗页面显示异常）；修复 = 宽度改 **380**（主页 `termExtractDialog` 与设置页 `extractDialog` 一致）
+- **侧边栏面板与顶部收起条叠字（2026-08-19）**：`Main.qml` `panelLoader`（面板内容 Loader）`anchors.fill` 从 y=0 铺满，顶部收起条 `sidebarTopBar`（y=`appBar.height`，高 30）覆盖其上 → 面板自带标题（如「章节导航」）与收起条叠字；修复 = `panelLoader` 加 `anchors.topMargin: appBar.height + 30`（通用修复，所有侧边栏面板受益）
 
 ### 浮窗
 - 位置失效根因 = `screen.virtualX/Width` 未映射返回 undefined → NaN 污染钳制 → `Number()||fallback`
@@ -157,14 +167,30 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 
 ### 富文本 / .trx / docx
 - 编辑富文本行 → 必须降级纯文本（否则退出编辑不显示新内容）
+- **编辑降级必须在模型层清显示层**（2026-08-19）：`DocumentModel::updateLineText` 同步清 `display/rich/imageIds`，否则 trx 往返残留旧样式
+- **`LinkArea` 不存在**（2026-08-19）：QtQuick 无此类型，`LinkArea is not a type` 页面加载失败；链接点击用 `Text.onLinkActivated: Qt.openUrlExternally(link)`
+- **meta 时序（2026-08-19）**：openFile 时 `setLines` 先触发 delegate 绑定，`imageSource` 读 `meta.images` 时 meta 未就绪 → `[图片]` 替换跑空；修复 = QML `_docVersion`（`documentChanged` 后 +1 强制绑定重求值）+ C++ 侧 meta 写入移到 setLines 前（pdf/docx 同步）
 - `.trx` 显示层（`display/rich/imageIds`）不参与 undo
 - **docx `w:color/sz/rFonts` 属性带 `w:` 前缀**：`QXmlStreamAttributes::value("val")` 按 qualifiedName 匹配返回空 → 必须 `value(kWordNs, "val")`
 - docx 图片：`w:drawing > a:blip r:embed`；rels 里 `Target` 相对 `word/` 需补前缀
+
+### PDF 解析（PdfParser / ChapterService）
+- **无 ToUnicode 简单字体回退 `QChar(code)` 显示 □**（2026-08-19）：0x80-0x9F 是控制字符/私有区，直接当 Unicode 显示成 □；修复 = 按 `/Encoding` 标准编码表（WinAnsi/Standard/MacRoman）解码 + 未映射码跳过（见 `pdf-service.md` §9.2.2）
+- **PDFium 重写器把单词拆到相邻视觉行**（2026-08-19）：出现 "uction4" 孤立残片行；`mergeLineFragments` 按 y 差 < 1.5 行高 + x 连续（0 < 间距 < 0.5em）拼接回逻辑行，真换行 x 回行首不误并（见 §9.2.1）
+- **章节正则对 PDF/docx 富文本标题失效**（2026-08-19）：默认正则只认 markdown `#`/中文第X章，加粗/大字号标题检测不出；`ChapterService::rebuild` 增加样式特征判定（字号 ≥ 正文基准×1.15 或短行加粗），目录条目（数字开头+尾随页码）过滤（见 `chapter-service.md` §2.1）
+- **测试夹具须带 xref 才测得到 decodeText**（2026-08-19）：无 xref 的夹具走 `getAllText` 回退（pdfium 提取），解码用例必须用 `buildPdf` 构造
 
 ### 翻译后端 / 配置
 - **`ITranslationBackend::updateConfig` 默认空实现**：NetworkModelBackend 未重写 → 后端参数必须经 `TranslationOptions.extra` 传递（`apiEndpoint/apiKey/model`）。`testBackendConnection` 曾只 updateConfig → 永远"未配置网络大模型 API 地址"（2026-08-17 修复：探测时 `opts.extra = cfg`，与 `currentBackend()` 合并逻辑一致）
 - `ConfigService::values()` 非 Q_INVOKABLE：QML 不可直接调用（UiDriverActions.getConfig 用 `sectionItems`+`get` 组合）
 - 后端 section id（如 `translation.network_model`）即 ConfigService section 名，用户配置存 `%APPDATA%/sr291/Translex/config.ini`
+- **术语提取词形与字符类（2026-08-19）**：①候选词形 `[A-Za-z0-9+#-]{2,}`（覆盖 API/C++/P2899R1/x86-64 等技术标识符），**必须含字母**过滤纯数字/纯符号，2 字母词非停用词也保留；②字符类**不能含 `.`**——句点是分隔符，否则 `client.` 与 `client` 词频分裂；③`QRegularExpression` 中文码点范围必须用 `\x{4e00}` 语法（`\u{4e00}` 不被支持）；④中文候选 = 连续 CJK 段内 2-3 字滑窗，n-gram 含虚词字符（的了是在和与及或为有不这那之以而中也上下都吧吗呢着过把被从对至于个就才便再又）则跳过（详见 `translation-service.md` §4.2.1）
+- **AI 建议译文仅网络大模型后端可用（2026-08-19）**：`termSuggestionAvailable()` 判定 `m_backendId == translation.network_model` **且** `ConfigService::values` 已配置 `apiEndpoint`/`apiKey`；本地 Ollama/云端在线/echo 后端按钮禁用。`suggestTermTranslations` 在 QtConcurrent 线程内**重新创建后端实例**（`ServiceRegistry::createBackend`）并合并 `m_backendConfig` 快照——不读 this 成员，规避竞态（见 `translation-service.md` §4.2.1）
+- **目标语言预检测通用化（2026-08-19）**：`isTargetLanguageText` 原只支持中文（CJK≥30%），现支持 zh/ja/ko/en（英文：拉丁≥80% 且无 CJK；日文：假名占比；韩文：谚文≥30%）——用户配置 targetLang=en + 翻译英文文档（p2899r1）整篇「翻译结果与原文相同」误报即源于此（en→en 模型回显 + 降级云端 MyMemory 返回原文被回显拦截）；**模型名配置本身正确**（官方名 deepseek-v4-flash，见下），非配置错误
+- **降级链错误透出（2026-08-19）**：`translateSync`/`translateBatchSync` 记录主后端真实错误（模型名/网络），最终失败（含回显拦截）时 `errorMessage` = 主错误 +「（降级后也未成功）」——否则只见「与原文相同」而不知模型名配错（DeepSeek **官方模型名为 deepseek-v4-flash / deepseek-v4-pro**，BASE URL `https://api.deepseek.com`，见官方定价文档 https://api-docs.deepseek.com/zh-cn/quick_start/pricing；`deepseek-chat` 为旧版名已弃用，配置默认值/占位符已更正）
+- **后端内逐行兜底双重重试坑（2026-08-19）**：`NetworkModelBackend::translateBatch` 曾在批量请求失败后**逐行兜底**（`ITranslationBackend::translateBatch` 默认实现 = 逐行 translate），该兜底不受 `fallbackEnabled` 控制，且与 `translateBatchSync` 上层重试**叠加成双重重试**——批量超时后每行再等 30-60 秒，15 行卡 7 分钟以上（用户看到「翻译卡住不动」「关了降级还在重试」）。修复 = 删除后端内兜底，批量失败直接返回失败结果，由 `translateBatchSync` 统一处理：批量「部分成功」→ 仅重试失败行；批量「全失败」→ **不逐行重试**、只降级一次（受 `fallbackEnabled` 控制，`fallbackEnabled=false` 时快速失败）；批量超时 90s→60s（translationbackend.cpp）
+- **型号行回显误报豁免 + 回显不进复核面板（2026-08-19）**：`QualityGate::notJustEcho` 增加 `hasTranslatableContent` 前置判断——原文去除数字/型号/代码 token（复用 `extractTokens`）后无实质可翻译内容（"P2899R1"/"2025-03-14"/"API"）时译文=原文是**正确翻译**，不算未翻译（截图实证 3 条「疑似未翻译」+ 1 条「译文长度异常」全为误报）；长度规则短行≤8 字符或纯型号行放宽 0.1x~8x（"OK"→"好" 0.5x、"AI"→"人工智能" 3x 天然波动，极端 "hi"→30 字 15x 仍拦截）。`postProcess` 回显拦截**始终生效**（不受 `qualityGateEnabled` 控制）但**不发 `qualityWarning`**（复核面板只收规则告警），失败经 `translationFailed` 单条提示——否则用户关了「质量自检」仍看到「疑似未翻译」误以为开关无效（schema 描述已注明，见 `config/translation.json`）
+- **术语 AI 建议 en 目标提示（2026-08-19）**：目标语言 `en` 且建议结果为空时错误消息追加「当前目标语言为英文，若文档/术语为英文请检查目标语言设置」（英文术语 + 目标英文 = 模型自译被过滤导致建议全空）
 
 ### zlib / QuaZip（docx 依赖，静态）
 - **zlib 默认构建 DLL（libzd.dll）** → 测试 0xc0000135。必须 `ZLIB_BUILD_SHARED=OFF` + `ZLIB_BUILD_STATIC=ON`
@@ -182,7 +208,7 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 - 构建日志/`reconfigure*.log` 等已 gitignore
 - **QPdfWriter 文本层缺陷**（Qt 6.5.3，**已绕过**）：导出 PDF 提取乱码（ASCII 重复、CJK 变 ?），视觉正常；v2 已自建 ToUnicode CMap 重建修复（`PdfParser`，2026-08-16），文本可提取可再导入；**Qt 升级后复查**是否可删 hack 回归原生（详见 `pdf-service.md` §3.0/§6）
 - **火绒安全会挂起新 exe**（行为分析以调试方式创建进程，症状：进程停在 DbgBreakPoint、cdb 附加被拒、`tst_docx`/`tst_pdf` 等含 ZIP/PDF 写入代码的新测试 exe 无法启动）→ 把项目目录加进火绒信任区（白名单）；若某次测试突然“卡死”，先怀疑它
-- **QML pragma Singleton 绑定失效**（Qt 6.5，踩过）：`qml/DesignTokens.qml` 曾用 `pragma Singleton`，运行期全部属性 undefined（绑定从未求值，`NO_CACHEGEN` 也无效），报错形如 `Unable to assign [undefined] to double` 刷屏且探针不执行 → 改为**普通组件 + 页面内实例化**（`DesignTokens { id: tokens }`）；delegate/内联 Window 内不能访问实例 id，须经页面属性中转（`page.rowRadius`/`page.cardRadius` 模式，见 `qml/TranslateHomePage.qml` 头部注释）
+- **QML pragma Singleton 绑定失效**（Qt 6.5，踩过；**Qt 6.11 已修复**）：`qml/DesignTokens.qml` 曾用 `pragma Singleton`，运行期全部属性 undefined（绑定从未求值，`NO_CACHEGEN` 也无效），报错形如 `Unable to assign [undefined] to double` 刷屏且探针不执行 → 当时改为**普通组件 + 页面内实例化**（`DesignTokens { id: tokens }`）；delegate/内联 Window 内不能访问实例 id，须经页面属性中转（`page.rowRadius`/`page.cardRadius` 模式，见 `qml/TranslateHomePage.qml` 头部注释）。**2026-08-18 用 Qt 6.11.1 qmltestrunner 实测 singleton 绑定正常（3/3 PASS）**——后续新代码可直接用 `pragma Singleton`，旧页面可逐步去掉实例化/中转（见 `docs/ui/visual-language.md` v2）
 - **中文标点比较必须用码点**：`QLatin1Char('。')` 对多字节 UTF-8 字面量会截断（取最低字节），永不匹配 → 用 `QChar::unicode()` 与 `0x3002` 等码点比较（`endsWithSentenceBoundary` 踩过）
 - **测试配置隔离**：`ConfigService::set` 会落盘 `%APPDATA%`，测试进程间互相污染（MSVC 测试写 `sentenceAwareChunking=false` → clang 测试读到 false 失败）→ 测试必须 `ConfigService::setDataDirectoryForTest(临时目录)`（参照 `tst_quality::initTestCase`）
 - **UI 驱动点击坐标**：DPI 缩放（120%）下 `SetCursorPos` 用物理坐标、WM_LBUTTONDOWN 用客户区逻辑坐标；PowerShell `[ref]` 传 out int 参数在 pwsh 7 有怪癖（只填充首参），用 csc 编译 C# 工具最稳（`%TEMP%\opencode\cap.exe`/`wmclick.exe` 模式）
@@ -203,7 +229,7 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 - docx 导出（对称补全 B）
 - pdf 导出文本层修复（升级 Qt ≥6.8 后复查 pdf-service.md §3.0）
 - .trx 图片 external 降级（>1MB 图片外置 `*.images/` 目录，已在 file-service.md §7 设计）
-- 术语表 UI（`TermGlossary` 已有 C++ 层）
+- ~~术语表 UI~~（`TermGlossary` 已有 C++ 层）——已随迭代4「术语自动提取」实现（设置页 + 主页双入口、行内译文编辑，见功能表）
 - 更多示例插件（对照 `docs/services/plugin-development.md` 写第三方插件演示）
 
 ## 9. 工作流程（AGENTS.md 摘要）
@@ -219,9 +245,10 @@ third_party/quazip,zlib    # 子模块（docx 依赖，静态；zlib 有本地�
 - 架构：TRANSLEX_UI_DRIVER=1 启动 -> src/driver_service.cpp（QLocalServer named pipe translex-ui-driver，JSON 行协议）-> QML UiDriverActions（业务动作，onCompleted 注册 sink）
 - 客户端：.opencode/scripts/ui-driver.mjs（Node net.connect 到 pipe；应用未运行自动以驱动模式启动）
 - 命令：openFile / setDark / getState / translateLine / translateAll / navigate（--index，0=编辑 1=设置）/ testConnection / getConfig（--section）/ setConfig（--set section=key=value）
-- 踩坑：QML 函数参数在 meta 系统暴露为 QVariant（invokeMethod 须 Q_ARG(QVariant)）；客户端需自行 end() 连接（服务端不主动断开）；ui_ 前缀文件名会被 AUTOUIC 误判（命名 driver_service 规避）；**鼠标点击类 UI 验证不可靠**（SendMessage/真实点击对 QML 窗口常无效，且多实例会串窗口）→ 优先用驱动命令直达服务层
+- 踩坑：QML 函数参数在 meta 系统暴露为 QVariant（invokeMethod 须 Q_ARG(QVariant)）；客户端需自行 end() 连接（服务端不主动断开）；ui_ 前缀文件名会被 AUTOUIC 误判（命名 driver_service 规避）；**鼠标点击类 UI 验证不可靠**（SendMessage/真实点击对 QML 窗口常无效，且多实例会串窗口）→ 优先用驱动命令直达服务层；**多实例时 sink 不注册（2026-08-19）**：应用多开时 UiDriverService 的 sink 不注册（ui-driver 报「sink 未注册」）→ 必须保持单实例（先 `Stop-Process translex` 关掉多余实例再连）
 - **挂起陷阱（2026-08-18）**：应用未运行时 ui-driver 会代启动应用（spawn detached），但 opencode 的 bash 工具会等待该 GUI 子进程退出 → 命令超时（用户看到「卡死」）→ **先确认应用已在运行（`Get-Process translex`），未运行则请用户手动启动后再连**；诊断日志优先走 AppGuard（`%APPDATA%/sr291/Translex/Translex-<日期>.log`）而非终端重定向
 - review 流程：.opencode/prompts/review.md §0（驱动操作 -> 截图 -> vision 断言 -> Stop-Process 清理）
+- **截图脚本 PrintWindow 需 PW_RENDERFULLCONTENT(2)**（2026-08-19）：Qt/ANGLE GPU 渲染窗口后台截图必须用该 flag，否则 PrintWindow 返回假/黑图（后台窗口尤其如此）；失败退 flags=0 再退 CopyFromScreen——screenshot.ps1 已内置三级回退
 
 ### Review 权限语义与导出往返（2026-08-17）
 - 语义：review 不是只读——可运行程序/导出到临时目录/检查产物/清理自己产生的临时文件；唯一红线是**不修改项目文件与数据、不负责修改**

@@ -53,10 +53,20 @@ public:
     Q_INVOKABLE void setGlossary(const QVariantMap &terms);
     Q_INVOKABLE void clearGlossary();
     Q_INVOKABLE QVariantMap glossary() const;
-    // 术语自动提取（迭代4）：从行文本提取高频英文词候选（频率降序，过滤停用词/已有术语），
-    // 返回 [{word, count}]；中文分词暂不支持（见 docs/services/iteration4-stats-autosave-glossary.md §3）
+    // 术语自动提取（迭代4，2026-08-19 增强）：从行文本提取高频词候选
+    //（英文/技术标识符/中文 n-gram，频率降序，过滤停用词/已有术语），
+    // 返回 [{word, count}]（见 docs/services/translation-service.md §4.2.1）
     Q_INVOKABLE QVariantList extractTermCandidates(const QStringList &lines,
                                                    int minFreq = 3, int maxCount = 20);
+    // 术语建议译文（异步，2026-08-19）：仅当当前后端是配置了 API 的网络大模型时可用；
+    // 请求模型根据文档上下文猜测术语译文，结果经 termSuggestionsReady 信号返回
+    Q_INVOKABLE void suggestTermTranslations(const QStringList &terms,
+                                             const QStringList &contextLines);
+    // 当前后端是否支持术语建议（网络大模型后端且已配置 apiEndpoint/apiKey）
+    Q_INVOKABLE bool termSuggestionAvailable() const;
+    // 解析模型输出的术语译文（逐行 "术语 = 译文" 等；键与原术语大小写不敏感匹配）；
+    // 静态工具（供测试）
+    static QVariantMap parseTermSuggestions(const QString &text, const QStringList &terms);
     // 质量：自检开关
     Q_INVOKABLE void setQualityGateEnabled(bool enabled);
     Q_INVOKABLE bool qualityGateEnabled() const;
@@ -100,6 +110,9 @@ signals:
     void translationCanceled();
     // 连接测试结果（backendId, ok, message）
     void connectionTested(const QString &backendId, bool ok, const QString &message);
+    // 术语建议译文（terms→suggestions 映射；ok=false 时 errorMessage 说明原因）
+    void termSuggestionsReady(const QVariantMap &suggestions, bool ok,
+                              const QString &errorMessage);
 
 private:
     QStringList withContextLines(const QStringList &sourceLines, int lineNumber) const;

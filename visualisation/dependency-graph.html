@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Translex · 全链路依赖图</title>
+<style>
+  :root {
+    --bg: #121212;
+    --panel: #1E1E1E;
+    --panel-border: #333;
+    --text: rgba(255,255,255,0.92);
+    --text-dim: rgba(255,255,255,0.55);
+    --accent: #4FC1FF;
+    --accent2: #6CCB5F;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+    font-size: 13px;
+  }
+  /* ---------- 顶栏 ---------- */
+  #toolbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 50;
+    display: flex; align-items: center; gap: 16px; padding: 0 16px;
+    background: rgba(30,30,30,0.92); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--panel-border);
+  }
+  #toolbar .logo { font-size: 15px; font-weight: 600; white-space: nowrap; }
+  #toolbar .logo small { color: var(--text-dim); font-weight: 400; margin-left: 8px; }
+  #toolbar .search { flex: 1; max-width: 420px; position: relative; }
+  #toolbar .search input {
+    width: 100%; padding: 7px 12px 7px 32px; border-radius: 6px;
+    border: 1px solid var(--panel-border); background: #2A2A2A; color: var(--text);
+    outline: none; font-size: 13px;
+  }
+  #toolbar .search input:focus { border-color: var(--accent); }
+  #toolbar .search .icon { position: absolute; left: 10px; top: 7px; color: var(--text-dim); }
+  #toolbar .btn {
+    padding: 7px 14px; border-radius: 6px; border: 1px solid var(--panel-border);
+    background: #2A2A2A; color: var(--text); cursor: pointer; font-size: 13px; white-space: nowrap;
+  }
+  #toolbar .btn:hover { border-color: var(--accent); color: var(--accent); }
+  #toolbar .seg { display: flex; border: 1px solid var(--panel-border); border-radius: 6px; overflow: hidden; }
+  #toolbar .seg button {
+    padding: 7px 12px; border: none; background: #2A2A2A; color: var(--text-dim);
+    cursor: pointer; font-size: 12px; white-space: nowrap;
+  }
+  #toolbar .seg button + button { border-left: 1px solid var(--panel-border); }
+  #toolbar .seg button.active { background: rgba(79,193,255,0.15); color: var(--accent); }
+  #toolbar .stats { margin-left: auto; color: var(--text-dim); font-size: 12px; white-space: nowrap; }
+
+  /* ---------- 侧边过滤器 ---------- */
+  #panel {
+    position: fixed; top: 60px; right: 12px; width: 236px; z-index: 40;
+    background: var(--panel); border: 1px solid var(--panel-border); border-radius: 8px;
+    padding: 12px 14px; max-height: calc(100vh - 80px); overflow-y: auto;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  #panel h3 { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .5px; margin: 10px 0 6px; }
+  #panel h3:first-child { margin-top: 0; }
+  #panel .f-item { display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; user-select: none; }
+  #panel .f-item input { accent-color: var(--accent); cursor: pointer; }
+  #panel .f-item .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  #panel .f-item .lbl { flex: 1; }
+  #panel .f-item .cnt { color: var(--text-dim); font-size: 11px; }
+  #panel .legend-line { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 12px; }
+  #panel .legend-line svg { flex: none; }
+
+  /* ---------- 详情面板 ---------- */
+  #detail {
+    position: fixed; left: 12px; top: 60px; width: 300px; z-index: 40;
+    background: var(--panel); border: 1px solid var(--panel-border); border-radius: 8px;
+    padding: 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    display: none; max-height: calc(100vh - 80px); overflow-y: auto;
+  }
+  #detail .d-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  #detail .d-title .badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; color: #fff; font-weight: 500; }
+  #detail .d-kv { margin-top: 10px; display: grid; grid-template-columns: 64px 1fr; gap: 4px 8px; font-size: 12px; }
+  #detail .d-kv .k { color: var(--text-dim); }
+  #detail .d-desc { margin-top: 10px; font-size: 12px; line-height: 1.6; color: var(--text); }
+  #detail .d-links { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+  #detail .d-links a { color: var(--accent); font-size: 12px; text-decoration: none; }
+  #detail .d-links a:hover { text-decoration: underline; }
+  #detail .d-close { position: absolute; top: 10px; right: 12px; cursor: pointer; color: var(--text-dim); font-size: 16px; }
+  #detail .d-close:hover { color: var(--text); }
+  #detail .d-deps { margin-top: 12px; font-size: 12px; }
+  #detail .d-deps .t { color: var(--text-dim); margin-bottom: 4px; }
+  #detail .d-deps .chip {
+    display: inline-block; padding: 2px 8px; margin: 2px; border-radius: 10px; font-size: 11px;
+    border: 1px solid var(--panel-border); cursor: pointer; background: #262626;
+  }
+  #detail .d-deps .chip:hover { border-color: var(--accent); }
+
+  /* ---------- SVG 图区 ---------- */
+  #graph { position: fixed; inset: 52px 0 0 0; width: 100%; height: calc(100vh - 52px); cursor: grab; }
+  #graph.dragging { cursor: grabbing; }
+  #graph .layer-band { pointer-events: none; }
+  #graph .layer-band text { font-size: 11px; fill: rgba(255,255,255,0.14); letter-spacing: 2px; }
+  #graph .edge { stroke-linecap: round; transition: opacity .15s; }
+  #graph .node-g { cursor: pointer; }
+  #graph .node-g .node-ring { transition: r .15s, stroke .15s; }
+  #graph .node-g:hover .node-ring { stroke: #fff; }
+  #graph .node-g .node-label { font-size: 11px; fill: rgba(255,255,255,0.85); pointer-events: none; paint-order: stroke; stroke: rgba(0,0,0,0.7); stroke-width: 3px; }
+  #graph .node-g.dim { opacity: .18; }
+
+  /* ---------- 依赖扩散动画控制条 ---------- */
+  #anim-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 45;
+    background: rgba(30,30,30,0.95); border-top: 1px solid var(--panel-border);
+    display: none; align-items: center; gap: 10px; padding: 8px 14px;
+    backdrop-filter: blur(8px);
+  }
+  #anim-bar.visible { display: flex; }
+  #anim-bar .ab-btn {
+    width: 34px; height: 34px; border-radius: 6px; border: 1px solid var(--panel-border);
+    background: #2A2A2A; color: var(--text); cursor: pointer; font-size: 14px; flex: none;
+  }
+  #anim-bar .ab-btn:hover { border-color: var(--accent); color: var(--accent); }
+  #anim-bar .ab-btn.play { width: 46px; background: rgba(79,193,255,0.18); border-color: var(--accent); color: var(--accent); }
+  #anim-bar .ab-progress { flex: 1; display: flex; align-items: center; gap: 10px; }
+  #anim-bar input[type=range] { flex: 1; accent-color: var(--accent); cursor: pointer; }
+  #anim-bar .ab-info { font-size: 12px; color: var(--text-dim); white-space: nowrap; min-width: 84px; text-align: center; }
+  #anim-bar .ab-desc {
+    position: absolute; bottom: 54px; left: 50%; transform: translateX(-50%);
+    background: rgba(30,30,30,0.95); border: 1px solid var(--panel-border); border-radius: 6px;
+    padding: 6px 12px; font-size: 12px; max-width: 72vw;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.4);
+  }
+  #anim-bar .ab-speed { display: flex; gap: 4px; flex: none; }
+  #anim-bar .ab-speed button {
+    padding: 5px 8px; border-radius: 5px; border: 1px solid var(--panel-border);
+    background: #2A2A2A; color: var(--text-dim); cursor: pointer; font-size: 11px;
+  }
+  #anim-bar .ab-speed button.active { border-color: var(--accent); color: var(--accent); }
+  #anim-bar .ab-close { width: 30px; height: 30px; border: none; background: none; color: var(--text-dim); cursor: pointer; font-size: 15px; flex: none; }
+  #anim-bar .ab-close:hover { color: var(--text); }
+
+  /* 动画当前步节点脉冲 */
+  @keyframes animPulse {
+    0% { opacity: .9; transform: scale(1); }
+    50% { opacity: .3; transform: scale(1.6); }
+    100% { opacity: .9; transform: scale(1); }
+  }
+  .node-g.current .node-glow { animation: animPulse 0.9s ease-in-out infinite; }
+
+  /* ---------- Tooltip ---------- */
+  #tooltip {
+    position: fixed; z-index: 60; pointer-events: none; display: none; max-width: 320px;
+    background: #262626; border: 1px solid var(--panel-border); border-radius: 6px;
+    padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  }
+  #tooltip .tt-t { font-weight: 600; }
+  #tooltip .tt-d { color: var(--text-dim); margin-top: 2px; line-height: 1.5; }
+
+  /* ---------- 右下提示 ---------- */
+  #hint {
+    position: fixed; right: 12px; bottom: 12px; z-index: 30;
+    color: var(--text-dim); font-size: 11px; text-align: right; pointer-events: none;
+  }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <div class="logo">Translex <small>全链路依赖图 · L0–L8</small></div>
+  <div class="search">
+    <span class="icon">🔍</span>
+    <input id="search" type="text" placeholder="搜索节点（zlib / qt_pdf / user32 / 服务名…）" spellcheck="false">
+  </div>
+  <div class="seg" id="seg-color">
+    <button data-mode="layer" class="active">按层级</button>
+    <button data-mode="owner">按实现主体</button>
+  </div>
+  <button class="btn" id="btn-reset">↺ 重置视图</button>
+  <button class="btn" id="btn-anim" style="color:#6CCB5F;border-color:#6CCB5F55">▶ 依赖动画</button>
+  <button class="btn" id="btn-panel">⛭ 图例与过滤</button>
+  <div class="stats" id="stats"></div>
+</div>
+
+<div id="panel" style="display:none"></div>
+<div id="detail"></div>
+<svg id="graph"></svg>
+<div id="tooltip"></div>
+<div id="hint">滚轮缩放 · 空白拖拽平移 · 节点拖拽重排 · 点击节点看详情</div>
+
+<div id="anim-bar">
+  <div class="ab-desc" id="ab-desc"></div>
+  <button class="ab-btn" id="ab-prev" title="上一步">⏮</button>
+  <button class="ab-btn play" id="ab-play" title="播放/暂停">▶</button>
+  <button class="ab-btn" id="ab-next" title="下一步">⏭</button>
+  <div class="ab-progress">
+    <input type="range" id="ab-range" min="0" max="100" value="0">
+    <span class="ab-info" id="ab-info">0 / 0</span>
+  </div>
+  <div class="ab-speed" id="ab-speed">
+    <button data-s="0.5">0.5×</button>
+    <button data-s="1" class="active">1×</button>
+    <button data-s="2">2×</button>
+    <button data-s="4">4×</button>
+  </div>
+  <button class="ab-close" id="ab-close" title="关闭动画">✕</button>
+</div>
+
+<script>
+"use strict";
+/* ================= 数据（由 generate.mjs 从 data/dependencies.json 注入） ================= */
+const GRAPH = {"meta":{"project":"Translex","date":"2026-08-20","generatedBy":"visualisation/data","purpose":"全链路递归依赖数据（源码 → 三方库 → Qt 模块 → 内嵌库 → 工具链 → 测试 → 打包 → 运行时系统依赖）","sources":["CMakeLists.txt / tests/CMakeLists.txt / CMakePresets.json","src/services/** 的 #include（源码级引用）","qml/** 的 import（QML 依赖）","third_party/FluentUI, quazip, zlib（git 子模块 + 本地补丁）","D:/Software/Qt/6.11.1/msvc2022_64/lib/cmake/*/*Dependencies.cmake（Qt 模块传递依赖矩阵）","Qt 6.11.0 官方 licenses-used-in-qt.html（Qt 源码内嵌第三方库清单）","GitHub qt/qtbase、qt/qtmultimedia、qt/qtspeech、qt/qtwebengine 源码（Windows 系统库链接）","build-vs2026-x64/Debug/*.dll + 各插件子目录（windeployqt 部署的真实运行时清单）"],"edgeTypes":{"source":"源码引用（#include / import）","build":"编译期链接（CMake target_link_libraries）","runtime":"运行期加载（DLL / 系统库）","tool":"工具链（构建/部署工具）","test":"测试关系","package":"打包/部署产物"}},"layers":[{"id":0,"name":"L0 应用产物","color":"#0F7B0F","desc":"最终交付物（exe / dll）"},{"id":1,"name":"L1 源码","color":"#0078D4","desc":"src/services 服务层、QML 界面、插件、测试"},{"id":2,"name":"L2 三方库","color":"#9D5D00","desc":"git 子模块 + 自研 SDK（含本地补丁）"},{"id":3,"name":"L3 Qt 模块","color":"#744DA9","desc":"Qt 6.11.1 直接依赖 + 递归传递依赖"},{"id":4,"name":"L4 内嵌子库","color":"#C42B1C","desc":"内嵌子库：FluentUI 内嵌（qhotkey/qrencode/qcustomplot）+ Qt 源码内嵌第三方库（PCRE2/FreeType/HarfBuzz/PDFium…）"},{"id":5,"name":"L5 编译工具链","color":"#006666","desc":"CMake / 编译器 / 部署工具"},{"id":6,"name":"L6 测试","color":"#0078D4","desc":"CTest / Qt Test"},{"id":7,"name":"L7 打包部署","color":"#D13438","desc":"NSIS / CPack / windeployqt"},{"id":8,"name":"L8 运行时系统依赖","color":"#5D5D5D","desc":"Windows 系统组件（D3D 族 / Media Foundation / WASAPI / SAPI / DirectWrite / 平台插件系统库）+ CRT + FFmpeg"}],"nodes":[{"id":"translex","label":"translex.exe","layer":0,"kind":"exe","version":"1.1.0-qml","desc":"Translex QML 主程序（Qt 6.11.1 + FluentUI 1.7.7）","owner":"translex"},{"id":"example_plugin","label":"example_translation_plugin.dll","layer":0,"kind":"dll","desc":"示例插件（回显后端 translation.echo + 侧边栏面板），验证插件全链路","owner":"translex"},{"id":"main_qml","label":"src/main_qml.cpp","layer":1,"kind":"source","desc":"QML 版入口：注册全部 service 到 ServiceRegistry，setContextProperty 暴露给 QML","owner":"translex"},{"id":"driver_service","label":"src/driver_service.*","layer":1,"kind":"source","desc":"UI 驱动桥（测试钩子，TRANSLEX_UI_DRIVER=1 时启用）","owner":"translex"},{"id":"appguard","label":"appguard","layer":1,"kind":"service","desc":"稳定性：全局日志（AppData/sr291/Translex）+ 崩溃诊断","owner":"translex"},{"id":"documentmodel","label":"documentmodel","layer":1,"kind":"service","desc":"懒加载文档行模型（ListView 虚拟化，大文件性能核心），应用级单例","owner":"translex"},{"id":"securestorage","label":"securestorage","layer":1,"kind":"service","desc":"敏感信息加密存储（机器指纹密钥 + 随机盐 + 校验），写入 %APPDATA%/secure.ini","owner":"translex"},{"id":"serviceregistry","label":"serviceregistry","layer":1,"kind":"service","desc":"服务注册表：注册/查询/健康度聚合/插件扫描（QPluginLoader）","owner":"translex"},{"id":"translationbackend","label":"translationbackend","layer":1,"kind":"service","desc":"三翻译后端：Ollama / 云翻译 / 网络大模型 API（OpenAI 风格）","owner":"translex"},{"id":"translationcache","label":"translationcache","layer":1,"kind":"service","desc":"翻译缓存（内存 + 磁盘，SHA-256 key）","owner":"translex"},{"id":"translationservice","label":"translationservice","layer":1,"kind":"service","desc":"翻译编排：上下文/智能分块/失败降级/质量门/缓存","owner":"translex"},{"id":"termglossary","label":"termglossary","layer":1,"kind":"service","desc":"术语表（术语一致性校验）","owner":"translex"},{"id":"qualitygate","label":"qualitygate","layer":1,"kind":"service","desc":"质量自检：回显拦截/长度/token 保留/术语（Levenshtein 编辑距离）","owner":"translex"},{"id":"configservice","label":"configservice","layer":1,"kind":"service","desc":"配置服务（schema 驱动：ui/translation/tts JSON），持久化 + 加密","owner":"translex"},{"id":"commentservice","label":"commentservice","layer":1,"kind":"service","desc":"批注单一数据源（provider 委托）","owner":"translex"},{"id":"documentmanager","label":"documentmanager","layer":1,"kind":"service","desc":"文档打开/保存/新建/最近文件，格式分发（txt/trx/docx/pdf）","owner":"translex"},{"id":"chapterservice","label":"chapterservice","layer":1,"kind":"service","desc":"章节识别（第X章/Markdown #）与跳转","owner":"translex"},{"id":"findservice","label":"findservice","layer":1,"kind":"service","desc":"全文查找/替换（大小写/整词/模糊开关）","owner":"translex"},{"id":"trxparser","label":"trxparser","layer":1,"kind":"service","desc":".trx 格式读写（显示层：富文本/图片往返）","owner":"translex"},{"id":"docxparser","label":"docxparser","layer":1,"kind":"service","desc":".docx 导入（图文混排，QuaZip 解压）","owner":"translex"},{"id":"pdfparser","label":"pdfparser","layer":1,"kind":"service","desc":".pdf 导入/导出（QPdfDocument/QPdfWriter，每行一页）","owner":"translex"},{"id":"texttospeechservice","label":"texttospeechservice","layer":1,"kind":"service","desc":"TTS 朗读（可选功能，无引擎时优雅降级）","owner":"translex"},{"id":"translationhistoryservice","label":"translationhistoryservice","layer":1,"kind":"service","desc":"翻译历史（内存环形缓冲）","owner":"translex"},{"id":"config_schemas","label":"config/*.json","layer":1,"kind":"data","desc":"配置 schema：ui.json / translation.json / translation.ollama.json / translation.network_model.json / textToSpeech.json","owner":"translex"},{"id":"qml_ui","label":"qml/（界面层）","layer":1,"kind":"source","desc":"Main.qml（Outlook 式主窗口）+ TranslateHomePage + TranslateSettingsPage + panels/*（10+ 文件，FluentUI）","owner":"translex"},{"id":"plugin_src","label":"plugins/（插件源码）","layer":1,"kind":"source","desc":"example_translation_plugin：EchoBackend + ExamplePanel.qml","owner":"translex"},{"id":"tests","label":"tests/（16 个测试）","layer":1,"kind":"source","desc":"tst_documentmodel/securestorage/performance/translation/quality/configservice/comment/documentmanager/chapter/find/trx/docx/pdf/texttospeech/history/registry","owner":"translex"},{"id":"translex_services","label":"translex_services（测试静态库）","layer":1,"kind":"build","desc":"tests/CMakeLists.txt 把全部 service 源码抽为静态库，16 个测试共享编译","owner":"translex"},{"id":"fluentui","label":"FluentUI","layer":2,"kind":"lib","version":"1.7.7","license":"BSD-3-Clause","desc":"Fluent 设计语言 QML 组件库（git 子模块 + 本地补丁：FluWindow appBar z:1 等）","url":"https://github.com/zhuzichu520/FluentUI","owner":"fluentui"},{"id":"quazip","label":"QuaZip","layer":2,"kind":"lib","version":"1.7.2","license":"LGPL-2.1","desc":"Qt 的 ZIP 包装库（docx 导入解压，git 子模块 + 本地补丁）","url":"https://github.com/stachenov/quazip","owner":"quazip"},{"id":"zlib","label":"zlib","layer":2,"kind":"lib","version":"1.3.2.1","license":"zlib License","desc":"通用无损压缩库（QuaZip 依赖，静态编译，git 子模块 + 本地补丁）","url":"https://github.com/madler/zlib","owner":"zlib"},{"id":"translex_sdk","label":"Translex_sdk","layer":2,"kind":"lib","version":"1.0","license":"MIT","desc":"插件化公共接口（iservice.h / itranslationbackend.h / itranslationplugin.h / serviceregistry.h），INTERFACE 库","owner":"translex"},{"id":"qt_core","label":"Qt6 Core","layer":3,"kind":"qt","version":"6.11.1","desc":"核心非 GUI 功能（QString/QSettings/QProcess/QCryptographicHash）","owner":"qt"},{"id":"qt_gui","label":"Qt6 Gui","layer":3,"kind":"qt","version":"6.11.1","desc":"GUI 基础（QPainter/QFontMetrics/QPdfDocument 依赖）","owner":"qt"},{"id":"qt_widgets","label":"Qt6 Widgets","layer":3,"kind":"qt","version":"6.11.1","desc":"Widgets（QApplication/QuickWidgets 依赖）","owner":"qt"},{"id":"qt_concurrent","label":"Qt6 Concurrent","layer":3,"kind":"qt","version":"6.11.1","desc":"并行（translationservice 智能分块/翻译回调）","owner":"qt"},{"id":"qt_network","label":"Qt6 Network","layer":3,"kind":"qt","version":"6.11.1","desc":"网络（三翻译后端 HTTP）","owner":"qt"},{"id":"qt_qml","label":"Qt6 Qml","layer":3,"kind":"qt","version":"6.11.1","desc":"QML 引擎（QQmlApplicationEngine）","owner":"qt"},{"id":"qt_quick","label":"Qt6 Quick","layer":3,"kind":"qt","version":"6.11.1","desc":"Qt Quick 渲染（ListView 虚拟化编辑器）","owner":"qt"},{"id":"qt_quickwidgets","label":"Qt6 QuickWidgets","layer":3,"kind":"qt","version":"6.11.1","desc":"QML 嵌入 Widgets 容器","owner":"qt"},{"id":"qt_svg","label":"Qt6 Svg","layer":3,"kind":"qt","version":"6.11.1","desc":"SVG 渲染（图标）","owner":"qt"},{"id":"qt_shadertools","label":"Qt6 ShaderTools","layer":3,"kind":"qt","version":"6.11.1","desc":"着色器工具（Quick 渲染所需）","owner":"qt"},{"id":"qt_printsupport","label":"Qt6 PrintSupport","layer":3,"kind":"qt","version":"6.11.1","desc":"打印支持（PDF 导出/打印）","owner":"qt"},{"id":"qt_pdf","label":"Qt6 Pdf","layer":3,"kind":"qt","version":"6.11.1","desc":"PDF 解析/生成（pdfparser，核心功能硬性要求）","owner":"qt"},{"id":"qt_texttospeech","label":"Qt6 TextToSpeech","layer":3,"kind":"qt","version":"6.11.1","desc":"TTS 朗读（可选，TRANSLEX_HAS_TTS）；Windows 带 SAPI + WinRT 双后端插件","owner":"qt"},{"id":"qt_test","label":"Qt6 Test","layer":3,"kind":"qt","version":"6.11.1","desc":"单元测试框架（16 个测试目标）","owner":"qt"},{"id":"qt_qmlintegration","label":"Qt6 QmlIntegration","layer":3,"kind":"qt","version":"6.11.1","desc":"QML 集成（Qml 传递依赖）","owner":"qt"},{"id":"qt_qmlmodels","label":"Qt6 QmlModels","layer":3,"kind":"qt","version":"6.11.1","desc":"QML 模型（Quick 传递依赖）","owner":"qt"},{"id":"qt_qmlmeta","label":"Qt6 QmlMeta","layer":3,"kind":"qt","version":"6.11.1","desc":"QML 元类型（Quick 传递依赖）","owner":"qt"},{"id":"qt_qmlworkerscript","label":"Qt6 QmlWorkerScript","layer":3,"kind":"qt","version":"6.11.1","desc":"QML WorkerScript（QmlMeta 传递依赖）","owner":"qt"},{"id":"qt_opengl","label":"Qt6 OpenGL","layer":3,"kind":"qt","version":"6.11.1","desc":"OpenGL（Quick 渲染后端）","owner":"qt"},{"id":"qt_quickcontrols2","label":"Qt6 QuickControls2","layer":3,"kind":"qt","version":"6.11.1","desc":"Quick Controls 2（QML 控件）","owner":"qt"},{"id":"qt_quicktemplates2","label":"Qt6 QuickTemplates2","layer":3,"kind":"qt","version":"6.11.1","desc":"Quick Controls 模板（QuickControls2 传递依赖）","owner":"qt"},{"id":"qt_quickcontrols2impl","label":"Qt6 QuickControls2Impl","layer":3,"kind":"qt","version":"6.11.1","desc":"Quick Controls 2 实现（样式基础）","owner":"qt"},{"id":"qt_quicklayouts","label":"Qt6 QuickLayouts","layer":3,"kind":"qt","version":"6.11.1","desc":"QML 布局（设置页卡片布局）","owner":"qt"},{"id":"qt_quickdialogs2","label":"Qt6 QuickDialogs2","layer":3,"kind":"qt","version":"6.11.1","desc":"QML 对话框","owner":"qt"},{"id":"qt_quickdialogs2utils","label":"Qt6 QuickDialogs2Utils","layer":3,"kind":"qt","version":"6.11.1","desc":"对话框工具","owner":"qt"},{"id":"qt_quickdialogs2quickimpl","label":"Qt6 QuickDialogs2QuickImpl","layer":3,"kind":"qt","version":"6.11.1","desc":"对话框 Quick 实现","owner":"qt"},{"id":"qt_quickshapes","label":"Qt6 QuickShapes","layer":3,"kind":"qt","version":"6.11.1","desc":"Quick 矢量形状","owner":"qt"},{"id":"qt_quickeffects","label":"Qt6 QuickEffects","layer":3,"kind":"qt","version":"6.11.1","desc":"Quick 特效","owner":"qt"},{"id":"qt_quickvectorimage","label":"Qt6 QuickVectorImage","layer":3,"kind":"qt","version":"6.11.1","desc":"Quick 矢量图（依赖 Svg）","owner":"qt"},{"id":"qt_multimedia","label":"Qt6 Multimedia","layer":3,"kind":"qt","version":"6.11.1","desc":"多媒体（TextToSpeech / Pdf 传递依赖；FFmpeg 后端）","owner":"qt"},{"id":"qt_core5compat","label":"Qt6 Core5Compat","layer":3,"kind":"qt","version":"6.11.1","desc":"Qt5 兼容（QuaZip QTextCodec 需要）","owner":"qt"},{"id":"qt_labsfolderlistmodel","label":"Qt6 LabsFolderListModel","layer":3,"kind":"qt","version":"6.11.1","desc":"文件夹列表模型（windeployqt 部署，Quick 运行时）","owner":"qt"},{"id":"qt_lottie","label":"Qt6 Lottie","layer":3,"kind":"qt","version":"6.11.1","desc":"Lottie 动画（FluentUI/部署依赖）","owner":"qt"},{"id":"qt_quick3dutils","label":"Qt6 Quick3DUtils","layer":3,"kind":"qt","version":"6.11.1","desc":"Quick3D 工具（部署依赖）","owner":"qt"},{"id":"qt_virtualkeyboard","label":"Qt6 VirtualKeyboard","layer":3,"kind":"qt","version":"6.11.1","desc":"虚拟键盘（windeployqt 自动部署）","owner":"qt"},{"id":"qt_entrypointprivate","label":"Qt6 EntryPointPrivate","layer":3,"kind":"qt","version":"6.11.1","desc":"入口点（Core 传递依赖，winmain）","owner":"qt"},{"id":"fluentui_qhotkey","label":"qhotkey（FluentUI 内嵌）","layer":4,"kind":"embedded","desc":"全局快捷键（Win：RegisterHotKey）","owner":"fluentui"},{"id":"fluentui_qrcode","label":"qrcode / qrencode（FluentUI 内嵌）","layer":4,"kind":"embedded","desc":"二维码生成（内嵌 qrencode C 库）","owner":"fluentui"},{"id":"fluentui_qmlcustomplot","label":"qmlcustomplot / qcustomplot（FluentUI 内嵌）","layer":4,"kind":"embedded","desc":"图表绘制（内嵌 qcustomplot）","url":"https://www.qcustomplot.com/","owner":"fluentui"},{"id":"cmake","label":"CMake","layer":5,"kind":"tool","version":"3.21+","desc":"构建系统（qt_add_executable/qt_add_qml_module/CPack）","owner":"kitware"},{"id":"msvc","label":"MSVC（VS 2026 x64）","layer":5,"kind":"tool","desc":"主编译器 cl.exe/link.exe（Visual Studio 18 2026 生成器，build-vs2026-x64）","owner":"microsoft"},{"id":"clangcl","label":"clang-cl + Ninja","layer":5,"kind":"tool","desc":"交叉编译验证（build-clang，MSVC ABI）","owner":"llvm"},{"id":"mingw","label":"MinGW g++ + Ninja","layer":5,"kind":"tool","desc":"交叉编译验证（build-mingw）","owner":"gcc"},{"id":"ninja","label":"Ninja","layer":5,"kind":"tool","desc":"clang-cl/MinGW 的生成器","owner":"kitware"},{"id":"windeployqt","label":"windeployqt","layer":5,"kind":"tool","desc":"Qt 运行时部署（post-build，拷贝 DLL + QML 模块）","owner":"translex"},{"id":"qt_tools","label":"moc / rcc / uic / lupdate / lrelease","layer":5,"kind":"tool","desc":"Qt 构建工具（AUTOMOC/AUTORCC/AUTOUIC；FluentUI i18n）","owner":"qt"},{"id":"vswhere","label":"vswhere","layer":5,"kind":"tool","desc":"探测 VS 安装路径（设置 VCINSTALLDIR 消除 windeployqt 警告）","owner":"microsoft"},{"id":"ctest","label":"CTest","layer":6,"kind":"tool","desc":"测试驱动（ctest --test-dir build-vs2026-x64）","owner":"kitware"},{"id":"nsis","label":"NSIS（makensis）","layer":7,"kind":"tool","desc":"Windows 安装包生成","owner":"nsis"},{"id":"cpack","label":"CPack / ZIP","layer":7,"kind":"tool","desc":"打包（无 NSIS 时回退 ZIP）","owner":"kitware"},{"id":"win_system","label":"Windows 系统 DLL","layer":8,"kind":"runtime","desc":"kernel32 / advapi32 / shell32 / ole32 / oleaut32 / comdlg32 / winspool / crypt32 / ws2_32 / bcrypt / secur32（Qt 运行时）","owner":"microsoft"},{"id":"win_user32","label":"user32","layer":8,"kind":"runtime","desc":"FluentUI 无边框（HTCAPTION 拖拽）+ qhotkey（RegisterHotKey）直接调用","owner":"microsoft"},{"id":"win_dwmapi","label":"dwmapi","layer":8,"kind":"runtime","desc":"FluentUI 无边框窗口（DwmExtendFrameIntoClientArea）","owner":"microsoft"},{"id":"win_graphics","label":"图形/DirectX","layer":8,"kind":"runtime","desc":"图形/DirectX 聚合（子节点：d3d11/d3d12/dxgi/dwrite/d2d/d3d9/dcomp/opengl/D3Dcompiler）","owner":"microsoft"},{"id":"msvc_runtime","label":"MSVC CRT","layer":8,"kind":"runtime","desc":"msvcp140 / vcruntime140 / concrt140 / vccorlib140（Debug 带 d 后缀）","owner":"microsoft"},{"id":"ffmpeg","label":"FFmpeg（QtMultimedia 后端）","layer":8,"kind":"runtime","desc":"FFmpeg 7.1.3（QtMultimedia FFmpeg 后端）：avcodec-61 / avformat-61 / avutil-59 / swresample-5 / swscale-8（Qt 6.11 内嵌打包，windeployqt 部署）","owner":"ffmpeg","version":"7.1.3"},{"id":"qt_qwindows","label":"Qt 平台插件 (qwindows)","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"Windows 平台集成插件（platforms/qwindows.dll），Qt GUI 运行必需；链接 gdi32/dwrite/d3d9/imm32/setupapi 等 17 个系统库"},{"id":"qt_schannel","label":"Qt TLS 后端 (Schannel)","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"Windows Schannel TLS 后端（tls/qschannelbackend.dll），HTTPS 用系统证书存储"},{"id":"qt_ffmpeg_plugin","label":"Qt 多媒体后端 (FFmpeg)","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"multimedia/ffmpegmediaplugin.dll（QtMultimedia FFmpeg 后端插件）"},{"id":"qt_wmf_plugin","label":"Qt 多媒体后端 (WMF)","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"multimedia/windowsmediaplugin.dll（Windows Media Foundation 后端）"},{"id":"qt_imageformats","label":"Qt 图片格式插件","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"imageformats/：gif / icns / ico / jpeg / pdf / svg / tga / tiff / wbmp / webp（内嵌 libtiff + libwebp）"},{"id":"fluentui_assets","label":"FluentIcons 字体 + i18n","layer":4,"kind":"embedded","owner":"fluentui","desc":"FluentIcons.ttf 图标字体 + fluentui_en_US/zh_CN.qm 翻译资源（内嵌 qrc）"},{"id":"qt_quickcontrols2basic","label":"Qt6 QuickControls2 Basic","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"QuickControls2 基础样式（Basic Style），windeployqt 全量部署"},{"id":"qt_quickcontrols2basicstyleimpl","label":"Qt6 QuickControls2 BasicStyleImpl","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"Basic 样式实现（StyleImpl，样式基座）"},{"id":"qt_quickcontrols2fusion","label":"Qt6 QuickControls2 Fusion","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"Fusion 样式（跨平台桌面风格）"},{"id":"qt_quickcontrols2fusionstyleimpl","label":"Qt6 QuickControls2 FusionStyleImpl","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"Fusion 样式实现"},{"id":"qt_quickcontrols2imagine","label":"Qt6 QuickControls2 Imagine","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"Imagine 样式（资源驱动皮肤）"},{"id":"qt_quickcontrols2imaginestyleimpl","label":"Qt6 QuickControls2 ImagineStyleImpl","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"Imagine 样式实现"},{"id":"qt_quickcontrols2material","label":"Qt6 QuickControls2 Material","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"Material 样式（Google Material 设计）"},{"id":"qt_quickcontrols2materialstyleimpl","label":"Qt6 QuickControls2 MaterialStyleImpl","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"Material 样式实现"},{"id":"qt_quickcontrols2universal","label":"Qt6 QuickControls2 Universal","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"Universal 样式（Windows 通用设计）"},{"id":"qt_quickcontrols2universalstyleimpl","label":"Qt6 QuickControls2 UniversalStyleImpl","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"Universal 样式实现"},{"id":"qt_quickcontrols2windowsstyleimpl","label":"Qt6 QuickControls2 WindowsStyleImpl","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"Windows 原生样式实现（qmodernwindowsstyled.dll 依赖）"},{"id":"qt_quickvectorimagegenerator","label":"Qt6 QuickVectorImageGenerator","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"QtQuick.VectorImage 模块的矢量图生成器（依赖 QuickVectorImage + Svg）"},{"id":"qt_lottievectorimagegenerator","label":"Qt6 LottieVectorImageGenerator","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"Lottie 矢量图生成器（依赖 Lottie + LottieVectorImageHelpers，vectorimageformats 插件载体）"},{"id":"qt_certonly","label":"Qt TLS 后端 (CertOnly)","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"tls/qcertonlybackend.dll：仅证书校验 TLS 后端（与 Schannel 并存）"},{"id":"qt_windowsstyle","label":"Qt Windows 样式 (Modern)","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"styles/qmodernwindowsstyled.dll：Windows 11 现代原生样式"},{"id":"qt_networkinfo","label":"Qt 网络信息 (Windows)","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"networkinformation/qnetworklistmanagerd.dll：Windows 网络连接状态后端"},{"id":"qt_tts_sapi","label":"Qt TTS 后端 (SAPI)","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"texttospeech/qtexttospeech_sapid.dll：Windows SAPI5 语音合成（ISpVoice COM）"},{"id":"qt_tts_winrt","label":"Qt TTS 后端 (WinRT)","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"texttospeech/qtexttospeech_winrtd.dll：Windows.Media.SpeechSynthesis 语音合成"},{"id":"qt_tts_mock","label":"Qt TTS 后端 (Mock)","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"texttospeech/qtexttospeech_mockd.dll：测试用模拟引擎"},{"id":"qt_svgicon","label":"Qt 图标引擎 (SVG)","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"iconengines/qsvgicond.dll：SVG 图标引擎"},{"id":"qt_uiotouch","label":"Qt 通用插件 (UIO Touch)","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"generic/qtuiotouchplugind.dll：UIO 触摸输入桥接（模拟器/调试）"},{"id":"qt_vkeyboard_plugin","label":"Qt 虚拟键盘输入法插件","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"platforminputcontexts/qtvirtualkeyboardplugind.dll：Qt VirtualKeyboard 输入上下文插件"},{"id":"qt_lottie_vectorimage","label":"Qt Lottie 矢量图格式","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"vectorimageformats/qlottievectorimaged.dll：QML 矢量图格式后端（.qml 导出 SVG 路径）"},{"id":"qt_qmltooling","label":"Qt QML 调试工具集","layer":3,"kind":"qt","version":"6.11.1","owner":"qt","desc":"qmltooling/：qmldbg_server / tcp / debugger / inspector / profiler / quickprofiler / messages / local / native / nativedebugger / preview / quick3dprofiler / quickeventreplay（11+ 插件，QML 远程调试）"},{"id":"qt_emb_pcre2","label":"PCRE2（QtCore 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"10.47","license":"BSD-2/BSD-3","desc":"正则表达式引擎（QRegularExpression），qtbase/src/3rdparty/pcre2"},{"id":"qt_emb_zlib","label":"zlib（QtCore 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"1.3.2","license":"zlib License","desc":"数据压缩（QByteArray/qCompress，Qt 自备一份与 QuaZip 分离）"},{"id":"qt_emb_tinycbor","label":"TinyCBOR（QtCore 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"7.0","license":"MIT","desc":"CBOR 二进制序列化（QCborValue/QCborArray/QCborMap）"},{"id":"qt_emb_doubleconversion","label":"double-conversion（QtCore 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"3.4.0","license":"BSD-3","desc":"IEEE 双精度浮点高效二进制/十进制转换（QString 数字格式化）"},{"id":"qt_emb_hash","label":"哈希算法集（QtCore 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"—","license":"CC0/Public Domain/BSD","desc":"BLAKE2 + MD4 + MD5 + SHA-1 + SHA-3(Keccak) + SipHash + SHA-384/512(rfc6234)，QCryptographicHash 后端"},{"id":"qt_emb_easing","label":"Easing Equations（QtCore 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"—","license":"BSD-3","desc":"Robert Penner 缓动函数（QEasingCurve 动画）"},{"id":"qt_emb_clrd","label":"Unicode CLDR + UCD（QtCore 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"v48.1 / 36","license":"Unicode License","desc":"Unicode 通用语言数据仓库 + 字符数据库（QLocale/QString 本地化）"},{"id":"qt_emb_freetype","label":"FreeType（QtGui 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"2.14.1","license":"FTL / GPL-2","desc":"字体光栅化引擎（QFont 渲染核心）"},{"id":"qt_emb_harfbuzz","label":"HarfBuzz-NG（QtGui 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"12.3.2","license":"MIT","desc":"复杂文字整形引擎（中东/南亚/东亚文字正确排布）"},{"id":"qt_emb_libpng","label":"LibPNG（QtGui 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"1.6.55","license":"Libpng License","desc":"PNG 编解码（QImage PNG 格式）"},{"id":"qt_emb_libjpeg","label":"LibJPEG-turbo（QtGui 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"3.1.3","license":"IJG / BSD-3","desc":"JPEG 编解码（SIMD 加速）"},{"id":"qt_emb_md4c","label":"MD4C（QtGui 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"0.5.2","license":"MIT","desc":"Markdown 解析（QTextMarkdownImporter/Exporter）"},{"id":"qt_emb_pixman","label":"Pixman（QtGui 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"0.17.12","license":"MIT","desc":"像素操作与光栅化库（QImage 合成/变换）"},{"id":"qt_emb_d3d12ma","label":"D3D12 Memory Allocator（QtGui 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"f128d39","license":"MIT","desc":"Direct3D 12 显存分配器（Qt RHI 后端）"},{"id":"qt_emb_vma","label":"Vulkan Memory Allocator（QtGui 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"3.2.1","license":"MIT","desc":"Vulkan 显存分配器（Qt RHI Vulkan 后端）"},{"id":"qt_emb_vulkanheaders","label":"Vulkan API Registry（QtGui 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"1.4.308","license":"Apache-2 / MIT","desc":"Vulkan 头文件（WrapVulkanHeaders，RHI 编译所需）"},{"id":"qt_emb_openglheaders","label":"OpenGL / GLES2 Headers（QtGui 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"rev 27684","license":"MIT","desc":"OpenGL / OpenGL ES 2 头文件（RHI GL 后端编译所需）"},{"id":"qt_emb_emoji_segmenter","label":"Emoji Segmenter（QtGui 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"0.4.0","license":"Apache-2","desc":"Emoji 序列分段（文本渲染）"},{"id":"qt_emb_libtiff","label":"libtiff（Qt 图片格式内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"4.7.1","license":"Libtiff License","desc":"TIFF 编解码（imageformats/qtiff）"},{"id":"qt_emb_libwebp","label":"libwebp（Qt 图片格式内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"1.6.0","license":"BSD-3","desc":"WebP 编解码（imageformats/qwebp）"},{"id":"qt_emb_drlibs","label":"DR Libs（QtMultimedia 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"0.14.4","license":"Unlicense / MIT","desc":"音频重采样（DR_WAV/DR_MP3，FFmpeg 后端解码）"},{"id":"qt_emb_signalsmith","label":"Signalsmith Stretch（QtMultimedia 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"1.0.0","license":"MIT","desc":"高质量音频变速变调（音高/速率独立控制）"},{"id":"qt_emb_tlsf","label":"Two-Level Segregated Fit（QtMultimedia 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"v3.1","license":"BSD-3","desc":"实时内存分配器（音频缓冲）"},{"id":"qt_emb_libpsl","label":"libpsl + Public Suffix List（QtNetwork 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"PSL 2026-01-16","license":"BSD-3 / MPL-2","desc":"公共后缀列表解析（cookie 域/安全域判定）"},{"id":"qt_emb_pdfium","label":"PDFium（QtPdf 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"Chromium PDFium","license":"BSD-3","desc":"Chromium 的 PDF 引擎（QPdfDocument/QPdfPageRenderer 核心，静态编入 Qt6Pdf）"},{"id":"qt_emb_jscore_macro","label":"JavaScriptCore Macro Assembler（QtQml 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"—","license":"BSD-2","desc":"JIT 宏汇编器（QML JS 引擎 V4 编译后端）"},{"id":"qt_emb_yoga","label":"Yoga（QtQuick 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"2.0.1","license":"MIT","desc":"Flexbox 布局引擎（QtQuick.Layouts / 布局计算）"},{"id":"qt_emb_spirv_cross","label":"SPIRV-Cross（QtShaderTools 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"—","license":"Apache-2 / MIT","desc":"SPIR-V 反射与跨后端转换（rhi 着色器处理）"},{"id":"qt_emb_glslang","label":"glslang（QtShaderTools 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"16.1.0","license":"BSD-3 / MIT / Apache-2","desc":"GLSL/HLSL → SPIR-V 编译器（qsb 工具链）"},{"id":"qt_emb_openwnn","label":"OpenWnn（QtVirtualKeyboard 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"—","license":"Apache-2","desc":"日语输入法（假名 → 汉字转换）"},{"id":"qt_emb_pinyinime","label":"PinyinIME（QtVirtualKeyboard 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"—","license":"Apache-2","desc":"拼音输入法（汉字候选）"},{"id":"qt_emb_tcime","label":"tcime（QtVirtualKeyboard 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"—","license":"Apache-2 / BSD-3","desc":"繁体中文注音输入法"},{"id":"qt_emb_catch2","label":"Catch2（QtTest 内嵌）","layer":4,"kind":"embedded","owner":"qt","version":"2.13.10","license":"BSL-1.0","desc":"测试断言库（QtTest 内部使用）"},{"id":"win_d3d11","label":"d3d11 (Direct3D 11)","layer":8,"kind":"runtime","owner":"microsoft","desc":"Direct3D 11（Qt RHI 主渲染后端 + WMF/EVR 呈现 + FFmpeg 硬件解码）"},{"id":"win_d3d12","label":"d3d12 + dxcompiler + dxil","layer":8,"kind":"runtime","owner":"microsoft","desc":"Direct3D 12（Qt RHI D3D12 后端；dxcompiler/dxil 为 HLSL→DXIL 编译器，windeployqt 部署）"},{"id":"win_dxgi","label":"dxgi + dxguid","layer":8,"kind":"runtime","owner":"microsoft","desc":"DXGI 图形基础设施（适配器/交换链；dxguid 为 GUID 定义库）"},{"id":"win_directwrite","label":"dwrite (DirectWrite)","layer":8,"kind":"runtime","owner":"microsoft","desc":"DirectWrite 文字排版（qwindows 平台插件字体渲染）"},{"id":"win_direct2d","label":"d2d1 (Direct2D)","layer":8,"kind":"runtime","owner":"microsoft","desc":"Direct2D（qwindows 可选 Direct2D 呈现路径）"},{"id":"win_d3d9","label":"d3d9 (Direct3D 9)","layer":8,"kind":"runtime","owner":"microsoft","desc":"Direct3D 9（qwindows 旧版 GL 测试/回退）"},{"id":"win_dcomp","label":"dcomp (DirectComposition)","layer":8,"kind":"runtime","owner":"microsoft","desc":"DirectComposition 桌面合成（Qt Quick RHI 窗口合成）"},{"id":"win_opengl","label":"opengl32 + opengl32sw","layer":8,"kind":"runtime","owner":"microsoft","desc":"OpenGL 系统库 + opengl32sw.dll 软件渲染回退（无 GPU 时）"},{"id":"win_d3dcompiler","label":"D3Dcompiler_47","layer":8,"kind":"runtime","owner":"microsoft","desc":"Direct3D HLSL 编译器（RHI 着色器编译，windeployqt 部署）"},{"id":"win_mediafoundation","label":"Media Foundation","layer":8,"kind":"runtime","owner":"microsoft","desc":"Windows Media Foundation：Mfplat.dll / Mf.dll / Mfreadwrite.dll（MFStartup/MFCreateSourceReader…，WMF 多媒体后端核心）"},{"id":"win_wasapi","label":"WASAPI 音频","layer":8,"kind":"runtime","owner":"microsoft","desc":"mmdeviceapi.dll + audioclient.dll（Windows 音频会话 API，音频输出/输入）"},{"id":"win_evr","label":"EVR (evr.dll)","layer":8,"kind":"runtime","owner":"microsoft","desc":"增强视频渲染器（WMF 后端视频呈现，D3D11 交换链）"},{"id":"win_sapi","label":"SAPI (sapi.dll)","layer":8,"kind":"runtime","owner":"microsoft","desc":"Speech API 5（qtexttospeech_sapi 后端：ISpVoice COM 语音合成）"},{"id":"win_winrt","label":"Windows Runtime","layer":8,"kind":"runtime","owner":"microsoft","desc":"WinRT 运行时（runtimeobject.dll；qtexttospeech_winrt 后端经 RoActivateInstance 激活 Windows.Media.SpeechSynthesis）"},{"id":"win_wmcodecdsp","label":"wmcodecdsp","layer":8,"kind":"runtime","owner":"microsoft","desc":"Windows 媒体编解码器 DSP（音频/视频 MFT 编解码）"},{"id":"win_gdi32","label":"gdi32","layer":8,"kind":"runtime","owner":"microsoft","desc":"GDI 图形设备接口（字体/绘图/DIB）"},{"id":"win_uxtheme","label":"uxtheme","layer":8,"kind":"runtime","owner":"microsoft","desc":"Windows 主题引擎（控件视觉风格）"},{"id":"win_wintab","label":"wintab32","layer":8,"kind":"runtime","owner":"microsoft","desc":"Wintab 数位板 API（qwindows 手写笔/压感，动态加载）"},{"id":"win_imm32","label":"imm32","layer":8,"kind":"runtime","owner":"microsoft","desc":"IMM32 输入法管理器（IME 组合窗口）"},{"id":"win_setupapi","label":"setupapi","layer":8,"kind":"runtime","owner":"microsoft","desc":"设备安装 API（qwindows 平台插件）"},{"id":"win_shlwapi","label":"shlwapi","layer":8,"kind":"runtime","owner":"microsoft","desc":"Shell 轻量工具（路径/注册表辅助，qwindows + WinRT TTS）"},{"id":"win_version","label":"version.dll","layer":8,"kind":"runtime","owner":"microsoft","desc":"版本资源 API（qwindows 读取系统/驱动版本）"},{"id":"win_winmm","label":"winmm","layer":8,"kind":"runtime","owner":"microsoft","desc":"Windows 多媒体（计时器/低层音频，qwindows）"},{"id":"win_wtsapi","label":"wtsapi32","layer":8,"kind":"runtime","owner":"microsoft","desc":"终端服务 API（会话/桌面监控，qwindows）"},{"id":"win_shcore","label":"shcore","layer":8,"kind":"runtime","owner":"microsoft","desc":"Shell 核心（Per-Monitor DPI 感知，qwindows）"},{"id":"win_mscms","label":"mscms","layer":8,"kind":"runtime","owner":"microsoft","desc":"Windows 颜色管理（ICC 色彩配置，qwindows）"},{"id":"win_schannel_sys","label":"schannel","layer":8,"kind":"runtime","owner":"microsoft","desc":"Windows 安全通道（TLS/SSL 加密协议，Qt Schannel 后端底层）"}],"edges":[{"source":"translex","target":"main_qml","type":"source"},{"source":"translex","target":"driver_service","type":"source"},{"source":"translex","target":"qml_ui","type":"source"},{"source":"translex","target":"config_schemas","type":"source"},{"source":"translex","target":"appguard","type":"source"},{"source":"translex","target":"documentmodel","type":"source"},{"source":"translex","target":"securestorage","type":"source"},{"source":"translex","target":"serviceregistry","type":"source"},{"source":"translex","target":"translationbackend","type":"source"},{"source":"translex","target":"translationcache","type":"source"},{"source":"translex","target":"translationservice","type":"source"},{"source":"translex","target":"termglossary","type":"source"},{"source":"translex","target":"qualitygate","type":"source"},{"source":"translex","target":"configservice","type":"source"},{"source":"translex","target":"commentservice","type":"source"},{"source":"translex","target":"documentmanager","type":"source"},{"source":"translex","target":"chapterservice","type":"source"},{"source":"translex","target":"findservice","type":"source"},{"source":"translex","target":"trxparser","type":"source"},{"source":"translex","target":"docxparser","type":"source"},{"source":"translex","target":"pdfparser","type":"source"},{"source":"translex","target":"texttospeechservice","type":"source"},{"source":"translex","target":"translationhistoryservice","type":"source"},{"source":"translex","target":"fluentui","type":"build"},{"source":"translex","target":"quazip","type":"build"},{"source":"translex","target":"translex_sdk","type":"build"},{"source":"translex","target":"qt_core","type":"build"},{"source":"translex","target":"qt_gui","type":"build"},{"source":"translex","target":"qt_widgets","type":"build"},{"source":"translex","target":"qt_concurrent","type":"build"},{"source":"translex","target":"qt_network","type":"build"},{"source":"translex","target":"qt_qml","type":"build"},{"source":"translex","target":"qt_quick","type":"build"},{"source":"translex","target":"qt_quickwidgets","type":"build"},{"source":"translex","target":"qt_svg","type":"build"},{"source":"translex","target":"qt_shadertools","type":"build"},{"source":"translex","target":"qt_printsupport","type":"build"},{"source":"translex","target":"qt_pdf","type":"build"},{"source":"translex","target":"qt_texttospeech","type":"build"},{"source":"translex","target":"qt_tools","type":"tool"},{"source":"translex","target":"windeployqt","type":"tool"},{"source":"translex","target":"win_system","type":"runtime"},{"source":"translex","target":"msvc_runtime","type":"runtime"},{"source":"translex","target":"win_graphics","type":"runtime"},{"source":"translex","target":"example_plugin","type":"package"},{"source":"main_qml","target":"appguard","type":"source"},{"source":"main_qml","target":"serviceregistry","type":"source"},{"source":"main_qml","target":"documentmodel","type":"source"},{"source":"main_qml","target":"translationservice","type":"source"},{"source":"main_qml","target":"configservice","type":"source"},{"source":"main_qml","target":"commentservice","type":"source"},{"source":"main_qml","target":"documentmanager","type":"source"},{"source":"main_qml","target":"chapterservice","type":"source"},{"source":"main_qml","target":"findservice","type":"source"},{"source":"main_qml","target":"texttospeechservice","type":"source"},{"source":"main_qml","target":"translationhistoryservice","type":"source"},{"source":"main_qml","target":"driver_service","type":"source"},{"source":"qml_ui","target":"fluentui","type":"build"},{"source":"qml_ui","target":"qt_quick","type":"build"},{"source":"qml_ui","target":"qt_qml","type":"build"},{"source":"qml_ui","target":"qt_quickcontrols2","type":"build"},{"source":"qml_ui","target":"qt_quicklayouts","type":"build"},{"source":"chapterservice","target":"documentmodel","type":"source"},{"source":"configservice","target":"securestorage","type":"source"},{"source":"configservice","target":"config_schemas","type":"source"},{"source":"documentmanager","target":"commentservice","type":"source"},{"source":"documentmanager","target":"configservice","type":"source"},{"source":"documentmanager","target":"documentmodel","type":"source"},{"source":"documentmanager","target":"docxparser","type":"source"},{"source":"documentmanager","target":"pdfparser","type":"source"},{"source":"documentmanager","target":"trxparser","type":"source"},{"source":"documentmodel","target":"commentservice","type":"source"},{"source":"docxparser","target":"commentservice","type":"source"},{"source":"docxparser","target":"documentmodel","type":"source"},{"source":"findservice","target":"documentmodel","type":"source"},{"source":"pdfparser","target":"commentservice","type":"source"},{"source":"pdfparser","target":"documentmodel","type":"source"},{"source":"serviceregistry","target":"translex_sdk","type":"source"},{"source":"texttospeechservice","target":"configservice","type":"source"},{"source":"translationbackend","target":"serviceregistry","type":"source"},{"source":"translationservice","target":"configservice","type":"source"},{"source":"translationservice","target":"serviceregistry","type":"source"},{"source":"translationservice","target":"translationbackend","type":"source"},{"source":"translationservice","target":"translationcache","type":"source"},{"source":"docxparser","target":"quazip","type":"build"},{"source":"pdfparser","target":"qt_pdf","type":"build"},{"source":"pdfparser","target":"qt_printsupport","type":"build"},{"source":"pdfparser","target":"qt_gui","type":"build"},{"source":"translationbackend","target":"qt_network","type":"build"},{"source":"translationservice","target":"qt_concurrent","type":"build"},{"source":"translationservice","target":"qt_network","type":"build"},{"source":"texttospeechservice","target":"qt_texttospeech","type":"build"},{"source":"documentmodel","target":"qt_core","type":"build"},{"source":"documentmodel","target":"qt_gui","type":"build"},{"source":"securestorage","target":"qt_core","type":"build"},{"source":"configservice","target":"qt_core","type":"build"},{"source":"quazip","target":"zlib","type":"build"},{"source":"quazip","target":"qt_core","type":"build"},{"source":"quazip","target":"qt_core5compat","type":"build"},{"source":"fluentui","target":"qt_core","type":"build"},{"source":"fluentui","target":"qt_quick","type":"build"},{"source":"fluentui","target":"qt_qml","type":"build"},{"source":"fluentui","target":"qt_widgets","type":"build"},{"source":"fluentui","target":"qt_printsupport","type":"build"},{"source":"fluentui","target":"fluentui_qhotkey","type":"source"},{"source":"fluentui","target":"fluentui_qrcode","type":"source"},{"source":"fluentui","target":"fluentui_qmlcustomplot","type":"source"},{"source":"fluentui","target":"win_user32","type":"runtime"},{"source":"fluentui","target":"win_dwmapi","type":"runtime"},{"source":"fluentui_qhotkey","target":"win_user32","type":"runtime"},{"source":"example_plugin","target":"translex_sdk","type":"build"},{"source":"example_plugin","target":"plugin_src","type":"source"},{"source":"tests","target":"translex_services","type":"build"},{"source":"tests","target":"qt_test","type":"build"},{"source":"tests","target":"ctest","type":"test"},{"source":"translex_services","target":"documentmodel","type":"source"},{"source":"translex_services","target":"translationservice","type":"source"},{"source":"translex_services","target":"configservice","type":"source"},{"source":"translex_services","target":"pdfparser","type":"source"},{"source":"translex_services","target":"docxparser","type":"source"},{"source":"translex_services","target":"quazip","type":"build"},{"source":"qt_gui","target":"qt_core","type":"build"},{"source":"qt_network","target":"qt_core","type":"build"},{"source":"qt_concurrent","target":"qt_core","type":"build"},{"source":"qt_widgets","target":"qt_core","type":"build"},{"source":"qt_widgets","target":"qt_gui","type":"build"},{"source":"qt_printsupport","target":"qt_core","type":"build"},{"source":"qt_printsupport","target":"qt_gui","type":"build"},{"source":"qt_printsupport","target":"qt_widgets","type":"build"},{"source":"qt_svg","target":"qt_core","type":"build"},{"source":"qt_svg","target":"qt_gui","type":"build"},{"source":"qt_shadertools","target":"qt_core","type":"build"},{"source":"qt_shadertools","target":"qt_gui","type":"build"},{"source":"qt_qml","target":"qt_core","type":"build"},{"source":"qt_qml","target":"qt_qmlintegration","type":"build"},{"source":"qt_qml","target":"qt_network","type":"build"},{"source":"qt_qmlmodels","target":"qt_core","type":"build"},{"source":"qt_qmlmodels","target":"qt_qml","type":"build"},{"source":"qt_qmlmeta","target":"qt_qml","type":"build"},{"source":"qt_qmlmeta","target":"qt_qmlmodels","type":"build"},{"source":"qt_qmlmeta","target":"qt_qmlworkerscript","type":"build"},{"source":"qt_qmlworkerscript","target":"qt_core","type":"build"},{"source":"qt_qmlworkerscript","target":"qt_qml","type":"build"},{"source":"qt_opengl","target":"qt_core","type":"build"},{"source":"qt_opengl","target":"qt_gui","type":"build"},{"source":"qt_quick","target":"qt_core","type":"build"},{"source":"qt_quick","target":"qt_gui","type":"build"},{"source":"qt_quick","target":"qt_qml","type":"build"},{"source":"qt_quick","target":"qt_qmlmodels","type":"build"},{"source":"qt_quick","target":"qt_qmlmeta","type":"build"},{"source":"qt_quick","target":"qt_network","type":"build"},{"source":"qt_quick","target":"qt_opengl","type":"build"},{"source":"qt_quickwidgets","target":"qt_core","type":"build"},{"source":"qt_quickwidgets","target":"qt_gui","type":"build"},{"source":"qt_quickwidgets","target":"qt_qml","type":"build"},{"source":"qt_quickwidgets","target":"qt_quick","type":"build"},{"source":"qt_quickwidgets","target":"qt_widgets","type":"build"},{"source":"qt_quickcontrols2","target":"qt_core","type":"build"},{"source":"qt_quickcontrols2","target":"qt_gui","type":"build"},{"source":"qt_quickcontrols2","target":"qt_quick","type":"build"},{"source":"qt_quickcontrols2","target":"qt_qml","type":"build"},{"source":"qt_quickcontrols2","target":"qt_quicktemplates2","type":"build"},{"source":"qt_quicktemplates2","target":"qt_core","type":"build"},{"source":"qt_quicktemplates2","target":"qt_gui","type":"build"},{"source":"qt_quicktemplates2","target":"qt_quick","type":"build"},{"source":"qt_quicktemplates2","target":"qt_qml","type":"build"},{"source":"qt_quicktemplates2","target":"qt_qmlmodels","type":"build"},{"source":"qt_quickcontrols2impl","target":"qt_core","type":"build"},{"source":"qt_quickcontrols2impl","target":"qt_gui","type":"build"},{"source":"qt_quickcontrols2impl","target":"qt_quick","type":"build"},{"source":"qt_quickcontrols2impl","target":"qt_qml","type":"build"},{"source":"qt_quickcontrols2impl","target":"qt_quicktemplates2","type":"build"},{"source":"qt_quicklayouts","target":"qt_core","type":"build"},{"source":"qt_quicklayouts","target":"qt_qml","type":"build"},{"source":"qt_quicklayouts","target":"qt_gui","type":"build"},{"source":"qt_quicklayouts","target":"qt_quick","type":"build"},{"source":"qt_quickdialogs2","target":"qt_core","type":"build"},{"source":"qt_quickdialogs2","target":"qt_gui","type":"build"},{"source":"qt_quickdialogs2","target":"qt_quick","type":"build"},{"source":"qt_quickdialogs2","target":"qt_qml","type":"build"},{"source":"qt_quickdialogs2","target":"qt_quickcontrols2impl","type":"build"},{"source":"qt_quickdialogs2","target":"qt_quickdialogs2utils","type":"build"},{"source":"qt_quickdialogs2","target":"qt_quickdialogs2quickimpl","type":"build"},{"source":"qt_quickdialogs2","target":"qt_quicktemplates2","type":"build"},{"source":"qt_quickdialogs2utils","target":"qt_core","type":"build"},{"source":"qt_quickdialogs2utils","target":"qt_gui","type":"build"},{"source":"qt_quickdialogs2quickimpl","target":"qt_core","type":"build"},{"source":"qt_quickdialogs2quickimpl","target":"qt_gui","type":"build"},{"source":"qt_quickdialogs2quickimpl","target":"qt_quick","type":"build"},{"source":"qt_quickdialogs2quickimpl","target":"qt_qml","type":"build"},{"source":"qt_quickdialogs2quickimpl","target":"qt_quickcontrols2impl","type":"build"},{"source":"qt_quickdialogs2quickimpl","target":"qt_quickdialogs2utils","type":"build"},{"source":"qt_quickdialogs2quickimpl","target":"qt_quicktemplates2","type":"build"},{"source":"qt_quickshapes","target":"qt_core","type":"build"},{"source":"qt_quickshapes","target":"qt_qml","type":"build"},{"source":"qt_quickshapes","target":"qt_gui","type":"build"},{"source":"qt_quickshapes","target":"qt_quick","type":"build"},{"source":"qt_quickeffects","target":"qt_core","type":"build"},{"source":"qt_quickeffects","target":"qt_gui","type":"build"},{"source":"qt_quickeffects","target":"qt_qml","type":"build"},{"source":"qt_quickeffects","target":"qt_quick","type":"build"},{"source":"qt_quickvectorimage","target":"qt_quick","type":"build"},{"source":"qt_quickvectorimage","target":"qt_svg","type":"build"},{"source":"qt_multimedia","target":"qt_core","type":"build"},{"source":"qt_multimedia","target":"qt_gui","type":"build"},{"source":"qt_multimedia","target":"qt_concurrent","type":"build"},{"source":"qt_multimedia","target":"qt_network","type":"build"},{"source":"qt_texttospeech","target":"qt_core","type":"build"},{"source":"qt_texttospeech","target":"qt_multimedia","type":"build"},{"source":"qt_pdf","target":"qt_core","type":"build"},{"source":"qt_pdf","target":"qt_gui","type":"build"},{"source":"qt_pdf","target":"qt_network","type":"build"},{"source":"qt_core5compat","target":"qt_core","type":"build"},{"source":"qt_labsfolderlistmodel","target":"qt_core","type":"build"},{"source":"qt_labsfolderlistmodel","target":"qt_qml","type":"build"},{"source":"qt_labsfolderlistmodel","target":"qt_qmlmodels","type":"build"},{"source":"qt_lottie","target":"qt_core","type":"build"},{"source":"qt_lottie","target":"qt_gui","type":"build"},{"source":"qt_lottie","target":"qt_qml","type":"build"},{"source":"qt_lottie","target":"qt_quick","type":"build"},{"source":"qt_quick3dutils","target":"qt_core","type":"build"},{"source":"qt_quick3dutils","target":"qt_gui","type":"build"},{"source":"qt_quick3dutils","target":"qt_quick","type":"build"},{"source":"qt_virtualkeyboard","target":"qt_core","type":"build"},{"source":"qt_virtualkeyboard","target":"qt_gui","type":"build"},{"source":"qt_virtualkeyboard","target":"qt_qml","type":"build"},{"source":"qt_virtualkeyboard","target":"qt_quick","type":"build"},{"source":"qt_core","target":"qt_entrypointprivate","type":"build"},{"source":"qt_multimedia","target":"ffmpeg","type":"runtime"},{"source":"qt_quick","target":"win_graphics","type":"runtime"},{"source":"qt_gui","target":"win_graphics","type":"runtime"},{"source":"qt_core","target":"win_system","type":"runtime"},{"source":"qt_network","target":"win_system","type":"runtime"},{"source":"qt_gui","target":"win_user32","type":"runtime"},{"source":"msvc_runtime","target":"win_system","type":"runtime"},{"source":"cmake","target":"msvc","type":"tool"},{"source":"cmake","target":"clangcl","type":"tool"},{"source":"cmake","target":"mingw","type":"tool"},{"source":"clangcl","target":"ninja","type":"tool"},{"source":"mingw","target":"ninja","type":"tool"},{"source":"cmake","target":"qt_tools","type":"tool"},{"source":"cmake","target":"ctest","type":"tool"},{"source":"cmake","target":"cpack","type":"tool"},{"source":"windeployqt","target":"vswhere","type":"tool"},{"source":"cpack","target":"nsis","type":"tool"},{"source":"translex","target":"cpack","type":"package"},{"source":"translex","target":"nsis","type":"package"},{"source":"qt_gui","target":"qt_qwindows","type":"runtime"},{"source":"qt_qwindows","target":"win_system","type":"runtime"},{"source":"qt_network","target":"qt_schannel","type":"runtime"},{"source":"qt_schannel","target":"win_system","type":"runtime"},{"source":"qt_multimedia","target":"qt_ffmpeg_plugin","type":"runtime"},{"source":"qt_ffmpeg_plugin","target":"ffmpeg","type":"runtime"},{"source":"qt_multimedia","target":"qt_wmf_plugin","type":"runtime"},{"source":"qt_wmf_plugin","target":"win_system","type":"runtime"},{"source":"qt_gui","target":"qt_imageformats","type":"runtime"},{"source":"qt_imageformats","target":"win_system","type":"runtime"},{"source":"fluentui","target":"fluentui_assets","type":"source"},{"source":"qt_quickcontrols2basic","target":"qt_quickcontrols2basicstyleimpl","type":"build"},{"source":"qt_quickcontrols2basic","target":"qt_quickcontrols2","type":"build"},{"source":"qt_quickcontrols2basicstyleimpl","target":"qt_quickcontrols2impl","type":"build"},{"source":"qt_quickcontrols2fusion","target":"qt_quickcontrols2fusionstyleimpl","type":"build"},{"source":"qt_quickcontrols2fusion","target":"qt_quickcontrols2","type":"build"},{"source":"qt_quickcontrols2fusion","target":"qt_quickcontrols2basic","type":"build"},{"source":"qt_quickcontrols2fusionstyleimpl","target":"qt_quickcontrols2impl","type":"build"},{"source":"qt_quickcontrols2imagine","target":"qt_quickcontrols2imaginestyleimpl","type":"build"},{"source":"qt_quickcontrols2imagine","target":"qt_quickcontrols2","type":"build"},{"source":"qt_quickcontrols2imagine","target":"qt_quickcontrols2impl","type":"build"},{"source":"qt_quickcontrols2imagine","target":"qt_quickcontrols2basic","type":"build"},{"source":"qt_quickcontrols2imaginestyleimpl","target":"qt_quickcontrols2impl","type":"build"},{"source":"qt_quickcontrols2material","target":"qt_quickcontrols2materialstyleimpl","type":"build"},{"source":"qt_quickcontrols2material","target":"qt_quickcontrols2","type":"build"},{"source":"qt_quickcontrols2material","target":"qt_quickcontrols2impl","type":"build"},{"source":"qt_quickcontrols2material","target":"qt_quickcontrols2basic","type":"build"},{"source":"qt_quickcontrols2materialstyleimpl","target":"qt_quickcontrols2impl","type":"build"},{"source":"qt_quickcontrols2universal","target":"qt_quickcontrols2universalstyleimpl","type":"build"},{"source":"qt_quickcontrols2universal","target":"qt_quickcontrols2","type":"build"},{"source":"qt_quickcontrols2universal","target":"qt_quickcontrols2impl","type":"build"},{"source":"qt_quickcontrols2universal","target":"qt_quickcontrols2basic","type":"build"},{"source":"qt_quickcontrols2universalstyleimpl","target":"qt_quickcontrols2impl","type":"build"},{"source":"qt_quickcontrols2windowsstyleimpl","target":"qt_quickcontrols2impl","type":"build"},{"source":"qt_quickvectorimagegenerator","target":"qt_quickvectorimage","type":"build"},{"source":"qt_quickvectorimagegenerator","target":"qt_svg","type":"build"},{"source":"qt_lottievectorimagegenerator","target":"qt_lottie","type":"build"},{"source":"qt_network","target":"qt_certonly","type":"runtime"},{"source":"qt_quickcontrols2","target":"qt_windowsstyle","type":"runtime"},{"source":"qt_network","target":"qt_networkinfo","type":"runtime"},{"source":"qt_texttospeech","target":"qt_tts_sapi","type":"runtime"},{"source":"qt_texttospeech","target":"qt_tts_winrt","type":"runtime"},{"source":"qt_texttospeech","target":"qt_tts_mock","type":"runtime"},{"source":"qt_gui","target":"qt_svgicon","type":"runtime"},{"source":"qt_gui","target":"qt_uiotouch","type":"runtime"},{"source":"qt_gui","target":"qt_vkeyboard_plugin","type":"runtime"},{"source":"qt_virtualkeyboard","target":"qt_vkeyboard_plugin","type":"runtime"},{"source":"qt_gui","target":"qt_lottie_vectorimage","type":"runtime"},{"source":"qt_quickvectorimage","target":"qt_lottie_vectorimage","type":"runtime"},{"source":"qt_qml","target":"qt_qmltooling","type":"runtime"},{"source":"qt_core","target":"qt_emb_pcre2","type":"build"},{"source":"qt_core","target":"qt_emb_zlib","type":"build"},{"source":"qt_core","target":"qt_emb_tinycbor","type":"build"},{"source":"qt_core","target":"qt_emb_doubleconversion","type":"build"},{"source":"qt_core","target":"qt_emb_hash","type":"build"},{"source":"qt_core","target":"qt_emb_easing","type":"build"},{"source":"qt_core","target":"qt_emb_clrd","type":"build"},{"source":"qt_gui","target":"qt_emb_freetype","type":"build"},{"source":"qt_gui","target":"qt_emb_harfbuzz","type":"build"},{"source":"qt_gui","target":"qt_emb_libpng","type":"build"},{"source":"qt_gui","target":"qt_emb_libjpeg","type":"build"},{"source":"qt_gui","target":"qt_emb_md4c","type":"build"},{"source":"qt_gui","target":"qt_emb_pixman","type":"build"},{"source":"qt_gui","target":"qt_emb_d3d12ma","type":"build"},{"source":"qt_gui","target":"qt_emb_vma","type":"build"},{"source":"qt_gui","target":"qt_emb_vulkanheaders","type":"build"},{"source":"qt_gui","target":"qt_emb_openglheaders","type":"build"},{"source":"qt_gui","target":"qt_emb_emoji_segmenter","type":"build"},{"source":"qt_emb_freetype","target":"qt_emb_libpng","type":"build"},{"source":"qt_imageformats","target":"qt_emb_libtiff","type":"build"},{"source":"qt_imageformats","target":"qt_emb_libwebp","type":"build"},{"source":"qt_multimedia","target":"qt_emb_drlibs","type":"build"},{"source":"qt_multimedia","target":"qt_emb_signalsmith","type":"build"},{"source":"qt_multimedia","target":"qt_emb_tlsf","type":"build"},{"source":"qt_network","target":"qt_emb_libpsl","type":"build"},{"source":"qt_pdf","target":"qt_emb_pdfium","type":"build"},{"source":"qt_qml","target":"qt_emb_jscore_macro","type":"build"},{"source":"qt_quick","target":"qt_emb_yoga","type":"build"},{"source":"qt_shadertools","target":"qt_emb_spirv_cross","type":"build"},{"source":"qt_shadertools","target":"qt_emb_glslang","type":"build"},{"source":"qt_virtualkeyboard","target":"qt_emb_openwnn","type":"build"},{"source":"qt_virtualkeyboard","target":"qt_emb_pinyinime","type":"build"},{"source":"qt_virtualkeyboard","target":"qt_emb_tcime","type":"build"},{"source":"qt_test","target":"qt_emb_catch2","type":"build"},{"source":"win_graphics","target":"win_d3d11","type":"runtime"},{"source":"win_graphics","target":"win_d3d12","type":"runtime"},{"source":"win_graphics","target":"win_dxgi","type":"runtime"},{"source":"win_graphics","target":"win_directwrite","type":"runtime"},{"source":"win_graphics","target":"win_direct2d","type":"runtime"},{"source":"win_graphics","target":"win_d3d9","type":"runtime"},{"source":"win_graphics","target":"win_dcomp","type":"runtime"},{"source":"win_graphics","target":"win_opengl","type":"runtime"},{"source":"win_graphics","target":"win_d3dcompiler","type":"runtime"},{"source":"qt_quick","target":"win_d3d11","type":"runtime"},{"source":"qt_quick","target":"win_d3d12","type":"runtime"},{"source":"qt_quick","target":"win_dxgi","type":"runtime"},{"source":"qt_quick","target":"win_dcomp","type":"runtime"},{"source":"qt_gui","target":"win_d3d11","type":"runtime"},{"source":"qt_gui","target":"win_dxgi","type":"runtime"},{"source":"qt_gui","target":"win_gdi32","type":"runtime"},{"source":"qt_gui","target":"win_uxtheme","type":"runtime"},{"source":"qt_qwindows","target":"win_directwrite","type":"runtime"},{"source":"qt_qwindows","target":"win_direct2d","type":"runtime"},{"source":"qt_qwindows","target":"win_d3d9","type":"runtime"},{"source":"qt_qwindows","target":"win_gdi32","type":"runtime"},{"source":"qt_qwindows","target":"win_uxtheme","type":"runtime"},{"source":"qt_qwindows","target":"win_wintab","type":"runtime"},{"source":"qt_qwindows","target":"win_imm32","type":"runtime"},{"source":"qt_qwindows","target":"win_setupapi","type":"runtime"},{"source":"qt_qwindows","target":"win_shlwapi","type":"runtime"},{"source":"qt_qwindows","target":"win_version","type":"runtime"},{"source":"qt_qwindows","target":"win_winmm","type":"runtime"},{"source":"qt_qwindows","target":"win_wtsapi","type":"runtime"},{"source":"qt_qwindows","target":"win_shcore","type":"runtime"},{"source":"qt_qwindows","target":"win_mscms","type":"runtime"},{"source":"qt_wmf_plugin","target":"win_mediafoundation","type":"runtime"},{"source":"qt_wmf_plugin","target":"win_wasapi","type":"runtime"},{"source":"qt_wmf_plugin","target":"win_evr","type":"runtime"},{"source":"qt_wmf_plugin","target":"win_wmcodecdsp","type":"runtime"},{"source":"qt_wmf_plugin","target":"win_d3d11","type":"runtime"},{"source":"qt_ffmpeg_plugin","target":"win_d3d11","type":"runtime"},{"source":"qt_ffmpeg_plugin","target":"win_dxgi","type":"runtime"},{"source":"qt_tts_sapi","target":"win_sapi","type":"runtime"},{"source":"qt_tts_winrt","target":"win_winrt","type":"runtime"},{"source":"qt_schannel","target":"win_schannel_sys","type":"runtime"},{"source":"win_d3d11","target":"win_dxgi","type":"runtime"},{"source":"win_d3d12","target":"win_dxgi","type":"runtime"},{"source":"win_direct2d","target":"win_d3d11","type":"runtime"},{"source":"win_direct2d","target":"win_dxgi","type":"runtime"},{"source":"win_dcomp","target":"win_dxgi","type":"runtime"},{"source":"win_evr","target":"win_d3d11","type":"runtime"},{"source":"win_evr","target":"win_dxgi","type":"runtime"},{"source":"win_directwrite","target":"win_gdi32","type":"runtime"},{"source":"win_wasapi","target":"win_system","type":"runtime"},{"source":"win_mediafoundation","target":"win_system","type":"runtime"},{"source":"win_winrt","target":"win_system","type":"runtime"},{"source":"win_sapi","target":"win_system","type":"runtime"},{"source":"driver_service","target":"qt_core","type":"build"},{"source":"driver_service","target":"qt_qml","type":"build"},{"source":"appguard","target":"qt_core","type":"build"},{"source":"translationcache","target":"qt_core","type":"build"},{"source":"termglossary","target":"qt_core","type":"build"},{"source":"qualitygate","target":"qt_core","type":"build"},{"source":"commentservice","target":"qt_core","type":"build"},{"source":"trxparser","target":"qt_core","type":"build"},{"source":"translationhistoryservice","target":"qt_core","type":"build"},{"source":"translex_sdk","target":"qt_core","type":"build"},{"source":"plugin_src","target":"translex_sdk","type":"source"},{"source":"zlib","target":"msvc_runtime","type":"build"},{"source":"qt_entrypointprivate","target":"win_system","type":"build"},{"source":"qt_certonly","target":"qt_core","type":"runtime"},{"source":"qt_certonly","target":"qt_network","type":"runtime"},{"source":"qt_windowsstyle","target":"qt_core","type":"runtime"},{"source":"qt_windowsstyle","target":"qt_widgets","type":"runtime"},{"source":"qt_windowsstyle","target":"win_system","type":"runtime"},{"source":"qt_windowsstyle","target":"win_uxtheme","type":"runtime"},{"source":"qt_networkinfo","target":"qt_core","type":"runtime"},{"source":"qt_networkinfo","target":"qt_network","type":"runtime"},{"source":"qt_networkinfo","target":"win_system","type":"runtime"},{"source":"qt_tts_mock","target":"qt_core","type":"runtime"},{"source":"qt_tts_mock","target":"qt_texttospeech","type":"runtime"},{"source":"qt_svgicon","target":"qt_core","type":"runtime"},{"source":"qt_svgicon","target":"qt_gui","type":"runtime"},{"source":"qt_svgicon","target":"qt_svg","type":"runtime"},{"source":"qt_uiotouch","target":"qt_core","type":"runtime"},{"source":"qt_uiotouch","target":"qt_gui","type":"runtime"},{"source":"qt_vkeyboard_plugin","target":"qt_core","type":"runtime"},{"source":"qt_vkeyboard_plugin","target":"qt_qml","type":"runtime"},{"source":"qt_vkeyboard_plugin","target":"qt_quick","type":"runtime"},{"source":"qt_vkeyboard_plugin","target":"qt_virtualkeyboard","type":"runtime"},{"source":"qt_vkeyboard_plugin","target":"win_imm32","type":"runtime"},{"source":"qt_lottie_vectorimage","target":"qt_core","type":"runtime"},{"source":"qt_lottie_vectorimage","target":"qt_lottie","type":"runtime"},{"source":"qt_lottie_vectorimage","target":"qt_svg","type":"runtime"},{"source":"qt_qmltooling","target":"qt_core","type":"runtime"},{"source":"qt_qmltooling","target":"qt_qml","type":"runtime"},{"source":"qt_qmltooling","target":"qt_network","type":"runtime"},{"source":"qt_emb_pcre2","target":"msvc_runtime","type":"build"},{"source":"qt_emb_zlib","target":"msvc_runtime","type":"build"},{"source":"qt_emb_tinycbor","target":"msvc_runtime","type":"build"},{"source":"qt_emb_doubleconversion","target":"msvc_runtime","type":"build"},{"source":"qt_emb_hash","target":"msvc_runtime","type":"build"},{"source":"qt_emb_easing","target":"msvc_runtime","type":"build"},{"source":"qt_emb_clrd","target":"msvc_runtime","type":"build"},{"source":"qt_emb_harfbuzz","target":"msvc_runtime","type":"build"},{"source":"qt_emb_libpng","target":"msvc_runtime","type":"build"},{"source":"qt_emb_libjpeg","target":"msvc_runtime","type":"build"},{"source":"qt_emb_md4c","target":"msvc_runtime","type":"build"},{"source":"qt_emb_pixman","target":"msvc_runtime","type":"build"},{"source":"qt_emb_d3d12ma","target":"msvc_runtime","type":"build"},{"source":"qt_emb_vma","target":"msvc_runtime","type":"build"},{"source":"qt_emb_emoji_segmenter","target":"msvc_runtime","type":"build"},{"source":"qt_emb_libtiff","target":"msvc_runtime","type":"build"},{"source":"qt_emb_libwebp","target":"msvc_runtime","type":"build"},{"source":"qt_emb_drlibs","target":"msvc_runtime","type":"build"},{"source":"qt_emb_signalsmith","target":"msvc_runtime","type":"build"},{"source":"qt_emb_tlsf","target":"msvc_runtime","type":"build"},{"source":"qt_emb_libpsl","target":"msvc_runtime","type":"build"},{"source":"qt_emb_pdfium","target":"msvc_runtime","type":"build"},{"source":"qt_emb_jscore_macro","target":"msvc_runtime","type":"build"},{"source":"qt_emb_yoga","target":"msvc_runtime","type":"build"},{"source":"qt_emb_spirv_cross","target":"msvc_runtime","type":"build"},{"source":"qt_emb_glslang","target":"msvc_runtime","type":"build"},{"source":"qt_emb_openwnn","target":"msvc_runtime","type":"build"},{"source":"qt_emb_pinyinime","target":"msvc_runtime","type":"build"},{"source":"qt_emb_tcime","target":"msvc_runtime","type":"build"},{"source":"qt_emb_catch2","target":"msvc_runtime","type":"build"},{"source":"qt_emb_libpng","target":"qt_emb_zlib","type":"build"},{"source":"qt_emb_libtiff","target":"qt_emb_zlib","type":"build"},{"source":"qt_emb_libtiff","target":"qt_emb_libjpeg","type":"build"},{"source":"qt_emb_pdfium","target":"qt_emb_freetype","type":"build"},{"source":"qt_emb_pdfium","target":"qt_emb_libjpeg","type":"build"},{"source":"qt_emb_pdfium","target":"qt_emb_libpng","type":"build"},{"source":"qt_emb_pdfium","target":"qt_emb_zlib","type":"build"},{"source":"qt_emb_pdfium","target":"win_system","type":"build"},{"source":"fluentui_qrcode","target":"msvc_runtime","type":"build"},{"source":"fluentui_qmlcustomplot","target":"qt_core","type":"build"},{"source":"fluentui_qmlcustomplot","target":"qt_gui","type":"build"},{"source":"fluentui_qmlcustomplot","target":"qt_widgets","type":"build"},{"source":"msvc","target":"msvc_runtime","type":"tool"},{"source":"ninja","target":"msvc_runtime","type":"tool"},{"source":"vswhere","target":"msvc_runtime","type":"tool"},{"source":"ctest","target":"msvc_runtime","type":"tool"},{"source":"nsis","target":"msvc_runtime","type":"tool"},{"source":"qt_tools","target":"qt_core","type":"tool"},{"source":"qt_tools","target":"msvc_runtime","type":"tool"},{"source":"ffmpeg","target":"win_system","type":"runtime"},{"source":"ffmpeg","target":"win_user32","type":"runtime"},{"source":"win_user32","target":"win_system","type":"runtime"},{"source":"win_dwmapi","target":"win_system","type":"runtime"},{"source":"win_gdi32","target":"win_system","type":"runtime"},{"source":"win_gdi32","target":"win_user32","type":"runtime"},{"source":"win_dxgi","target":"win_system","type":"runtime"},{"source":"win_d3d9","target":"win_system","type":"runtime"},{"source":"win_d3d9","target":"win_user32","type":"runtime"},{"source":"win_d3d9","target":"win_gdi32","type":"runtime"},{"source":"win_opengl","target":"win_system","type":"runtime"},{"source":"win_opengl","target":"win_user32","type":"runtime"},{"source":"win_opengl","target":"win_gdi32","type":"runtime"},{"source":"win_d3dcompiler","target":"win_system","type":"runtime"},{"source":"win_d3dcompiler","target":"win_user32","type":"runtime"},{"source":"win_wmcodecdsp","target":"win_system","type":"runtime"},{"source":"win_wmcodecdsp","target":"win_mediafoundation","type":"runtime"},{"source":"win_uxtheme","target":"win_system","type":"runtime"},{"source":"win_uxtheme","target":"win_user32","type":"runtime"},{"source":"win_uxtheme","target":"win_gdi32","type":"runtime"},{"source":"win_wintab","target":"win_system","type":"runtime"},{"source":"win_wintab","target":"win_user32","type":"runtime"},{"source":"win_imm32","target":"win_system","type":"runtime"},{"source":"win_imm32","target":"win_user32","type":"runtime"},{"source":"win_setupapi","target":"win_system","type":"runtime"},{"source":"win_setupapi","target":"win_user32","type":"runtime"},{"source":"win_shlwapi","target":"win_system","type":"runtime"},{"source":"win_shlwapi","target":"win_user32","type":"runtime"},{"source":"win_version","target":"win_system","type":"runtime"},{"source":"win_winmm","target":"win_system","type":"runtime"},{"source":"win_winmm","target":"win_user32","type":"runtime"},{"source":"win_wtsapi","target":"win_system","type":"runtime"},{"source":"win_shcore","target":"win_system","type":"runtime"},{"source":"win_shcore","target":"win_user32","type":"runtime"},{"source":"win_mscms","target":"win_system","type":"runtime"},{"source":"win_mscms","target":"win_user32","type":"runtime"},{"source":"win_mscms","target":"win_gdi32","type":"runtime"},{"source":"win_schannel_sys","target":"win_system","type":"runtime"}],"owners":[{"id":"translex","name":"本项目 (Translex)","color":"#4FC1FF","desc":"Translex 仓库（QML + services + 测试）"},{"id":"qt","name":"Qt (The Qt Company)","color":"#744DA9","desc":"Qt 6.11.1 模块 / 运行时 / 插件"},{"id":"fluentui","name":"FluentUI (zhuzichu520)","color":"#E6008D","desc":"FluentUI 1.7.7 组件库 + 内嵌子库"},{"id":"quazip","name":"QuaZip (S. Tachenov)","color":"#C586C0","desc":"QuaZip 1.7.2"},{"id":"zlib","name":"zlib (madler)","color":"#B5CEA8","desc":"zlib 1.3.2.1"},{"id":"kitware","name":"Kitware","color":"#CE9178","desc":"CMake / CTest / CPack / Ninja"},{"id":"microsoft","name":"Microsoft","color":"#0078D4","desc":"MSVC / VS 2026 / Windows 系统 / DirectX"},{"id":"llvm","name":"LLVM","color":"#9CDCFE","desc":"clang-cl"},{"id":"gcc","name":"GCC (MinGW)","color":"#F48771","desc":"MinGW g++"},{"id":"ffmpeg","name":"FFmpeg 项目","color":"#6CCB5F","desc":"FFmpeg 6.x 库（QtMultimedia 后端）"},{"id":"nsis","name":"NSIS 项目","color":"#DCDCAA","desc":"Nullsoft 脚本安装系统"}]};
+
+/* ================= 工具 ================= */
+const $ = (id) => document.getElementById(id);
+const nodeMap = {};
+GRAPH.nodes.forEach(n => nodeMap[n.id] = n);
+const layerMeta = {};
+GRAPH.layers.forEach(l => layerMeta[l.id] = l);
+const ownerMeta = {};
+(GRAPH.owners || []).forEach(o => ownerMeta[o.id] = o);
+
+// 当前着色模式：'layer'（按层级）| 'owner'（按实现主体）
+let colorMode = 'layer';
+function nodeColor(n) {
+  if (colorMode === 'owner' && ownerMeta[n.owner]) return ownerMeta[n.owner].color;
+  return layerMeta[n.layer].color;
+}
+function ownerName(id) {
+  return ownerMeta[id] ? ownerMeta[id].name : '—';
+}
+
+// 邻接表
+const adjOut = {}, adjIn = {};
+GRAPH.edges.forEach(e => {
+  (adjOut[e.source] = adjOut[e.source] || []).push(e);
+  (adjIn[e.target] = adjIn[e.target] || []).push(e);
+});
+const degree = {};
+GRAPH.nodes.forEach(n => {
+  degree[n.id] = (adjOut[n.id] ? adjOut[n.id].length : 0) + (adjIn[n.id] ? adjIn[n.id].length : 0);
+});
+
+const EDGE_STYLE = {
+  source:   { color: "#4EC9B0", dash: "5 4",   label: "源码引用 (#include/import)" },
+  build:    { color: "#569CD6", dash: "",      label: "编译期链接 (CMake)" },
+  runtime:  { color: "#CE9178", dash: "10 5",  label: "运行期加载 (DLL/系统库)" },
+  tool:     { color: "#DCDCAA", dash: "3 4",   label: "工具链" },
+  test:     { color: "#C586C0", dash: "2 3",   label: "测试关系" },
+  package:  { color: "#F48771", dash: "8 3 2 3", label: "打包/部署" },
+};
+
+/* ================= 力导向分层布局 ================= */
+const W = 1800, H = 1500;
+const LAYER_GAP = H / (GRAPH.layers.length + 1);
+const byLayer = {};
+GRAPH.nodes.forEach(n => { (byLayer[n.layer] = byLayer[n.layer] || []).push(n); });
+
+function initPositions() {
+  GRAPH.layers.forEach(l => {
+    const list = byLayer[l.id] || [];
+    list.forEach((n, i) => {
+      n.x = (i + 0.5) * W / Math.max(1, list.length) + (Math.random() - 0.5) * 40;
+      n.y = (l.id + 1) * LAYER_GAP + (Math.random() - 0.5) * 30;
+      n.vx = 0; n.vy = 0;
+    });
+  });
+}
+
+function runLayout(iters = 380) {
+  const ns = GRAPH.nodes;
+  for (let iter = 0; iter < iters; iter++) {
+    const t = 0.85 * (1 - iter / iters) + 0.15;   // 模拟退火温度
+    // 斥力（O(n²)，n≈90 可接受）
+    for (let i = 0; i < ns.length; i++) {
+      for (let j = i + 1; j < ns.length; j++) {
+        const a = ns[i], b = ns[j];
+        let dx = b.x - a.x, dy = b.y - a.y;
+        let d2 = dx * dx + dy * dy;
+        if (d2 < 1) { dx = Math.random() - .5; dy = Math.random() - .5; d2 = 1; }
+        const d = Math.sqrt(d2);
+        // 同层强斥（防重叠），跨层弱斥
+        const strength = (a.layer === b.layer ? 5200 : 1800) / d2;
+        const fx = (dx / d) * strength, fy = (dy / d) * strength;
+        a.vx -= fx; a.vy -= fy; b.vx += fx; b.vy += fy;
+      }
+    }
+    // 边弹簧
+    GRAPH.edges.forEach(e => {
+      const a = nodeMap[e.source], b = nodeMap[e.target];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      const rest = 150 + Math.abs(a.layer - b.layer) * 70;
+      const f = 0.028 * (d - rest);
+      const fx = (dx / d) * f, fy = (dy / d) * f;
+      a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+    });
+    // 分层弹簧：把节点拉向所属层带。
+    // 连接度高的节点（如 translex 有 40+ 条边）被边弹簧合力往下拽，需按 degree 加权补偿。
+    ns.forEach(n => {
+      const ty = (n.layer + 1) * LAYER_GAP;
+      const w = 1 + 0.12 * degree[n.id];
+      n.vy += 0.055 * w * (ty - n.y);
+      n.vx += 0.004 * (W / 2 - n.x);
+    });
+    // 积分 + 阻尼
+    ns.forEach(n => {
+      n.vx *= 0.82; n.vy *= 0.82;
+      n.x += n.vx * t;
+      n.y += n.vy * t;
+      n.x = Math.max(60, Math.min(W - 60, n.x));
+      n.y = Math.max(60, Math.min(H - 60, n.y));
+    });
+  }
+}
+
+/* ================= SVG 渲染 ================= */
+const svg = $("graph");
+const NS = "http://www.w3.org/2000/svg";
+let root, edgesG, nodesG, bandsG;
+let view = { tx: 0, ty: 0, s: 1 };
+
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+function nodeRadius(n) {
+  return Math.min(17, 5.5 + degree[n.id] * 1.15);
+}
+
+function buildScene() {
+  svg.innerHTML = "";
+  root = el("g", {}, svg);
+  bandsG = el("g", { class: "layer-band" }, root);
+  edgesG = el("g", {}, root);
+  nodesG = el("g", {}, root);
+
+  // 层带背景（按层级着色模式时显示，按主体着色时弱化以免干扰）
+  GRAPH.layers.forEach(l => {
+    const y = (l.id + 1) * LAYER_GAP;
+    const dim = colorMode === 'owner';
+    el("rect", { x: 0, y: y - LAYER_GAP / 2 + 26, width: W, height: LAYER_GAP - 52,
+                 fill: l.color, opacity: dim ? 0.015 : 0.05 }, bandsG);
+    el("line", { x1: 0, y1: y - LAYER_GAP / 2, x2: W, y2: y - LAYER_GAP / 2,
+                 stroke: l.color, opacity: dim ? 0.04 : 0.12, "stroke-width": 1 }, bandsG);
+    el("text", { x: 16, y: y - LAYER_GAP / 2 + 22, fill: l.color, opacity: dim ? 0.18 : 0.5,
+                 "font-size": 12 }, bandsG).textContent = `L${l.id} ${l.name}`;
+  });
+
+  // 边
+  GRAPH.edges.forEach(e => drawEdge(e, edgesG));
+  // 节点
+  GRAPH.nodes.forEach(n => drawNode(n, nodesG));
+  applyTransform();
+}
+
+function drawEdge(e, parent) {
+  const a = nodeMap[e.source], b = nodeMap[e.target];
+  const st = EDGE_STYLE[e.type] || EDGE_STYLE.build;
+  el("line", {
+    class: "edge", "data-eid": e.source + "→" + e.target, "data-type": e.type,
+    x1: a.x, y1: a.y, x2: b.x, y2: b.y,
+    stroke: st.color, "stroke-width": 1.1, opacity: 0.30,
+    "stroke-dasharray": st.dash,
+  }, parent);
+}
+
+function drawNode(n, parent) {
+  const g = el("g", { class: "node-g", "data-id": n.id, transform: `translate(${n.x},${n.y})` }, parent);
+  const r = nodeRadius(n);
+  const color = nodeColor(n);
+  el("circle", {
+    class: "node-ring", r: r, fill: color,
+    stroke: color, "stroke-width": 1.5, opacity: 0.95,
+  }, g);
+  // 光晕
+  el("circle", { class: "node-glow", r: r + 3, fill: "none", stroke: color, opacity: 0.25, "stroke-width": 2 }, g);
+  const short = n.label.length > 14 ? n.label.slice(0, 13) + "…" : n.label;
+  const txt = el("text", {
+    class: "node-label", x: r + 7, y: 4, "text-anchor": "start",
+  }, g);
+  txt.textContent = short;
+  g.dataset.r = r;
+  g.dataset.short = short;
+}
+
+function applyTransform() {
+  root.setAttribute("transform", `translate(${view.tx},${view.ty}) scale(${view.s})`);
+}
+
+function refreshEdgePositions() {
+  GRAPH.edges.forEach(e => {
+    const a = nodeMap[e.source], b = nodeMap[e.target];
+    const line = edgesG.querySelector(`[data-eid="${e.source}→${e.target}"]`);
+    if (line) { line.setAttribute("x1", a.x); line.setAttribute("y1", a.y); line.setAttribute("x2", b.x); line.setAttribute("y2", b.y); }
+  });
+}
+
+/* ================= 缩放 / 平移 ================= */
+function zoomAt(px, py, factor) {
+  const ns = view.s * factor;
+  const k = Math.max(0.15, Math.min(3, ns));
+  const ratio = k / view.s;
+  view.tx = px - (px - view.tx) * ratio;
+  view.ty = py - (py - view.ty) * ratio;
+  view.s = k;
+  applyTransform();
+}
+
+svg.addEventListener("wheel", (ev) => {
+  ev.preventDefault();
+  const rect = svg.getBoundingClientRect();
+  zoomAt(ev.clientX - rect.left, ev.clientY - rect.top, ev.deltaY < 0 ? 1.12 : 0.89);
+}, { passive: false });
+
+let drag = null;
+svg.addEventListener("mousedown", (ev) => {
+  const target = ev.target.closest(".node-g");
+  const rect = svg.getBoundingClientRect();
+  const mx = (ev.clientX - rect.left - view.tx) / view.s;
+  const my = (ev.clientY - rect.top - view.ty) / view.s;
+  if (target) {
+    drag = { kind: "node", id: target.dataset.id, x0: ev.clientX, y0: ev.clientY, moved: false, nx: mx, ny: my };
+  } else {
+    drag = { kind: "pan", x0: ev.clientX, y0: ev.clientY, tx0: view.tx, ty0: view.ty, moved: false };
+    svg.classList.add("dragging");
+  }
+});
+window.addEventListener("mousemove", (ev) => {
+  if (!drag) return;
+  const rect = svg.getBoundingClientRect();
+  const dx = ev.clientX - drag.x0, dy = ev.clientY - drag.y0;
+  if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+  if (drag.kind === "pan") {
+    view.tx = drag.tx0 + dx; view.ty = drag.ty0 + dy;
+    applyTransform();
+  } else if (drag.kind === "node") {
+    const n = nodeMap[drag.id];
+    n.x = drag.nx + dx / view.s;
+    n.y = drag.ny + dy / view.s;
+    const g = nodesG.querySelector(`[data-id="${n.id}"]`);
+    if (g) g.setAttribute("transform", `translate(${n.x},${n.y})`);
+    refreshEdgePositions();
+  }
+});
+window.addEventListener("mouseup", (ev) => {
+  if (!drag) return;
+  const wasDrag = drag.moved;
+  if (drag.kind === "node" && !wasDrag) {
+    // 视为点击 → 打开详情
+    selectNode(drag.id);
+  }
+  drag = null;
+  svg.classList.remove("dragging");
+});
+
+/* ================= 点击 / 悬停 ================= */
+function selectNode(id) {
+  const n = nodeMap[id];
+  if (!n) return;
+  const color = nodeColor(n);
+  const out = (adjOut[id] || []).map(e => e.target);
+  const inn = (adjIn[id] || []).map(e => e.source);
+  const d = $("detail");
+  let html = `<div class="d-title"><span class="badge" style="background:${color}">L${n.layer}</span>${n.label}</div>
+              <div class="d-close" onclick="closeDetail()">✕</div>`;
+  html += `<div class="d-kv">
+             <span class="k">类型</span><span>${n.kind || "—"}</span>
+             <span class="k">层</span><span>${layerMeta[n.layer].name}</span>
+             <span class="k">主体</span><span>${ownerName(n.owner)}</span>`;
+  if (n.version) html += `<span class="k">版本</span><span>${n.version}</span>`;
+  if (n.license) html += `<span class="k">许可</span><span>${n.license}</span>`;
+  html += `</div>`;
+  if (n.desc) html += `<div class="d-desc">${n.desc}</div>`;
+  if (n.url) html += `<div class="d-links"><a href="${n.url}" target="_blank" rel="noopener">🔗 主页</a></div>`;
+  const chips = [];
+  out.forEach(t => chips.push(`<span class="chip" onclick="selectNode('${t}')">→ ${nodeMap[t].label}</span>`));
+  inn.forEach(t => chips.push(`<span class="chip" onclick="selectNode('${t}')">← ${nodeMap[t].label}</span>`));
+  if (chips.length) html += `<div class="d-deps"><div class="t">依赖 (点击跳转)</div>${chips.join("")}</div>`;
+  d.innerHTML = html;
+  d.style.display = "block";
+}
+window.closeDetail = () => { $("detail").style.display = "none"; };
+// 暴露给内联 onclick
+window.selectNode = selectNode;
+
+// Tooltip（nodesG 事件在 buildScene() 之后绑定，见初始化部分）
+
+function highlightNode(id, on) {
+  const set = new Set([id]);
+  (adjOut[id] || []).forEach(e => { set.add(e.target); });
+  (adjIn[id] || []).forEach(e => { set.add(e.source); });
+  GRAPH.nodes.forEach(n => {
+    const g = nodesG.querySelector(`[data-id="${n.id}"]`);
+    if (!g) return;
+    const active = set.has(n.id);
+    g.classList.toggle("dim", !active);
+  });
+  edgesG.querySelectorAll(".edge").forEach(line => {
+    const eid = line.dataset.eid;
+    const [s, t] = eid.split("→");
+    const active = set.has(s) && set.has(t);
+    line.style.opacity = active ? 0.75 : 0.10;
+  });
+}
+
+/* ================= 过滤 ================= */
+const state = { layers: {}, types: {}, owners: {} };
+GRAPH.layers.forEach(l => state.layers[l.id] = true);
+Object.keys(EDGE_STYLE).forEach(t => state.types[t] = true);
+(GRAPH.owners || []).forEach(o => state.owners[o.id] = true);
+
+function nodeVisible(n) {
+  return state.layers[n.layer] && state.owners[n.owner !== undefined ? n.owner : 'translex'];
+}
+
+function applyFilters() {
+  GRAPH.nodes.forEach(n => {
+    const g = nodesG.querySelector(`[data-id="${n.id}"]`);
+    if (g) g.style.display = nodeVisible(n) ? "" : "none";
+  });
+  GRAPH.edges.forEach(e => {
+    const line = edgesG.querySelector(`[data-eid="${e.source}→${e.target}"]`);
+    if (line) line.style.display = (nodeVisible(nodeMap[e.source]) && nodeVisible(nodeMap[e.target]) && state.types[e.type]) ? "" : "none";
+  });
+  updateStats();
+}
+
+function updateStats() {
+  const visNodes = GRAPH.nodes.filter(nodeVisible).length;
+  const visEdges = GRAPH.edges.filter(e => nodeVisible(nodeMap[e.source]) && nodeVisible(nodeMap[e.target]) && state.types[e.type]).length;
+  $("stats").textContent = `${visNodes} 节点 · ${visEdges} 边`;
+}
+
+/* ================= 过滤面板 + 图例 ================= */
+function buildPanel() {
+  const p = $("panel");
+  let html = `<h3>层级过滤</h3>`;
+  GRAPH.layers.forEach(l => {
+    const cnt = (byLayer[l.id] || []).length;
+    html += `<label class="f-item"><input type="checkbox" data-l="${l.id}" checked>
+             <span class="dot" style="background:${l.color}"></span>
+             <span class="lbl">L${l.id} ${l.name}</span><span class="cnt">${cnt}</span></label>`;
+  });
+  html += `<h3>实现主体过滤</h3>`;
+  (GRAPH.owners || []).forEach(o => {
+    const cnt = GRAPH.nodes.filter(n => n.owner === o.id).length;
+    html += `<label class="f-item"><input type="checkbox" data-o="${o.id}" checked>
+             <span class="dot" style="background:${o.color}"></span>
+             <span class="lbl">${o.name}</span><span class="cnt">${cnt}</span></label>`;
+  });
+  html += `<h3>边类型</h3>`;
+  Object.entries(EDGE_STYLE).forEach(([k, st]) => {
+    const cnt = GRAPH.edges.filter(e => e.type === k).length;
+    html += `<label class="f-item"><input type="checkbox" data-t="${k}" checked>
+             <span class="lbl">${st.label}</span><span class="cnt">${cnt}</span></label>`;
+  });
+  html += `<h3>图例 · 边样式</h3>`;
+  Object.entries(EDGE_STYLE).forEach(([k, st]) => {
+    html += `<div class="legend-line"><svg width="34" height="8"><line x1="0" y1="4" x2="34" y2="4" stroke="${st.color}" stroke-width="2" stroke-dasharray="${st.dash || "none"}"></line></svg><span>${st.label}</span></div>`;
+  });
+  p.innerHTML = html;
+  p.querySelectorAll("input[data-l]").forEach(cb => {
+    cb.addEventListener("change", () => { state.layers[+cb.dataset.l] = cb.checked; applyFilters(); });
+  });
+  p.querySelectorAll("input[data-o]").forEach(cb => {
+    cb.addEventListener("change", () => { state.owners[cb.dataset.o] = cb.checked; applyFilters(); });
+  });
+  p.querySelectorAll("input[data-t]").forEach(cb => {
+    cb.addEventListener("change", () => { state.types[cb.dataset.t] = cb.checked; applyFilters(); });
+  });
+}
+
+/* ================= 搜索 ================= */
+let searchMatches = [];
+const searchInput = $("search");
+searchInput.addEventListener("input", () => {
+  const q = searchInput.value.trim().toLowerCase();
+  GRAPH.nodes.forEach(n => {
+    const g = nodesG.querySelector(`[data-id="${n.id}"]`);
+    if (!g) return;
+    const hit = q && (n.id.toLowerCase().includes(q) || n.label.toLowerCase().includes(q));
+    g.style.opacity = hit ? 1 : (q ? 0.18 : 1);
+    const ring = g.querySelector(".node-ring");
+    ring.setAttribute("r", hit ? nodeRadius(n) + 4 : nodeRadius(n));
+    ring.setAttribute("stroke", hit ? "#fff" : nodeColor(n));
+  });
+});
+searchInput.addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") {
+    const q = searchInput.value.trim().toLowerCase();
+    const m = GRAPH.nodes.find(n => n.id.toLowerCase().includes(q) || n.label.toLowerCase().includes(q));
+    if (m) {
+      selectNode(m.id);
+      // 平移到节点
+      const rect = svg.getBoundingClientRect();
+      view.tx = rect.width / 2 - m.x * view.s;
+      view.ty = rect.height / 2 - m.y * view.s;
+      applyTransform();
+    }
+  }
+});
+
+/* ================= 顶栏按钮 ================= */
+$("btn-reset").addEventListener("click", () => {
+  view = { tx: 0, ty: 0, s: 1 };
+  applyTransform();
+});
+$("btn-panel").addEventListener("click", () => {
+  const p = $("panel");
+  p.style.display = p.style.display === "none" ? "" : "none";
+});
+
+// 着色模式切换：按层级 / 按实现主体
+function setColorMode(mode) {
+  colorMode = mode;
+  document.querySelectorAll("#seg-color button").forEach(b => {
+    b.classList.toggle("active", b.dataset.mode === mode);
+  });
+  // 重绘节点颜色与层带
+  GRAPH.nodes.forEach(n => {
+    const g = nodesG.querySelector(`[data-id="${n.id}"]`);
+    if (!g) return;
+    const ring = g.querySelector(".node-ring");
+    const glow = g.querySelector(".node-glow");
+    const c = nodeColor(n);
+    if (ring) { ring.setAttribute("fill", c); ring.setAttribute("stroke", c); }
+    if (glow) glow.setAttribute("stroke", c);
+  });
+  // 层带弱化切换（owner 模式下半透明，避免干扰主体色）
+  bandsG.setAttribute("opacity", mode === "owner" ? 0.25 : 1);
+}
+document.querySelectorAll("#seg-color button").forEach(b => {
+  b.addEventListener("click", () => setColorMode(b.dataset.mode));
+});
+
+/* ================= 依赖扩散动画 =================
+ * 从 translex.exe 出发 BFS 扩散，逐节点点亮依赖；不可达节点按层追加保证全覆盖。 */
+const anim = {
+  steps: [], nodeIdx: {}, edgeIdx: {},
+  idx: -1, playing: false, timer: null, speed: 1,
+};
+
+function computeAnimSteps() {
+  const order = [], visited = new Set(['translex']), queue = ['translex'];
+  while (queue.length) {
+    const id = queue.shift();
+    order.push(id);
+    (adjOut[id] || []).forEach(e => {
+      if (!visited.has(e.target)) { visited.add(e.target); queue.push(e.target); }
+    });
+  }
+  // 不可达节点（工具链等）按层追加，保证 178 个节点全部点亮
+  GRAPH.nodes.filter(n => !visited.has(n.id))
+    .sort((a, b) => a.layer - b.layer)
+    .forEach(n => { visited.add(n.id); order.push(n.id); });
+  anim.steps = order;
+  anim.nodeIdx = {};
+  order.forEach((id, i) => anim.nodeIdx[id] = i);
+  anim.edgeIdx = {};
+  GRAPH.edges.forEach(e => {
+    anim.edgeIdx[e.source + '→' + e.target] = Math.max(anim.nodeIdx[e.source], anim.nodeIdx[e.target]);
+  });
+}
+
+function animRender() {
+  const k = anim.idx;
+  GRAPH.nodes.forEach(n => {
+    const g = nodesG.querySelector(`[data-id="${n.id}"]`);
+    if (!g) return;
+    const gi = anim.nodeIdx[n.id];
+    const on = gi <= k;
+    g.style.opacity = on ? 1 : 0.10;
+    g.classList.toggle('current', gi === k);
+    const ring = g.querySelector('.node-ring');
+    if (ring) ring.setAttribute('stroke', gi === k ? '#fff' : nodeColor(n));
+  });
+  edgesG.querySelectorAll('.edge').forEach(line => {
+    const ei = anim.edgeIdx[line.dataset.eid];
+    line.style.opacity = (ei !== undefined && ei <= k) ? 0.35 : 0.05;
+  });
+  // 进度条 / 步骤说明
+  const n = anim.steps.length;
+  $('ab-range').value = n ? Math.round(((k + 1) / n) * 100) : 0;
+  $('ab-info').textContent = `${Math.min(k + 1, n)} / ${n}`;
+  if (k >= 0 && k < n) {
+    const node = nodeMap[anim.steps[k]];
+    const inEdges = (adjIn[anim.steps[k]] || []).filter(e => anim.nodeIdx[e.source] <= k);
+    const parents = inEdges.map(e => nodeMap[e.source].label);
+    const et = inEdges[0] ? EDGE_STYLE[inEdges[0].type].label : '';
+    let txt = `第 ${k + 1}/${n} 步 · 点亮 ${node.label}（${layerMeta[node.layer].name}）`;
+    if (parents.length) txt += ` ｜ ${et}：${parents.slice(0, 3).join('、')}${parents.length > 3 ? ' 等' : ''}`;
+    $('ab-desc').textContent = txt;
+  }
+}
+
+function animResetStyles() {
+  GRAPH.nodes.forEach(n => {
+    const g = nodesG.querySelector(`[data-id="${n.id}"]`);
+    if (!g) return;
+    g.style.opacity = '';
+    g.classList.remove('current');
+    const ring = g.querySelector('.node-ring');
+    if (ring) ring.setAttribute('stroke', nodeColor(n));
+  });
+  edgesG.querySelectorAll('.edge').forEach(line => { line.style.opacity = ''; });
+}
+
+function animStep(delta) {
+  anim.idx = Math.max(-1, Math.min(anim.steps.length - 1, anim.idx + delta));
+  animRender();
+  if (anim.idx >= anim.steps.length - 1) animPause(); // 播完暂停，停在末帧
+}
+
+function animPlay() {
+  if (anim.playing) return;
+  if (anim.idx >= anim.steps.length - 1) anim.idx = -1;
+  anim.playing = true;
+  $('ab-play').textContent = '⏸';
+  const tick = () => {
+    if (!anim.playing) return;
+    animStep(1);
+    if (anim.playing) anim.timer = setTimeout(tick, 900 / anim.speed);
+  };
+  tick();
+}
+
+function animPause() {
+  anim.playing = false;
+  clearTimeout(anim.timer);
+  $('ab-play').textContent = '▶';
+}
+
+function animStart() {
+  computeAnimSteps();
+  anim.idx = -1;
+  animRender();
+  $('anim-bar').classList.add('visible');
+  animPlay();
+}
+
+function animClose() {
+  animPause();
+  $('anim-bar').classList.remove('visible');
+  animResetStyles();
+  applyFilters(); // 恢复过滤状态下的显示
+}
+
+$('btn-anim').addEventListener('click', () => {
+  if ($('anim-bar').classList.contains('visible')) animClose();
+  else animStart();
+});
+$('ab-play').addEventListener('click', () => { anim.playing ? animPause() : animPlay(); });
+$('ab-next').addEventListener('click', () => { animPause(); animStep(1); });
+$('ab-prev').addEventListener('click', () => { animPause(); animStep(-1); });
+$('ab-close').addEventListener('click', () => animClose());
+$('ab-range').addEventListener('input', (ev) => {
+  animPause();
+  const pct = +ev.target.value;
+  anim.idx = anim.steps.length ? Math.round((pct / 100) * (anim.steps.length - 1)) : -1;
+  animRender();
+});
+document.querySelectorAll('#ab-speed button').forEach(b => {
+  b.addEventListener('click', () => {
+    anim.speed = +b.dataset.s;
+    document.querySelectorAll('#ab-speed button').forEach(x => x.classList.toggle('active', x === b));
+    if (anim.playing) { animPause(); animPlay(); } // 以新速度重启
+  });
+});
+
+/* ================= 初始化 ================= */
+initPositions();
+runLayout();
+buildScene();
+buildPanel();
+applyFilters();
+
+// Tooltip 与节点悬停高亮（nodesG 已由 buildScene() 创建）
+const tip = $("tooltip");
+nodesG.addEventListener("mouseover", (ev) => {
+  const g = ev.target.closest(".node-g");
+  if (!g) return;
+  const n = nodeMap[g.dataset.id];
+  tip.innerHTML = `<div class="tt-t">${n.label}</div><div class="tt-d">${n.desc || ""}</div>`;
+  tip.style.display = "block";
+  highlightNode(n.id, true);
+});
+nodesG.addEventListener("mousemove", (ev) => {
+  tip.style.left = (ev.clientX + 14) + "px";
+  tip.style.top = (ev.clientY + 14) + "px";
+});
+nodesG.addEventListener("mouseout", (ev) => {
+  const g = ev.target.closest(".node-g");
+  if (!g) return;
+  tip.style.display = "none";
+  highlightNode(g.dataset.id, false);
+});
+
+// 初始自动缩放适配
+function fitView() {
+  const rect = svg.getBoundingClientRect();
+  const s = Math.min(rect.width / W, rect.height / H) * 0.92;
+  view.s = s;
+  view.tx = (rect.width - W * s) / 2;
+  view.ty = (rect.height - H * s) / 2;
+  applyTransform();
+}
+fitView();
+window.addEventListener("resize", fitView);
+</script>
+</body>
+</html>

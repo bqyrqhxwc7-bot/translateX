@@ -36,6 +36,22 @@
       "group": "翻译面板"
     },
     {
+      "key": "translatePanelWidth",
+      "displayName": "悬浮窗宽度（内部）",
+      "description": "悬浮窗手动缩放记忆的宽度（内部状态，不在设置页显示）",
+      "type": "number",
+      "default": 300,
+      "group": "翻译面板"
+    },
+    {
+      "key": "translatePanelHeight",
+      "displayName": "悬浮窗高度（内部）",
+      "description": "悬浮窗手动缩放记忆的高度（内部状态，不在设置页显示）",
+      "type": "number",
+      "default": 300,
+      "group": "翻译面板"
+    },
+    {
       "key": "currentRibbonTab",
       "displayName": "当前功能区标签（内部）",
       "description": "Ribbon 当前选中的标签索引，NoStack 页面重建后恢复（内部状态）",
@@ -113,6 +129,46 @@
       "description": "分割侧边栏收起状态（内部状态）",
       "type": "bool",
       "default": true,
+      "group": "布局"
+    },
+    {
+      "key": "windowX",
+      "displayName": "主窗口位置 X（内部）",
+      "description": "主窗口拖动记忆的横坐标（内部状态，不在设置页显示）",
+      "type": "number",
+      "default": 0,
+      "group": "布局"
+    },
+    {
+      "key": "windowY",
+      "displayName": "主窗口位置 Y（内部）",
+      "description": "主窗口拖动记忆的纵坐标（内部状态，不在设置页显示）",
+      "type": "number",
+      "default": 0,
+      "group": "布局"
+    },
+    {
+      "key": "windowWidth",
+      "displayName": "主窗口宽度（内部）",
+      "description": "主窗口大小记忆的宽度（内部状态，不在设置页显示）",
+      "type": "number",
+      "default": 1200,
+      "group": "布局"
+    },
+    {
+      "key": "windowHeight",
+      "displayName": "主窗口高度（内部）",
+      "description": "主窗口大小记忆的高度（内部状态，不在设置页显示）",
+      "type": "number",
+      "default": 780,
+      "group": "布局"
+    },
+    {
+      "key": "windowMaximized",
+      "displayName": "主窗口最大化（内部）",
+      "description": "主窗口退出时是否处于最大化（内部状态，不在设置页显示）",
+      "type": "bool",
+      "default": false,
       "group": "布局"
     }
   ]

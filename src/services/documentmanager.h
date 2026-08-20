@@ -80,6 +80,8 @@ private:
     void setDirty(bool dirty);
     // 打开成功后按 行数/体积 阈值设置模型受限模式（大文件降级）
     void applyLargeFileLimit(const QString &path);
+    // PDF 导入成功后写富文本持久化临时文件（%TEMP%/Translex/<pdf名>.trx，pdf-service.md §9.3）
+    void writePdfTrxTemp(const QString &pdfPath);
     static QString sanitizeFileName(QString name);
     static QString autosaveDir();
     static QString autosavePathFor(const QString &path);

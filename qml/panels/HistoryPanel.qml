@@ -4,13 +4,15 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import FluentUI
+import Translex
 
 Item {
     id: root
 
-    // 视觉 token（delegate 内不能直接访问实例 id，经 root 中转）
-    property var tokens: DesignTokens {}
-    readonly property color errorColor: tokens.error
+    // 视觉 token 实例（普通组件；delegate/内联组件内经页面属性中转）
+    DesignTokens {
+        id: tokens
+    }
 
     property var historyModel: ListModel {}
 
@@ -33,8 +35,9 @@ Item {
         anchors.fill: parent
         spacing: 0
 
-        Label {
+        FluText {
             text: qsTr("翻译历史")
+            font.pixelSize: tokens.fontHeading   // 面板标题（ui-improvement-plan P1）
             font.bold: true
             leftPadding: 12
             topPadding: 10
@@ -48,36 +51,58 @@ Item {
             Layout.fillHeight: true
             clip: true
             model: root.historyModel
-            delegate: ItemDelegate {
+            // 列表动画（ui-improvement-plan P0）；受限模式禁用（性能铁律，见 large-file.md）
+            add: Transition {
+                enabled: !documentModel.limitedMode
+                ParallelAnimation {
+                    NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200 }
+                    NumberAnimation { property: "y"; from: 10; to: 0; duration: 200; easing.type: Easing.OutCubic }
+                }
+            }
+            move: Transition {
+                enabled: !documentModel.limitedMode
+                NumberAnimation { property: "y"; duration: 150; easing.type: Easing.OutCubic }
+            }
+            displaced: Transition {
+                enabled: !documentModel.limitedMode
+                NumberAnimation { property: "y"; duration: 150; easing.type: Easing.OutCubic }
+            }
+            delegate: FluItemDelegate {
                 width: list.width
                 implicitHeight: 56
                 onClicked: root.focusLine(model.line)
+                // delegate 内不能访问顶层 tokens，实例化本地 token
+                DesignTokens {
+                    id: t
+                }
                 contentItem: ColumnLayout {
                     spacing: 2
                     RowLayout {
                         spacing: 6
-                        Label {
+                        FluText {
                             text: qsTr("第 %1 行").arg(model.line + 1)
-                            font.pixelSize: 12
+                            font.pixelSize: t.fontCaption
                             color: model.success ? FluTheme.fontSecondaryColor
-                                                 : root.errorColor
+                                                 : t.error
                         }
-                        Label {
+                        FluText {
                             text: model.time
-                            font.pixelSize: 12
+                            font.pixelSize: t.fontCaption
                             color: FluTheme.fontSecondaryColor
                         }
                         Item { Layout.fillWidth: true }
                     }
-                    Label {
+                    FluText {
                         text: model.source
+                        maximumLineCount: 1   // 防换行溢出固定高 delegate（2026-08-19 批注面板同坑）
                         elide: Text.ElideRight
-                        font.pixelSize: 12
+                        font.pixelSize: t.fontCaption
                         color: FluTheme.fontSecondaryColor
                         Layout.fillWidth: true
                     }
-                    Label {
+                    FluText {
                         text: model.translated
+                        maximumLineCount: 1   // 防换行溢出固定高 delegate（2026-08-19 批注面板同坑）
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                     }
@@ -85,9 +110,9 @@ Item {
             }
         }
 
-        Label {
+        FluText {
             text: qsTr("共 %1 条（会话级，重启清空）").arg(historyModel.count)
-            font.pixelSize: 12
+            font.pixelSize: tokens.fontCaption
             color: FluTheme.fontSecondaryColor
             leftPadding: 12
             bottomPadding: 8

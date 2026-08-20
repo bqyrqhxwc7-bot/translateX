@@ -282,13 +282,10 @@ int TranslationService::estimateTokens(const QString &text)
 
 bool TranslationService::isTargetLanguageText(const QString &text) const
 {
-    // 目标语言为中文时：CJK 字符占比 ≥ 30% 视为已是目标语言，跳过无意义的中文→中文翻译
-    //（模型对中文→中文会回显原文，触发回显检测误报“疑似未翻译”）
-    if (m_targetLang != QStringLiteral("zh-CN") && m_targetLang != QStringLiteral("zh")) {
-        return false;
-    }
-    int cjk = 0;
-    int nonSpace = 0;
+    // 通用目标语言检测：文本是否已基本是目标语言。
+    // 命中 → 跳过该行（避免无意义的目标语言→目标语言翻译：模型会回显原文，
+    // 触发回显检测误报「疑似未翻译」）。支持 zh/ja/ko/en。
+    int cjk = 0, hiragana = 0, katakana = 0, hangul = 0, latin = 0, nonSpace = 0;
     for (const QChar &c : text) {
         if (c.isSpace()) {
             continue;
@@ -297,9 +294,36 @@ bool TranslationService::isTargetLanguageText(const QString &text) const
         const ushort u = c.unicode();
         if ((u >= 0x4E00 && u <= 0x9FFF) || (u >= 0x3400 && u <= 0x4DBF)) {
             ++cjk;
+        } else if (u >= 0x3040 && u <= 0x309F) {
+            ++hiragana;
+        } else if (u >= 0x30A0 && u <= 0x30FF) {
+            ++katakana;
+        } else if (u >= 0xAC00 && u <= 0xD7AF) {
+            ++hangul;
+        } else if ((u >= 0x41 && u <= 0x5A) || (u >= 0x61 && u <= 0x7A)) {
+            ++latin;
         }
     }
-    return nonSpace > 0 && static_cast<double>(cjk) / nonSpace >= 0.3;
+    if (nonSpace <= 0) {
+        return false;
+    }
+    const QString lang = m_targetLang;
+    if (lang == QStringLiteral("zh") || lang == QStringLiteral("zh-CN")
+        || lang == QStringLiteral("zh-TW")) {
+        return static_cast<double>(cjk) / nonSpace >= 0.3;
+    }
+    if (lang == QStringLiteral("ja")) {
+        const double kanaRatio = static_cast<double>(hiragana + katakana) / nonSpace;
+        return kanaRatio >= 0.1 || (cjk > 0 && kanaRatio >= 0.05);
+    }
+    if (lang == QStringLiteral("ko")) {
+        return static_cast<double>(hangul) / nonSpace >= 0.3;
+    }
+    if (lang == QStringLiteral("en")) {
+        // 英文：拉丁字母为主且无 CJK（避免把中文/日文行误判为英文）
+        return cjk == 0 && static_cast<double>(latin) / nonSpace >= 0.8;
+    }
+    return false;
 }
 
 QList<QList<int>> TranslationService::buildChunks(
@@ -362,8 +386,12 @@ TranslationResult TranslationService::postProcess(
                               || (!sourceLangKnown && isTargetLanguageText(source));
     if (!QualityGate::notJustEcho(source, result.text, sameLanguage)) {
         result.success = false;
-        result.errorMessage = QStringLiteral("疑似未翻译（译文与原文相同），请检查后端或模型配置后重试");
-        emit qualityWarning(lineNumber, result.errorMessage);
+        result.errorMessage = QStringLiteral(
+            "疑似未翻译（译文与原文相同）：请检查源语言/目标语言设置；"
+            "若语言正确，请检查后端模型名与 API 配置是否正确");
+        // 回显拦截是硬性（不输出原文），但不进「质量自检复核面板」
+        //（面板只收集规则自检告警，受 qualityGateEnabled 开关控制；
+        //  本失败经 translationFailed 单条提示）
         return result;
     }
 
@@ -452,10 +480,179 @@ TranslationOptions TranslationService::buildOptions(
     return options;
 }
 
+// 解析模型输出的术语译文（逐行 "术语 = 译文"/"术语：译文"/"术语 → 译文"，
+// 容忍行首序号与引号；键与原术语大小写不敏感匹配）
+QVariantMap TranslationService::parseTermSuggestions(const QString &text,
+                                                     const QStringList &terms)
+{
+    QVariantMap out;
+    const QStringList outputLines = text.split(QLatin1Char('\n'));
+    static const QRegularExpression numPrefixRe(QStringLiteral("^\\d+[.)、]\\s*"));
+    for (const QString &rawLine : outputLines) {
+        QString line = rawLine.trimmed();
+        if (line.isEmpty()) {
+            continue;
+        }
+        line.remove(numPrefixRe);
+        int sep = -1;
+        int sepLen = 0;
+        for (const QString &marker : { QStringLiteral(" = "), QStringLiteral("："),
+                                       QStringLiteral(": "), QStringLiteral(" → "),
+                                       QStringLiteral("=>"), QStringLiteral("=") }) {
+            const int idx = line.indexOf(marker);
+            if (idx > 0) {
+                sep = idx;
+                sepLen = marker.size();
+                break;
+            }
+        }
+        if (sep < 0) {
+            continue;
+        }
+        const QString key = line.left(sep).trimmed();
+        QString value = line.mid(sep + sepLen).trimmed();
+        // 剥离成对引号（英文/中文弯引号/直角引号）
+        const bool quoted = value.size() >= 2
+            && ((value.startsWith(QLatin1Char('"')) && value.endsWith(QLatin1Char('"')))
+                || (value.startsWith(QChar(0x201C)) && value.endsWith(QChar(0x201D)))
+                || (value.startsWith(QChar(0x300C)) && value.endsWith(QChar(0x300D))));
+        if (quoted) {
+            value = value.mid(1, value.size() - 2).trimmed();
+        }
+        if (key.isEmpty() || value.isEmpty()) {
+            continue;
+        }
+        // 自译（模型回显 "翻译 = 翻译"）无意义，跳过
+        if (key.compare(value, Qt::CaseInsensitive) == 0) {
+            continue;
+        }
+        for (const QString &term : terms) {
+            if (key.compare(term, Qt::CaseInsensitive) == 0) {
+                out.insert(term, value);
+                break;
+            }
+        }
+    }
+    return out;
+}
+
+bool TranslationService::termSuggestionAvailable() const
+{
+    // 仅网络大模型后端（配置了 apiEndpoint/apiKey）支持术语建议；
+    // 本地 Ollama / 云端在线 / echo 不提供
+    if (m_backendId != QStringLiteral("translation.network_model")) {
+        return false;
+    }
+    const QVariantMap cfg = ConfigService::instance()->values(m_backendId);
+    return !cfg.value(QStringLiteral("apiEndpoint")).toString().isEmpty()
+        && !cfg.value(QStringLiteral("apiKey")).toString().isEmpty();
+}
+
+void TranslationService::suggestTermTranslations(
+    const QStringList &terms, const QStringList &contextLines)
+{
+    if (terms.isEmpty()) {
+        emit termSuggestionsReady({}, false, QStringLiteral("没有待建议的术语"));
+        return;
+    }
+    // 快照参数（异步期间不读 this 成员）
+    const QStringList snapshot = terms;
+    const QStringList context = contextLines;
+    const QString backendId = m_backendId;
+    const QVariantMap config = m_backendConfig;
+    const QString targetLang = m_targetLang;
+
+    auto *watcher = new QFutureWatcher<QVariantMap>(this);
+    connect(watcher, &QFutureWatcherBase::finished, this,
+            [this, watcher, snapshot, targetLang]() {
+        const QVariantMap result = watcher->result();
+        QString err;
+        if (result.isEmpty()) {
+            err = QStringLiteral("术语译文建议失败：大模型未返回可用结果，请检查 API 配置与网络");
+            // 目标语言与术语同语言（如英文术语 + 目标英文）→ 模型自译被过滤，提示检查设置
+            if (targetLang == QStringLiteral("en")) {
+                err += QStringLiteral("；当前目标语言为英文，若文档/术语为英文请检查目标语言设置");
+            }
+        }
+        emit termSuggestionsReady(result, !result.isEmpty(), err);
+        watcher->deleteLater();
+    });
+
+    watcher->setFuture(QtConcurrent::run(
+        [this, snapshot, context, backendId, config, targetLang]() {
+            QVariantMap out;
+            auto backend = ServiceRegistry::instance()->createBackend(backendId);
+            if (!backend) {
+                return out;
+            }
+            QVariantMap cfg = ConfigService::instance()->values(backendId);
+            for (auto it = config.constBegin(); it != config.constEnd(); ++it) {
+                cfg.insert(it.key(), it.value());
+            }
+            backend->updateConfig(cfg);
+
+            // 目标语言显示名（提示词用）
+            static const QHash<QString, QString> langNames = {
+                { QStringLiteral("zh"), QStringLiteral("中文") },
+                { QStringLiteral("en"), QStringLiteral("英文") },
+                { QStringLiteral("ja"), QStringLiteral("日文") },
+                { QStringLiteral("ko"), QStringLiteral("韩文") },
+                { QStringLiteral("fr"), QStringLiteral("法文") },
+                { QStringLiteral("de"), QStringLiteral("德文") },
+                { QStringLiteral("ru"), QStringLiteral("俄文") },
+                { QStringLiteral("es"), QStringLiteral("西班牙文") },
+            };
+            const QString langName = langNames.value(targetLang, targetLang);
+
+            // 为每个术语收集 1 条出现行作为上下文（最多 30 条，截断 3000 字符）
+            QStringList contextPool;
+            for (const QString &term : snapshot) {
+                if (contextPool.size() >= 30) {
+                    break;
+                }
+                for (const QString &line : context) {
+                    if (line.contains(term, Qt::CaseInsensitive)) {
+                        contextPool.append(line);
+                        break;
+                    }
+                }
+            }
+            QString ctxText = contextPool.join(QLatin1Char('\n'));
+            if (ctxText.size() > 3000) {
+                ctxText = ctxText.left(3000);
+            }
+
+            QString prompt;
+            prompt += QStringLiteral(
+                          "你是技术文档术语翻译助手。请根据下面的文档上下文，为每个术语给出%1的标准译文。\n")
+                          .arg(langName);
+            prompt += QStringLiteral(
+                "要求：只输出逐行「术语 = 译文」，不要序号、不要解释、不要其他文字；"
+                "不确定的也给出最可能的译文；专有名词按其通行译法。\n");
+            prompt += QStringLiteral("术语列表：\n") + snapshot.join(QLatin1Char('\n'))
+                + QLatin1Char('\n');
+            if (!ctxText.isEmpty()) {
+                prompt += QStringLiteral("文档上下文（节选）：\n") + ctxText + QLatin1Char('\n');
+            }
+            prompt += QStringLiteral("输出：\n");
+
+            TranslationOptions options;
+            options.strictOutput = m_strictOutput;
+            options.timeoutMs = m_timeoutMs;
+            options.sourceLang = m_sourceLang;
+            options.targetLang = targetLang;
+            options.extra = cfg;
+            const TranslationResult result = backend->translate(prompt, options, nullptr);
+            if (!result.success) {
+                return out;
+            }
+            return parseTermSuggestions(result.text, snapshot);
+        }));
+}
+
 QStringList TranslationService::withContextLines(
     const QStringList &sourceLines, int lineNumber) const
-{
-    QStringList lines;
+{    QStringList lines;
     if (m_contextRadius <= 0) {
         return lines;
     }
@@ -494,16 +691,26 @@ TranslationResult TranslationService::translateSync(const QString &text)
 
     TranslationResult result = backend ? backend->translate(text, options, nullptr) : TranslationResult{};
 
-    // 降级
+    // 降级（记录主后端真实错误：模型名/网络问题应在最终错误中透出，
+    // 否则降级结果被回显拦截时用户只看到「与原文相同」而不知配置错误）
+    QString primaryError;
     if (!result.success && m_fallbackEnabled) {
+        primaryError = result.errorMessage;
         auto fallback = fallbackBackend();
         if (fallback && fallback->backendId() != backend->backendId()) {
             result = fallback->translate(text, options, nullptr);
         }
+    } else if (!result.success) {
+        primaryError = result.errorMessage;
     }
 
     // 质量：术语校验 + 规则自检
     result = postProcess(text, result);
+
+    // 主后端曾失败且最终仍失败（含回显拦截）→ 透出主后端真实错误
+    if (!result.success && !primaryError.isEmpty()) {
+        result.errorMessage = primaryError + QStringLiteral("（降级后也未成功）");
+    }
 
     // 写缓存
     if (m_cacheEnabled && m_cache && result.success) {
@@ -556,15 +763,21 @@ QList<QPair<int, TranslationResult>> TranslationService::translateBatchSync(
         }
 
         // 2) 批量请求（后端可覆盖 translateBatch 合并多行，真正降请求数）
+        bool batchAnySuccess = false;
         if (!pending.isEmpty() && backend && !m_cancelRequested.load()) {
             const TranslationOptions options = buildOptions(sourceLines, pending.first());
             const auto batch = backend->translateBatch(sourceLines, pending, options, m_cancelFlag);
             for (const auto &pair : batch) {
+                if (pair.second.success) {
+                    batchAnySuccess = true;
+                }
                 chunkResults.insert(pair.first, pair.second);
             }
         }
 
-        // 3) 逐行兜底：批量缺失/失败 → 单行重试 + 降级链 + 质量自检
+        // 3) 逐行兜底：仅当批量「部分成功」时重试失败行（个别失败 → 单行重试合理）；
+        //    批量全失败（超时/后端整体慢/配置错误）→ 不逐行重试——逐行重试会
+        //    让每行再等 30-60 秒，15 行卡 7 分钟以上，用户看到「翻译卡住不动」
         for (int lineNumber : pending) {
             if (m_cancelRequested.load()) {
                 break;
@@ -573,15 +786,27 @@ QList<QPair<int, TranslationResult>> TranslationService::translateBatchSync(
             const TranslationOptions options = buildOptions(sourceLines, lineNumber);
 
             TranslationResult result = chunkResults.value(lineNumber);
-            if (!result.success) {
+            QString primaryError;
+            if (!result.success && batchAnySuccess) {
                 if (backend) {
                     result = backend->translate(text, options, m_cancelFlag);
                 }
                 if (!result.success && m_fallbackEnabled) {
+                    primaryError = result.errorMessage;   // 记住主后端真实错误
                     auto fallback = fallbackBackend();
                     if (fallback && (!backend || fallback->backendId() != backend->backendId())) {
                         result = fallback->translate(text, options, m_cancelFlag);
                     }
+                } else if (!result.success) {
+                    primaryError = result.errorMessage;
+                }
+                chunkResults.insert(lineNumber, result);
+            } else if (!result.success && !batchAnySuccess && m_fallbackEnabled) {
+                // 批量全失败：只降级一次（不逐行重试主后端）
+                primaryError = result.errorMessage;
+                auto fallback = fallbackBackend();
+                if (fallback && (!backend || fallback->backendId() != backend->backendId())) {
+                    result = fallback->translate(text, options, m_cancelFlag);
                 }
                 chunkResults.insert(lineNumber, result);
             }
@@ -589,6 +814,10 @@ QList<QPair<int, TranslationResult>> TranslationService::translateBatchSync(
             // 质量：术语校验 + 规则自检（结果写回 chunkResults，
             // 否则第 4 步发信号时仍取到未经拦截的原始回显结果）
             result = postProcess(text, result, lineNumber);
+            // 主后端曾失败且最终仍失败（含回显拦截）→ 透出主后端真实错误
+            if (!result.success && !primaryError.isEmpty()) {
+                result.errorMessage = primaryError + QStringLiteral("（降级后也未成功）");
+            }
             chunkResults.insert(lineNumber, result);
 
             if (m_cacheEnabled && m_cache && result.success) {

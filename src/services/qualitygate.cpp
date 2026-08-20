@@ -72,12 +72,33 @@ QStringList QualityGate::extractTokens(const QString &text)
     return tokens;
 }
 
+// 原文是否含实质可翻译内容：去除数字/型号/代码 token 后仍有 ≥2 连续字母（普通词）
+// 或 CJK 字符 → 可翻译；仅剩数字/型号/标点（"P2899R1"、"2025-03-14"）→ 不可翻译。
+bool QualityGate::hasTranslatableContent(const QString &text)
+{
+    QString stripped = text;
+    const QStringList tokens = extractTokens(text);
+    for (const QString &t : tokens) {
+        stripped.remove(t);
+    }
+    static const QRegularExpression wordRe(
+        QStringLiteral("[A-Za-z]{2,}|[\\x{4e00}-\\x{9fff}]"));
+    return wordRe.match(stripped).hasMatch();
+}
+
 bool QualityGate::lengthReasonable(const QString &source, const QString &translated)
 {
     const int sourceLen = source.size();
     const int targetLen = translated.size();
     if (sourceLen <= 0) {
         return true;
+    }
+    // 短行（≤8 字符：型号/编号/单词）长度比天然波动大（"OK"→"好" 0.5x、
+    // "AI"→"人工智能" 3x），且纯数字/型号行译文本就等长——放宽阈值（0.1x~8x）
+    // 而非完全跳过：极端异常（"hi"→30 字 15x）仍能拦截
+    if (sourceLen <= 8 || !hasTranslatableContent(source)) {
+        const double loose = static_cast<double>(targetLen) / sourceLen;
+        return loose >= 0.1 && loose <= 8.0;
     }
     // 中文通常更紧凑（英→中常见 0.25~0.5 倍）；允许 0.2x ~ 4x 范围
     const double ratio = static_cast<double>(targetLen) / sourceLen;
@@ -132,6 +153,11 @@ bool QualityGate::notJustEcho(const QString &source, const QString &translated,
     const QString src = source.trimmed();
     const QString tgt = translated.trimmed();
     if (src.isEmpty()) {
+        return true;
+    }
+    // 原文无实质可翻译内容（仅数字/型号/代码标识符/标点，如 "P2899R1"、"2025-03-14"）：
+    // 译文与原文一致是正确翻译（专名/数字本就不译），不算未翻译
+    if (!hasTranslatableContent(src)) {
         return true;
     }
     // 完全一致视为未翻译（任何场景）

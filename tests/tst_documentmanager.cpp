@@ -1,12 +1,14 @@
 #include <QtTest>
 #include <QTemporaryDir>
 #include <QFile>
+#include <QDir>
 #include <QSignalSpy>
 #include <QStandardPaths>
 
 #include "services/documentmanager.h"
 #include "services/documentmodel.h"
 #include "services/commentservice.h"
+#include "services/trxparser.h"
 
 class TestDocumentManager : public QObject
 {
@@ -33,6 +35,9 @@ private slots:
     void autosaveRestoreRoundTrip();
     void autosaveDiscardRemoves();
     void autosavePromptOnce();
+
+    // 迭代5：PDF 导入成功后自动写 trx 临时文件（%TEMP%/Translex/<pdf名>.trx）
+    void pdfImportWritesTrxTemp();
 
 private:
     QTemporaryDir m_temp;
@@ -381,6 +386,46 @@ void TestDocumentManager::autosaveDiscardRemoves()
 
     m_mgr.discardAutosave();
     QVERIFY(!m_mgr.hasAutosave());
+}
+
+// PDF 导入成功后自动写 trx 临时文件（%TEMP%/Translex/<pdf名>.trx，pdf-service.md §9.3）。
+// 富文本持久化载体：导出 PDF 回退读 trx / 用户手动打开 trx 恢复富文本。
+void TestDocumentManager::pdfImportWritesTrxTemp()
+{
+    // 手写简单 PDF（1 页两行文本）
+    const QString pdfPath = m_temp.filePath(QStringLiteral("pdf_trx_test.pdf"));
+    QFile f(pdfPath);
+    QVERIFY(f.open(QIODevice::WriteOnly));
+    f.write("%PDF-1.4\n");
+    f.write("1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n");
+    f.write("2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n");
+    const QByteArray content = "BT /F1 12 Tf 72 700 Td (Line one) Tj "
+                               "0 -22 Td (Line two) Tj ET\n";
+    f.write("3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            "/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n");
+    f.write("4 0 obj << /Length " + QByteArray::number(content.size())
+            + " >> stream\n" + content + "endstream endobj\n");
+    f.write("5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n");
+    f.write("trailer << /Root 1 0 R /Size 6 >>\n%%EOF\n");
+    f.close();
+
+    QVERIFY(m_mgr.openFile(pdfPath));
+    QCOMPARE(m_model.lineCount(), 2);
+
+    // trx 临时文件已生成
+    const QString trxPath = QDir::temp().filePath(
+        QStringLiteral("Translex/pdf_trx_test.trx"));
+    QVERIFY(QFile::exists(trxPath));
+
+    // 可被 TrxParser 读回（行数/内容一致 → 富文本信息可恢复）
+    DocumentModel back;
+    QVariantMap meta;
+    QString error;
+    QVERIFY2(TrxParser::read(trxPath, &back, nullptr, meta, &error), qPrintable(error));
+    QCOMPARE(back.lineCount(), 2);
+    QCOMPARE(back.lineText(0), QStringLiteral("Line one"));
+
+    QFile::remove(trxPath);   // 测试不污染 %TEMP%
 }
 
 QTEST_GUILESS_MAIN(TestDocumentManager)

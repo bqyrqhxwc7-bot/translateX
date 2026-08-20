@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import FluentUI
+import Translex
 
 // schema 驱动配置卡片：遍历 ConfigService 某 section 的配置项自动生成控件。
 // 效果类似 VSCode 设置面板——新增配置项只需在 config.json 声明，UI 自动出现，零核心改动。
@@ -9,6 +10,11 @@ import FluentUI
 // model/index/modelData 动态上下文属性在 qmlcachegen AOT 下会失效（运行时 ReferenceError）。
 ColumnLayout {
     id: root
+
+    // 视觉 token 实例（普通组件；delegate/内联组件内经页面属性中转）
+    DesignTokens {
+        id: tokens
+    }
 
     property string sectionId: ""        // ConfigService 的 section id
     property var excludeKeys: []         // 需要排除的 key（如 backend/glossary）
@@ -70,7 +76,7 @@ ColumnLayout {
     FluText {
         visible: root.showSectionTitle && root.sectionId.length > 0 && itemModel.count > 0
         text: configService.sectionDisplayName(root.sectionId)
-        font.pixelSize: 16
+        font.pixelSize: tokens.fontTitle
         font.bold: true
         Layout.fillWidth: true
         Layout.topMargin: 8

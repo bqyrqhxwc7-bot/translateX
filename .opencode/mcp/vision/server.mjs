@@ -46,7 +46,7 @@ function providerConfig() {
   if (goKey) {
     return {
       name: 'opencode-go',
-      model: process.env.VISION_MODEL || 'minimax-m3',
+      model: process.env.VISION_MODEL || 'mimo-v2.5',
       url: 'https://opencode.ai/zen/go/v1/chat/completions',
       key: goKey,
     };

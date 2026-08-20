@@ -40,17 +40,26 @@
 
 ## 3. 术语自动提取（TermGlossary::extractCandidates）
 
+> **2026-08-19 更新**：提取已支持中文与技术标识符（算法细节以 `translation-service.md` §4.2.1 为权威）；UI 增加设置页行内译文编辑与主页 Ribbon「提取术语」入口。本节为迭代4 原始设计与通用语义，要点未变者不再重复。
+
 - **接口**：`extractCandidates(const QStringList &lines, int minFreq = 3, int maxCount = 20)`
   → `QList<QPair<QString, int>>`（词 → 频次，频率降序）
-- **算法**（英文为主，文档注明中文暂不支持自动提取）：
-  1. 正则提取 ASCII 字母序列（≥3 字母），按小写归组统计（大小写不敏感）
-  2. 过滤停用词（内置 ~60 词表：a/an/the/and/.../i/you/he/she/...）与已收录术语（大小写不敏感）
-  3. 频率 ≥ minFreq → 按频率降序 → top maxCount
+- **算法**（2026-08-19 起支持三类候选，不再限英文）：
+  1. 英文/标识符词形 `[A-Za-z0-9+#-]{2,}`：覆盖技术标识符（API/C++/P2899R1/x86-64），
+     必须含字母（纯数字/符号过滤），按小写归组统计（大小写不敏感）
+  2. 中文 n-gram：连续 CJK 段内 2-3 字滑窗，含虚词字符（的了是在和与及或为有…）则跳过
+  3. 过滤停用词（内置 ~60 词表）与已收录术语（大小写不敏感）；频率 ≥ minFreq →
+     按频率降序 → top maxCount
   4. 返回原文中**最高频的实际书写形式**（术语表校验是大小写敏感的）
 - **UI**（设置页术语表卡片）：「从文档提取」按钮（受限模式禁用；最多取前 5 万行）→
-  `FluContentDialog` 弹窗列出候选（CheckBox 多选 + 全选）→ 确认加入术语表
-  （译文留空占位：不注入提示词、不参与质量校验，避免「译文=原文」污染自检；
-  经现有 `addTerm` 流程写回 `translation.glossary`）
+  `FluContentDialog` 弹窗列出候选（CheckBox 多选 + 全选）→ 确认加入术语表；
+  **2026-08-19 起列表行内可编辑标准译文**（原文 → FluTextBox 译文 → 删除，
+  `updateTermTranslation` 失焦保存）
+- **翻译功能区入口（2026-08-19）**：主页 Ribbon「提取术语」按钮（`FluentIcons.DictionaryAdd`，
+  受限模式禁用）→ `termExtractDialog` 弹窗（勾选 + 词频 + 行内译文 + 全选 + 添加选中）；
+  术语表为 `TranslationService` 应用级单例，主页/设置页共享同一数据源
+- 空译文占位语义不变（不注入提示词、不参与质量校验；经现有 `addTerm` 流程写回
+  `translation.glossary`）
 - 空文档/无候选 → 提示"未提取到高频词"
 
 ## 4. 测试计划
@@ -61,10 +70,11 @@
     enabled=false 不写；受限模式不写
   - 恢复：restoreAutosave 后行/批注一致；discardAutosave 删除文件
 - `tst_quality`（或新 tst）：`extractCandidates` 频率排序、停用词过滤、minFreq、
-  已有术语排除、maxCount 截断
+  已有术语排除、maxCount 截断；`extractCandidatesEnhanced`（2026-08-19）：
+  标识符（API/C++/P2899R1/x86-64）+ 中文 n-gram（术语表/翻译/质量）提取 + 停用词/纯数字排除
 
 ## 5. 限制（明示）
 
 - 自动保存间隔固定 60s；受限模式（大文件）禁用自动保存
-- 术语提取仅英文单词（中文分词复杂，后续按需）；不区分词形（单复数/时态不归并）
+- ~~术语提取仅英文单词~~（**2026-08-19 已支持中文 n-gram 与技术标识符**）；不区分词形（单复数/时态不归并）
 - 统计为一次性快照（不实时增量）

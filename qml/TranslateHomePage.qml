@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Dialogs
 import QtQuick.Window
 import FluentUI
+import Translex
 import Translex.Services 1.0
 
 FluContentPage {
@@ -14,12 +15,17 @@ FluContentPage {
     title: qsTr("编辑")
     launchMode: FluPageType.SingleTask
 
+    // 视觉语言 token 实例（普通组件；delegate/内联组件内经页面属性中转）
+    DesignTokens {
+        id: tokens
+    }
+
     // 页面标题：自定义 header（FluPage 默认用 Title 字号偏大，缩小以留出更多编辑空间）
     header: Item {
         implicitHeight: 28
         FluText {
             text: page.title
-            font.pixelSize: 14
+            font.pixelSize: tokens.fontBody
             font.bold: true
             color: FluTheme.fontPrimaryColor
             anchors.left: parent.left
@@ -65,18 +71,19 @@ FluContentPage {
     // 翻译服务（主进程提供，context property 全局可见）
     readonly property var translator: translationService
 
-    // 视觉语言 token 实例（普通组件；delegate/内联组件内经页面属性中转）
-    DesignTokens {
-        id: tokens
-    }
-
     // 图片行渲染：从文档 meta.images 取 base64 → data URI（docx 纯图段显示）
-    // 结果缓存，避免每次委托创建都遍历 meta
+    // 结果缓存（键 = 文档路径 + imageId：同一页面内切换文档不会串图）
     property var _imageUriCache: ({})
     property var _imageUriMetaVersion: 0
+    // 文档版本号：documentChanged 后 +1（此时 documentMeta 已就绪），
+    // 强制 rich 文本/图片绑定重新求值（openFile 时 setLines 触发绑定早于
+    // meta 赋值，[图片] 占位替换必须等版本号变化后重跑）
+    property int _docVersion: 0
     function imageSource(imageId) {
         if (!imageId) return ""
-        if (page._imageUriCache[imageId] !== undefined) return page._imageUriCache[imageId]
+        const v = page._docVersion   // 绑定追踪：换文档后强制重求值
+        const key = documentManager.currentPath() + "|" + imageId
+        if (page._imageUriCache[key] !== undefined) return page._imageUriCache[key]
         const meta = documentManager.documentMeta()
         const images = meta && meta.images ? meta.images : []
         for (const img of images) {
@@ -85,11 +92,30 @@ FluContentPage {
                            : img.format === "jpg" || img.format === "jpeg" ? "image/jpeg"
                            : img.format === "gif" ? "image/gif" : "image/png"
                 const uri = "data:" + mime + ";base64," + img.dataBase64
-                page._imageUriCache[imageId] = uri
+                page._imageUriCache[key] = uri
                 return uri
             }
         }
         return ""
+    }
+
+    // rich 行显示文本：把 [图片] 占位替换为真实 <img>（data URI 内嵌，Text 支持 img 标签）
+    function richTextFor(row) {
+        const v = page._docVersion   // 绑定追踪：换文档后强制重求值（meta 已就绪）
+        let t = row.model.rich || row.model.text
+        if (t.indexOf("[图片]") < 0) {
+            return t
+        }
+        const ids = row.model.imageIds || []
+        let i = 0
+        while (t.indexOf("[图片]") >= 0 && i < ids.length) {
+            const uri = page.imageSource(ids[i])
+            if (uri) {
+                t = t.replace("[图片]", '<img src="' + uri + '" height="60">')
+            }
+            ++i
+        }
+        return t
     }
 
     // 状态栏图标（0=无图标）
@@ -98,13 +124,6 @@ FluContentPage {
     // 大文件受限模式（>5 万行 / >200MB，DocumentManager 打开时自动置位）：
     // 禁富文本/图片渲染、批注编辑、翻译；编辑/滚动/查找/章节正常
     readonly property bool limited: documentModel.limitedMode
-    // delegate/内联组件内不能直接访问实例 id（tokens），经页面属性中转
-    //（Qt 6.5 的 QML pragma Singleton 在本应用内绑定不生效的替代方案，见 HANDOVER.md §6）
-    readonly property int rowRadius: tokens.radiusControl
-    readonly property color rowFindHighlight: tokens.findHighlight
-    readonly property int cardRadius: tokens.radiusCard   // 浮窗（inline Window）用
-    readonly property color bgFloatWindow: tokens.bgFloatWindow   // 浮窗背景（inline Window 用）
-    readonly property color overlayMask: tokens.overlayMask   // 模态遮罩
     // 翻译进度状态
     property bool translating: false
     property int progressDone: 0
@@ -169,6 +188,12 @@ FluContentPage {
         documentManager.setComments(commentService)
         chapterService.setDocument(documentModel)
         findService.setDocument(documentModel)
+        // 文档切换：meta（images 等）就绪后版本号 +1，强制 rich 文本/图片绑定重求值
+        //（openFile 时 setLines 先于 meta 赋值触发绑定，[图片] 占位需重跑替换）
+        documentManager.documentChanged.connect(function () {
+            page._docVersion += 1
+            page._imageUriCache = {}
+        })
         // 仅首次（模型为空）加载示例文档：模型已提升到应用级，若每次重建都调用
         // loadDemoDocument() 会把用户编辑/打开的内容覆盖掉（编辑丢失的根因之一）
         if (documentModel.lineCount() === 0) {
@@ -257,16 +282,16 @@ FluContentPage {
                                 .arg(ok).arg(failed).arg(total)
             refreshDocStatus()
             // 有质量告警 → 弹出复核面板（收集在 onQualityWarning）
-            if (page.qualityWarnings.count > 0) {
-                page.qualityReport.visible = true
+            if (qualityWarnings.count > 0) {
+                qualityReport.visible = true
             }
         }
         function onTranslationStarted(total) {
             page.translating = true
             page.progressTotal = total
             page.progressDone = 0
-            page.qualityWarnings.clear()   // 新一批翻译，清空上一批质量告警
-            page.qualityReport.visible = false
+            qualityWarnings.clear()   // 新一批翻译，清空上一批质量告警
+            qualityReport.visible = false
         }
         function onTranslationProgress(done, total) {
             page.progressDone = done
@@ -287,7 +312,28 @@ FluContentPage {
             const loc = lineNumber >= 0 ? qsTr("第 %1 行：").arg(lineNumber + 1) : ""
             infoBar.showWarning(loc + issue, 6000)
             // 收集到复核面板（onBatchFinished 汇总展示）
-            page.qualityWarnings.append({ line: lineNumber, issue: issue })
+            qualityWarnings.append({ line: lineNumber, issue: issue })
+        }
+        // 术语建议译文（提取弹窗）：填充勾选术语的建议译文（可修改后添加）
+        function onTermSuggestionsReady(suggestions, ok, errorMessage) {
+            if (!ok) {
+                statusLabel.text = errorMessage
+                statusIconSource = FluentIcons.Warning
+                statusIconColor = tokens.error
+                return
+            }
+            let filled = 0
+            for (let i = 0; i < termCandidateModel.count; ++i) {
+                const w = termCandidateModel.get(i).word
+                const s = suggestions[w]
+                if (s !== undefined && String(s).trim() !== "") {
+                    termCandidateModel.setProperty(i, "translation", String(s).trim())
+                    ++filled
+                }
+            }
+            statusLabel.text = qsTr("已为 %1 个术语填入建议译文（可修改）").arg(filled)
+            statusIconSource = 0
+            statusIconColor = FluTheme.fontSecondaryColor
         }
     }
 
@@ -625,9 +671,14 @@ FluContentPage {
             }
         }
         if (lines.length === 0) {
-            statusLabel.text = skipped > 0
-                ? qsTr("没有需要翻译的行（已跳过 %1 行目标语言文本）").arg(skipped)
-                : qsTr("没有可翻译的行")
+            if (skipped > 0) {
+                // 全部是目标语言：多半是源/目标语言配置与文档语言相同，明确引导
+                statusLabel.text = qsTr("没有需要翻译的行（已跳过 %1 行目标语言文本）——文档可能已是目标语言，请检查设置页的源语言/目标语言").arg(skipped)
+                statusIconSource = FluentIcons.Warning
+                statusIconColor = tokens.error
+            } else {
+                statusLabel.text = qsTr("没有可翻译的行")
+            }
             return
         }
         statusLabel.text = skipped > 0
@@ -664,9 +715,13 @@ FluContentPage {
             lines.push(ln)
         }
         if (lines.length === 0) {
-            statusLabel.text = skipped > 0
-                ? qsTr("选中的行均为目标语言，无需翻译")
-                : qsTr("没有可翻译的选中行")
+            if (skipped > 0) {
+                statusLabel.text = qsTr("选中的行均为目标语言，无需翻译——请检查设置页的源语言/目标语言")
+                statusIconSource = FluentIcons.Warning
+                statusIconColor = tokens.error
+            } else {
+                statusLabel.text = qsTr("没有可翻译的选中行")
+            }
             return
         }
         statusLabel.text = skipped > 0
@@ -675,6 +730,84 @@ FluContentPage {
         statusIconSource = FluentIcons.Sync
         statusIconColor = FluTheme.primaryColor
         translator.translateLines(lines, all)
+    }
+
+    // ---------- 术语自动提取（翻译功能区入口，与设置页共用 TranslationService 术语表） ----------
+    function extractTermsFromDoc() {
+        if (page.limited) {
+            statusLabel.text = qsTr("大文件受限模式下不支持术语提取")
+            statusIconSource = FluentIcons.Warning
+            statusIconColor = tokens.error
+            return
+        }
+        const lines = []
+        const count = Math.min(documentModel.lineCount(), 50000)
+        for (let i = 0; i < count; ++i) {
+            lines.push(documentModel.lineText(i))
+        }
+        const candidates = translationService.extractTermCandidates(lines, 3, -1)
+        termCandidateModel.clear()
+        for (const c of candidates) {
+            termCandidateModel.append({ word: c.word, count: c.count, checked: false, translation: "" })
+        }
+        if (termCandidateModel.count === 0) {
+            statusLabel.text = qsTr("未提取到高频词（词需出现 3 次以上；英文/标识符/中文均支持）")
+            statusIconSource = FluentIcons.Warning
+            statusIconColor = tokens.error
+            return
+        }
+        termExtractDialog.open()
+    }
+
+    // 请求大模型按文档上下文建议勾选术语的译文（仅网络大模型后端可用）
+    function suggestTermTranslations() {
+        const terms = []
+        for (let i = 0; i < termCandidateModel.count; ++i) {
+            if (termCandidateModel.get(i).checked) {
+                terms.push(termCandidateModel.get(i).word)
+            }
+        }
+        if (terms.length === 0) {
+            statusLabel.text = qsTr("请先勾选要建议译文的术语")
+            return
+        }
+        const lines = []
+        const count = Math.min(documentModel.lineCount(), 50000)
+        for (let i = 0; i < count; ++i) {
+            lines.push(documentModel.lineText(i))
+        }
+        statusLabel.text = qsTr("正在请求大模型建议 %1 个术语译文...").arg(terms.length)
+        statusIconSource = FluentIcons.Sync
+        statusIconColor = FluTheme.primaryColor
+        translationService.suggestTermTranslations(terms, lines)
+    }
+
+    function termExtractSelectAll(checked) {
+        for (let i = 0; i < termCandidateModel.count; ++i) {
+            termCandidateModel.setProperty(i, "checked", checked)
+        }
+    }
+
+    // 勾选的词加入术语表（含已填译文；空译文为占位，设置页可继续补填）
+    function addExtractedTermsFromDoc() {
+        const glossary = translationService.glossary()
+        let added = 0
+        for (let i = 0; i < termCandidateModel.count; ++i) {
+            if (!termCandidateModel.get(i).checked) {
+                continue
+            }
+            const w = termCandidateModel.get(i).word
+            if (glossary[w] === undefined) {
+                glossary[w] = termCandidateModel.get(i).translation.trim()
+                ++added
+            }
+        }
+        if (added > 0) {
+            translationService.setGlossary(glossary)
+            statusLabel.text = qsTr("已添加 %1 个术语；标准译文可在「设置→术语表」补填").arg(added)
+            statusIconSource = 0
+            statusIconColor = FluTheme.fontSecondaryColor
+        }
     }
 
     // ---------- TTS 朗读（迭代3，独立 service） ----------
@@ -933,14 +1066,17 @@ FluContentPage {
         else if (op === "paste") del.pasteLine()
     }
 
-    // ---------- 浮窗位置（真实窗口，屏幕坐标持久化） ----------
-    // ---------- 浮窗位置（真实窗口，屏幕坐标持久化） ----------
+    // ---------- 浮窗位置/大小（真实窗口，屏幕坐标持久化） ----------
     function saveFloatWindowPos() {
         const x = floatWindow.x
         const y = floatWindow.y
         if (isFinite(x) && isFinite(y) && x > -10000 && y > -10000) {
             configService.set("ui", "translatePanelX", Math.round(x))
             configService.set("ui", "translatePanelY", Math.round(y))
+        }
+        if (floatWindow.userResized) {
+            configService.set("ui", "translatePanelWidth", Math.round(floatWindow.width))
+            configService.set("ui", "translatePanelHeight", Math.round(floatWindow.height))
         }
     }
     function restoreFloatWindowPos() {
@@ -963,6 +1099,17 @@ FluContentPage {
         if (isFinite(px) && isFinite(py)) {
             floatWindow.setX(Math.round(px))
             floatWindow.setY(Math.round(py))
+        }
+        // 恢复手动缩放大小（用户真的缩放过才固定；否则保持跟随内容）
+        if (configService.isUserSet("ui", "translatePanelWidth")
+                && configService.isUserSet("ui", "translatePanelHeight")) {
+            const mw = Number(configService.get("ui", "translatePanelWidth"))
+            const mh = Number(configService.get("ui", "translatePanelHeight"))
+            if (isFinite(mw) && isFinite(mh) && mw >= 200 && mh >= 130) {
+                floatWindow.userResized = true
+                floatWindow.width = mw
+                floatWindow.manualHeight = mh
+            }
         }
     }
 
@@ -995,7 +1142,7 @@ FluContentPage {
                     configService.set("ui", "currentRibbonTab", ribbonPivot.currentIndex)
                 }
             }
-            font.pixelSize: 14
+            font.pixelSize: tokens.fontBody
 
             // 文件标签（DocumentManager service 的 PPT 式功能区）
             FluPivotItem {
@@ -1006,14 +1153,14 @@ FluContentPage {
                         anchors.leftMargin: 8
                         anchors.rightMargin: 8
                         spacing: 8
-                        FluButton { text: qsTr("新建"); onClicked: newDocument() }
-                        FluButton { text: qsTr("打开"); onClicked: openDocument() }
-                        FluButton { text: qsTr("最近"); enabled: page.hasRecent; onClicked: recentMenu.popup() }
-                        FluButton { text: qsTr("保存"); onClicked: saveDocument() }
-                        FluButton { text: qsTr("另存为"); onClicked: saveDocumentAs() }
+                        RibbonButton { iconSource: FluentIcons.Add; text: qsTr("新建"); onClicked: newDocument() }
+                        RibbonButton { iconSource: FluentIcons.OpenFile; text: qsTr("打开"); onClicked: openDocument() }
+                        RibbonButton { iconSource: FluentIcons.History; text: qsTr("最近"); enabled: page.hasRecent; onClicked: recentMenu.popup() }
+                        RibbonButton { iconSource: FluentIcons.Save; text: qsTr("保存"); onClicked: saveDocument() }
+                        RibbonButton { iconSource: FluentIcons.SaveAs; text: qsTr("另存为"); onClicked: saveDocumentAs() }
                         FluDivider { orientation: Qt.Vertical; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
-                        FluButton { text: qsTr("加载示例"); onClicked: loadDemoDocument() }
-                        FluButton { text: qsTr("清除译文"); onClicked: clearAllComments() }
+                        RibbonButton { iconSource: FluentIcons.Import; text: qsTr("加载示例"); onClicked: loadDemoDocument() }
+                        RibbonButton { iconSource: FluentIcons.Delete; text: qsTr("清除译文"); onClicked: clearAllComments() }
                         Item { Layout.fillWidth: true }
                     }
                 }
@@ -1028,10 +1175,10 @@ FluContentPage {
                         anchors.leftMargin: 8
                         anchors.rightMargin: 8
                         spacing: 8
-                        FluButton { text: qsTr("撤销"); enabled: page.canUndo; onClicked: { documentModel.undo(); afterUndoRedo() } }
-                        FluButton { text: qsTr("重做"); enabled: page.canRedo; onClicked: { documentModel.redo(); afterUndoRedo() } }
+                        RibbonButton { iconSource: FluentIcons.Undo; text: qsTr("撤销"); enabled: page.canUndo; onClicked: { documentModel.undo(); afterUndoRedo() } }
+                        RibbonButton { iconSource: FluentIcons.Redo; text: qsTr("重做"); enabled: page.canRedo; onClicked: { documentModel.redo(); afterUndoRedo() } }
                         FluDivider { orientation: Qt.Vertical; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
-                        FluText { text: qsTr("共 %1 行").arg(documentModel.lineCount()); font.pixelSize: 12; color: FluTheme.fontSecondaryColor }
+                        FluText { text: qsTr("共 %1 行").arg(documentModel.lineCount()); font.pixelSize: tokens.fontCaption; color: FluTheme.fontSecondaryColor }
                         Item { Layout.fillWidth: true }
                     }
                 }
@@ -1046,11 +1193,19 @@ FluContentPage {
                         anchors.leftMargin: 8
                         anchors.rightMargin: 8
                         spacing: 8
-                        FluFilledButton { text: qsTr("翻译当前行"); enabled: !page.limited; onClicked: translateCurrent() }
-                        FluButton { text: qsTr("翻译全部待译行"); enabled: !page.limited; onClicked: translateAllPending() }
-                        FluButton { text: qsTr("翻译选中行"); enabled: page.selectedLines.length > 0 && !page.limited; onClicked: translateSelected() }
+                        RibbonButton { filled: true; iconSource: FluentIcons.Play; text: qsTr("翻译当前行"); enabled: !page.limited; onClicked: translateCurrent() }
+                        RibbonButton { iconSource: FluentIcons.Play; text: qsTr("翻译全部待译行"); enabled: !page.limited; onClicked: translateAllPending() }
+                        RibbonButton { iconSource: FluentIcons.Play; text: qsTr("翻译选中行"); enabled: page.selectedLines.length > 0 && !page.limited; onClicked: translateSelected() }
+                        // 术语提取（翻译功能区入口）：文档高频词 → 勾选 + 填译文 → 加入术语表
+                        RibbonButton {
+                            iconSource: FluentIcons.DictionaryAdd
+                            text: qsTr("提取术语")
+                            enabled: !page.limited
+                            onClicked: page.extractTermsFromDoc()
+                        }
                         // TTS 朗读（迭代3）：朗读选中行（有译文读译文，否则读原文）；朗读中变「停止」
-                        FluButton {
+                        RibbonButton {
+                            iconSource: FluentIcons.Speakers
                             text: textToSpeechService.speaking ? qsTr("停止朗读") : qsTr("朗读选中行")
                             enabled: page.selectedLines.length > 0
                             onClicked: page.speakSelectedLines()
@@ -1058,7 +1213,8 @@ FluContentPage {
                         FluDivider { orientation: Qt.Vertical; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
                         // 翻译历史（迭代4b）：会话内翻译记录，点击条目跳转行；
                         // 属查询/辅助功能，与浮窗开关同区（review 2026-08-18：不混入翻译动作组）
-                        FluButton {
+                        RibbonButton {
+                            iconSource: FluentIcons.History
                             text: qsTr("翻译历史")
                             onClicked: page.openHistoryDialog()
                         }
@@ -1088,16 +1244,30 @@ FluContentPage {
                             }
                         }
                         Item { Layout.fillWidth: true }
-                        // 翻译进度（翻译中显示在右侧）
+                        // 翻译进度（翻译中显示在右侧；出现时淡入）
                         FluProgressBar {
                             visible: page.translating
+                            opacity: page.translating ? 1 : 0
+                            Behavior on opacity { NumberAnimation { duration: 150 } }
                             Layout.preferredWidth: 160
                             from: 0
                             to: Math.max(page.progressTotal, 1)
                             value: page.progressDone
                         }
-                        FluText { visible: page.translating; text: qsTr("%1/%2").arg(page.progressDone).arg(page.progressTotal); font.pixelSize: 12 }
-                        FluButton { visible: page.translating; text: qsTr("取消"); onClicked: translator.cancelTranslation() }
+                        FluText {
+                            visible: page.translating
+                            opacity: page.translating ? 1 : 0
+                            Behavior on opacity { NumberAnimation { duration: 150 } }
+                            text: qsTr("%1/%2").arg(page.progressDone).arg(page.progressTotal)
+                            font.pixelSize: tokens.fontCaption
+                        }
+                        FluButton {
+                            visible: page.translating
+                            opacity: page.translating ? 1 : 0
+                            Behavior on opacity { NumberAnimation { duration: 150 } }
+                            text: qsTr("取消")
+                            onClicked: translator.cancelTranslation()
+                        }
                     }
                 }
             }
@@ -1111,20 +1281,20 @@ FluContentPage {
                         anchors.leftMargin: 8
                         anchors.rightMargin: 8
                         spacing: 8
-                        FluText { text: qsTr("章节"); font.pixelSize: 12; color: FluTheme.fontSecondaryColor }
-                        FluButton { text: qsTr("上一章"); enabled: page.chapterTitles.length > 1; onClicked: page.goPrevChapter() }
-                        FluButton { text: qsTr("下一章"); enabled: page.chapterTitles.length > 1; onClicked: page.goNextChapter() }
+                        FluText { text: qsTr("章节"); font.pixelSize: tokens.fontCaption; color: FluTheme.fontSecondaryColor }
+                        RibbonButton { iconSource: FluentIcons.ChevronUp; text: qsTr("上一章"); enabled: page.chapterTitles.length > 1; onClicked: page.goPrevChapter() }
+                        RibbonButton { iconSource: FluentIcons.ChevronDown; text: qsTr("下一章"); enabled: page.chapterTitles.length > 1; onClicked: page.goNextChapter() }
                         FluText {
                             text: page.currentChapterIndex >= 0
                                 ? qsTr("%1 · 共 %2 章").arg(page.chapterTitles[page.currentChapterIndex] || "").arg(page.chapterTitles.length)
                                 : qsTr("共 %1 章").arg(page.chapterTitles.length)
                             Layout.maximumWidth: 260
                             elide: Text.ElideRight
-                            font.pixelSize: 12
+                            font.pixelSize: tokens.fontCaption
                             color: FluTheme.fontSecondaryColor
                         }
                         Item { Layout.fillWidth: true }
-                        FluButton { text: qsTr("重新检测"); onClicked: page.rebuildChapters() }
+                        RibbonButton { iconSource: FluentIcons.Refresh; text: qsTr("重新检测"); onClicked: page.rebuildChapters() }
                     }
                 }
             }
@@ -1138,13 +1308,13 @@ FluContentPage {
                         anchors.leftMargin: 8
                         anchors.rightMargin: 8
                         spacing: 8
-                        FluText { text: qsTr("批注 %1 条").arg(page.commentCount); font.pixelSize: 12; color: FluTheme.fontSecondaryColor }
-                        FluButton { text: qsTr("上一条"); enabled: page.commentCount > 1; onClicked: page.goPrevComment() }
-                        FluButton { text: qsTr("下一条"); enabled: page.commentCount > 1; onClicked: page.goNextComment() }
+                        FluText { text: qsTr("批注 %1 条").arg(page.commentCount); font.pixelSize: tokens.fontCaption; color: FluTheme.fontSecondaryColor }
+                        RibbonButton { iconSource: FluentIcons.ChevronUp; text: qsTr("上一条"); enabled: page.commentCount > 1; onClicked: page.goPrevComment() }
+                        RibbonButton { iconSource: FluentIcons.ChevronDown; text: qsTr("下一条"); enabled: page.commentCount > 1; onClicked: page.goNextComment() }
                         FluDivider { orientation: Qt.Vertical; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
-                        FluButton { text: qsTr("清空"); onClicked: page.clearAllComments() }
-                        FluButton { text: qsTr("导出"); onClicked: page.exportComments() }
-                        FluButton { text: qsTr("导入"); onClicked: page.importComments() }
+                        RibbonButton { iconSource: FluentIcons.Delete; text: qsTr("清空"); onClicked: page.clearAllComments() }
+                        RibbonButton { iconSource: FluentIcons.Export; text: qsTr("导出"); onClicked: page.exportComments() }
+                        RibbonButton { iconSource: FluentIcons.Import; text: qsTr("导入"); onClicked: page.importComments() }
                         Item { Layout.fillWidth: true }
                     }
                 }
@@ -1168,9 +1338,9 @@ FluContentPage {
                             Layout.maximumWidth: 240
                             onAccepted: page.doFindNext(findInput.text)
                         }
-                        FluButton { text: qsTr("上一个"); onClicked: page.doFindPrev(findInput.text) }
-                        FluButton { text: qsTr("下一个"); onClicked: page.doFindNext(findInput.text) }
-                        FluText { text: qsTr("%1 处").arg(page.findResultCount); font.pixelSize: 12; color: FluTheme.fontSecondaryColor }
+                        RibbonButton { iconSource: FluentIcons.ChevronUp; text: qsTr("上一个"); onClicked: page.doFindPrev(findInput.text) }
+                        RibbonButton { iconSource: FluentIcons.ChevronDown; text: qsTr("下一个"); onClicked: page.doFindNext(findInput.text) }
+                        FluText { text: qsTr("%1 处").arg(page.findResultCount); font.pixelSize: tokens.fontCaption; color: FluTheme.fontSecondaryColor }
                         FluDivider { orientation: Qt.Vertical; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
                         FluTextBox {
                             id: replaceInput
@@ -1206,7 +1376,7 @@ FluContentPage {
                 }
                 FluText {
                     text: qsTr("大文件受限模式：已禁用富文本/图片渲染、批注编辑与翻译（编辑/查找/章节正常）")
-                    font.pixelSize: 12
+                    font.pixelSize: tokens.fontCaption
                     color: FluTheme.fontPrimaryColor
                     Layout.fillWidth: true
                     elide: Text.ElideRight
@@ -1219,6 +1389,8 @@ FluContentPage {
             Layout.fillWidth: true
             Layout.fillHeight: true
             radius: tokens.radiusCard
+            // 注：不加 layer/MultiEffect 阴影——layer 离屏渲染在非整数 DPI 缩放下
+            // 文字模糊（2026-08-19 用户实测），且含滚动 ListView 开销大（性能铁律）
 
             ListView {
                 id: lineView
@@ -1247,12 +1419,16 @@ FluContentPage {
                     required property var model
                     required property int index
                     width: lineView.width
-                    // 图片行：行号 36 + 图片区 180 + 边距；其余：原文 36 + 批注区（自动换行）
+                    // 图片行：行号 36 + 图片区 180 + 边距；图文混排（rich+imageIds）：
+                    // 文本行 36 + 图片区（img height=60 + 间距）；其余：原文 36 + 批注区
                     height: row.model.display === "image"
                             ? 224
-                            : 36 + (row.model.hasComment || page.commentDraftLine === index
-                                    ? Math.max(20, commentMeasurer.contentHeight) + 6 : 0)
-                    radius: page.rowRadius   // 经页面属性中转（delegate 内单例访问缺陷，见上）
+                            : row.model.display === "rich"
+                              && row.model.imageIds && row.model.imageIds.length > 0
+                              ? 36 + 70
+                              : 36 + (row.model.hasComment || page.commentDraftLine === index
+                                      ? Math.max(20, commentMeasurer.contentHeight) + 6 : 0)
+                    radius: tokens.radiusControl   // 经页面属性中转（delegate 内单例访问缺陷，见上）
                     // 当前行 → 主题色浅背景；多选行 → 主题色更浅；批注行 → 主题色最浅；hover → itemHoverColor；否则透明
                     color: {
                         if (index === page.currentLine) {
@@ -1269,10 +1445,12 @@ FluContentPage {
                         }
                         if (page.isFindMatch(index)) {
                             // 查找命中：琥珀色浅底，与主题色（当前行/选中/批注）区分
-                            return page.rowFindHighlight
+                            return tokens.findHighlight
                         }
                         return row.hovered ? FluTheme.itemHoverColor : "transparent"
                     }
+                    // 交互动画（ui-improvement-plan P0）：hover/选中/当前行颜色平滑过渡
+                    Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
 
                     property bool hovered: false
                     HoverHandler {
@@ -1335,15 +1513,16 @@ FluContentPage {
                         }
                     }
 
-                    // 当前行左侧强调条（Fluent 选中指示）
+                    // 当前行左侧强调条（Fluent 选中指示，宽度 0→3 动画展开/收起）
                     Rectangle {
-                        visible: index === page.currentLine
+                        width: index === page.currentLine ? 3 : 0
+                        visible: width > 0
                         anchors.left: parent.left
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
-                        width: 3
-                        radius: 1.5
-                        color: FluTheme.primaryColor
+                        radius: 1.5   // 指示条专用圆角（细条，非标准控件圆角，不走 token）
+                        color: tokens.accentBar
+                        Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
                     }
 
                     // 原文行（顶部 36px）
@@ -1358,7 +1537,7 @@ FluContentPage {
 
                         FluText {
                             text: String(index + 1)   // 依赖 ListView 的 index 更新，插入行后行号正确刷新
-                            font.pixelSize: 12
+                            font.pixelSize: tokens.fontCaption
                             color: FluTheme.fontTertiaryColor
                             Layout.preferredWidth: 44
                             horizontalAlignment: Text.AlignRight
@@ -1417,8 +1596,8 @@ FluContentPage {
                                 anchors.right: parent.right
                                 anchors.bottom: parent.bottom
                                 height: 2
-                                radius: 1
-                                color: FluTheme.primaryColor
+                                radius: 1   // 指示条专用圆角（细条，非标准控件圆角，不走 token）
+                                color: tokens.accentBar
                             }
                         }
 
@@ -1432,8 +1611,10 @@ FluContentPage {
                             elide: Text.ElideRight
                             visible: page.currentLine !== index && row.model.display !== "rich"
                         }
+                        // 富文本行：Text 原生响应 <a href> 点击（onLinkActivated），
+                        // [图片] 占位 → 真实 <img>（data URI 内嵌）；非链接区域点击透传给行选中 MouseArea
                         Text {
-                            text: row.model.rich || row.model.text
+                            text: page.richTextFor(row)
                             textFormat: Text.RichText
                             font.pixelSize: page.originalFontSize
                             color: FluTheme.fontPrimaryColor
@@ -1441,6 +1622,7 @@ FluContentPage {
                             verticalAlignment: Text.AlignVCenter
                             wrapMode: Text.Wrap
                             visible: page.currentLine !== index && row.model.display === "rich"
+                            onLinkActivated: Qt.openUrlExternally(link)
                         }
 
                         // 批注图标（点击进入批注行内编辑）
@@ -1583,7 +1765,7 @@ FluContentPage {
                 FluText {
                     id: statusLabel
                     text: qsTr("就绪")
-                    font.pixelSize: 12
+                    font.pixelSize: tokens.fontCaption
                     color: FluTheme.fontSecondaryColor
                     Layout.fillWidth: true
                     elide: Text.ElideRight
@@ -1601,19 +1783,19 @@ FluContentPage {
                 FluText {
                     id: documentNameLabel
                     text: qsTr("未命名")
-                    font.pixelSize: 12
+                    font.pixelSize: tokens.fontCaption
                     font.bold: true
                     color: FluTheme.fontPrimaryColor
                 }
                 FluText {
                     id: docStatsLabel
                     text: ""
-                    font.pixelSize: 12
+                    font.pixelSize: tokens.fontCaption
                     color: FluTheme.fontTertiaryColor
                 }
                 FluText {
                     text: currentLine >= 0 ? qsTr("当前行 %1").arg(currentLine + 1) : ""
-                    font.pixelSize: 12
+                    font.pixelSize: tokens.fontCaption
                     color: FluTheme.fontTertiaryColor
                 }
             }
@@ -1720,7 +1902,7 @@ FluContentPage {
         id: historyDialog
         title: qsTr("翻译历史（本会话）")
         message: ""
-        negativeText: ""
+        buttonFlags: FluContentDialogType.PositiveButton
         positiveText: qsTr("关闭")
         contentDelegate: Component {
             Column {
@@ -1731,7 +1913,7 @@ FluContentPage {
                     spacing: 8
                     FluText {
                         text: qsTr("共 %1 条").arg(historyModel.count)
-                        font.pixelSize: 12
+                        font.pixelSize: tokens.fontCaption
                         color: FluTheme.fontSecondaryColor
                         Layout.alignment: Qt.AlignVCenter
                     }
@@ -1763,25 +1945,25 @@ FluContentPage {
                             Row {
                                 width: parent.width
                                 spacing: 6
-                                FluText { text: qsTr("第 %1 行").arg(model.line + 1); font.pixelSize: 11; color: FluTheme.fontSecondaryColor }
-                                FluText { text: model.time; font.pixelSize: 11; color: FluTheme.fontSecondaryColor }
+                                FluText { text: qsTr("第 %1 行").arg(model.line + 1); font.pixelSize: tokens.fontCaption; color: FluTheme.fontSecondaryColor }
+                                FluText { text: model.time; font.pixelSize: tokens.fontCaption; color: FluTheme.fontSecondaryColor }
                                 FluText {
                                     text: model.success ? qsTr("成功") : qsTr("失败")
-                                    font.pixelSize: 11
-                                    color: model.success ? "#2ea043" : "#d1242f"
+                                    font.pixelSize: tokens.fontCaption
+                                    color: model.success ? tokens.success : tokens.error
                                 }
                             }
                             FluText {
                                 width: parent.width
                                 elide: Text.ElideRight
                                 text: qsTr("原文：%1").arg(model.source)
-                                font.pixelSize: 12
+                                font.pixelSize: tokens.fontCaption
                             }
                             FluText {
                                 width: parent.width
                                 elide: Text.ElideRight
                                 text: qsTr("译文：%1").arg(model.translated)
-                                font.pixelSize: 12
+                                font.pixelSize: tokens.fontCaption
                                 color: FluTheme.fontSecondaryColor
                             }
                         }
@@ -1789,6 +1971,80 @@ FluContentPage {
                 }
             }
         }
+    }
+
+    // ---------- 术语自动提取弹窗（翻译功能区入口；与设置页共用 TranslationService 术语表） ----------
+    // ListModel 必须在 dialog 外声明（contentDelegate 重建时模型会被释放）
+    ListModel {
+        id: termCandidateModel
+    }
+
+    FluContentDialog {
+        id: termExtractDialog
+        title: qsTr("从文档提取术语")
+        negativeText: qsTr("取消")
+        positiveText: qsTr("添加选中")
+        contentDelegate: Component {
+            ColumnLayout {
+                // FluContentDialog implicitWidth 400，内容宽度须小于对话框宽度避免裁剪
+                width: 380
+                spacing: 8
+                FluText {
+                    text: qsTr("勾选要加入术语表的词（支持英文/技术标识符/中文，出现 3 次以上）；可直接填写标准译文，留空则为占位（设置页可补填）：")
+                    color: FluTheme.fontSecondaryColor
+                    wrapMode: Text.Wrap
+                }
+                ListView {
+                    id: termExtractList
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.min(contentHeight, 260)
+                    model: termCandidateModel
+                    clip: true
+                    spacing: 4
+                    delegate: RowLayout {
+                        width: termExtractList.width
+                        spacing: 8
+                        FluCheckBox {
+                            checked: model.checked
+                            onToggled: termCandidateModel.setProperty(index, "checked", checked)
+                        }
+                        FluText {
+                            text: qsTr("%1（出现 %2 次）").arg(model.word).arg(model.count)
+                            Layout.preferredWidth: 170
+                            Layout.alignment: Qt.AlignVCenter
+                            elide: Text.ElideRight
+                        }
+                        FluTextBox {
+                            Layout.fillWidth: true
+                            text: model.translation
+                            placeholderText: qsTr("标准译文")
+                            onEditingFinished: termCandidateModel.setProperty(index, "translation", text)
+                        }
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    FluCheckBox {
+                        text: qsTr("全选")
+                        onToggled: termExtractSelectAll(checked)
+                    }
+                    // AI 建议译文：仅配置了网络大模型 API 时可用（按文档上下文猜测标准译文）
+                    FluButton {
+                        text: qsTr("AI 建议译文")
+                        enabled: translationService.termSuggestionAvailable()
+                        onClicked: page.suggestTermTranslations()
+                    }
+                    Item { Layout.fillWidth: true }
+                    FluText {
+                        text: qsTr("译文为空 = 占位（不注入提示词）")
+                        font.pixelSize: tokens.fontCaption
+                        color: FluTheme.fontSecondaryColor
+                        wrapMode: Text.Wrap
+                    }
+                }
+            }
+        }
+        onPositiveClicked: addExtractedTermsFromDoc()
     }
 
     // ---------- 行右键菜单（页面内浮层：NoStack 下 Popup 不可用） ----------
@@ -1836,6 +2092,12 @@ FluContentPage {
             color: tokens.bgCard
             border.color: FluTheme.dividerColor
             border.width: 1
+            // 弹出动画（ui-improvement-plan P0）：缩放 + 淡入
+            opacity: lineMenu.visible ? 1.0 : 0.0
+            scale: lineMenu.visible ? 1.0 : 0.95
+            transformOrigin: Item.TopLeft
+            Behavior on opacity { NumberAnimation { duration: 120 } }
+            Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
             ColumnLayout {
                 id: menuCol
                 anchors.fill: parent
@@ -1891,7 +2153,7 @@ FluContentPage {
                             visible: modelData.key !== "sep"
                             anchors.fill: parent
                             anchors.margins: 1
-                            radius: page.rowRadius   // 经页面属性中转（delegate 内单例访问缺陷）
+                            radius: tokens.radiusControl   // 经页面属性中转（delegate 内单例访问缺陷）
                             color: menuRowHover.hovered ? FluTheme.itemHoverColor : "transparent"
                             opacity: parent.menuRowEnabled ? 1 : 0.4
                             HoverHandler { id: menuRowHover }
@@ -1900,7 +2162,7 @@ FluContentPage {
                                 anchors.leftMargin: 10
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: modelData.text || ""   // 分隔线行无 text
-                                font.pixelSize: 13
+                                font.pixelSize: tokens.fontMenu
                                 color: parent.parent.menuRowEnabled
                                     ? FluTheme.fontPrimaryColor : FluTheme.fontTertiaryColor
                             }
@@ -1941,7 +2203,7 @@ FluContentPage {
         // 遮罩（点击关闭）
         Rectangle {
             anchors.fill: parent
-            color: page.overlayMask
+            color: tokens.overlayMask
             MouseArea { anchors.fill: parent; onClicked: commentSettings.closeSettings() }
         }
         Rectangle {
@@ -1959,7 +2221,7 @@ FluContentPage {
                 spacing: 16
                 FluText {
                     text: qsTr("显示设置")
-                    font.pixelSize: 15
+                    font.pixelSize: tokens.fontTitle
                     font.bold: true
                     color: FluTheme.fontPrimaryColor
                 }
@@ -1969,7 +2231,7 @@ FluContentPage {
                     spacing: 12
                     FluText {
                         text: qsTr("原文字号 %1").arg(page.originalFontSize)
-                        font.pixelSize: 13
+                        font.pixelSize: tokens.fontMenu
                         color: FluTheme.fontPrimaryColor
                         Layout.preferredWidth: 100
                     }
@@ -1988,7 +2250,7 @@ FluContentPage {
                     spacing: 12
                     FluText {
                         text: qsTr("批注字号 %1").arg(page.commentFontSize)
-                        font.pixelSize: 13
+                        font.pixelSize: tokens.fontMenu
                         color: FluTheme.fontPrimaryColor
                         Layout.preferredWidth: 100
                     }
@@ -2003,7 +2265,7 @@ FluContentPage {
                 }
                 FluText {
                     text: qsTr("字号即时生效并持久化；批注字号独立于原文，仅影响批注区域。设置页「显示」可同步调整。")
-                    font.pixelSize: 12
+                    font.pixelSize: tokens.fontCaption
                     color: FluTheme.fontSecondaryColor
                     wrapMode: Text.Wrap
                     Layout.fillWidth: true
@@ -2032,7 +2294,7 @@ FluContentPage {
         anchors.fill: parent
         Rectangle {
             anchors.fill: parent
-            color: page.overlayMask
+            color: tokens.overlayMask
             MouseArea { anchors.fill: parent; onClicked: shortcutHelp.visible = false }
         }
         Rectangle {
@@ -2050,7 +2312,7 @@ FluContentPage {
                 spacing: 8
                 FluText {
                     text: qsTr("快捷键")
-                    font.pixelSize: 15
+                    font.pixelSize: tokens.fontTitle
                     font.bold: true
                     color: FluTheme.fontPrimaryColor
                 }
@@ -2070,14 +2332,14 @@ FluContentPage {
                         spacing: 12
                         FluText {
                             text: modelData.key
-                            font.pixelSize: 13
+                            font.pixelSize: tokens.fontMenu
                             font.bold: true
                             color: FluTheme.primaryColor
                             Layout.preferredWidth: 170
                         }
                         FluText {
                             text: modelData.desc
-                            font.pixelSize: 13
+                            font.pixelSize: tokens.fontMenu
                             color: FluTheme.fontPrimaryColor
                             Layout.fillWidth: true
                         }
@@ -2104,7 +2366,7 @@ FluContentPage {
         anchors.fill: parent
         Rectangle {
             anchors.fill: parent
-            color: page.overlayMask
+            color: tokens.overlayMask
             MouseArea { anchors.fill: parent; onClicked: qualityReport.visible = false }
         }
         Rectangle {
@@ -2123,7 +2385,7 @@ FluContentPage {
                     Layout.fillWidth: true
                     FluText {
                         text: qsTr("质量自检：%1 处需人工复核").arg(qualityWarnings.count)
-                        font.pixelSize: 15
+                        font.pixelSize: tokens.fontTitle
                         font.bold: true
                         color: FluTheme.fontPrimaryColor
                     }
@@ -2153,14 +2415,14 @@ FluContentPage {
                             spacing: 10
                             FluText {
                                 text: model.line >= 0 ? qsTr("第 %1 行").arg(model.line + 1) : qsTr("全文")
-                                font.pixelSize: 12
+                                font.pixelSize: tokens.fontCaption
                                 font.bold: true
                                 color: tokens.warning
                                 Layout.preferredWidth: 76
                             }
                             FluText {
                                 text: model.issue
-                                font.pixelSize: 13
+                                font.pixelSize: tokens.fontMenu
                                 color: FluTheme.fontPrimaryColor
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
@@ -2201,8 +2463,9 @@ FluContentPage {
         flags: Qt.Tool | Qt.FramelessWindowHint
         title: qsTr("翻译工具")
         width: 300
-        minimumWidth: 240
-        minimumHeight: 160
+        // 最小尺寸放宽（内容自适应缩放 + 窄窗口隐藏次要文本后仍可用）
+        minimumWidth: 200
+        minimumHeight: 130
         // 主窗口最小化时置 true 隐藏浮窗；恢复时置 false 重新显示
         property bool minimized: false
         // 应用退出（主窗口关闭）时置 true，放行浮窗关闭，避免拦截导致进程残留
@@ -2210,8 +2473,29 @@ FluContentPage {
         // 用户手动缩放后高度不再跟随内容（否则系统缩放会被绑定拉回）
         property bool userResized: false
         property real manualHeight: 300
+        property real manualWidth: 300
+        // 注意：floatWindow 内只能有一个 Component.onCompleted（多个会被 qmlcachegen
+        // 判为「属性值设置多次」编译错误，导致整页加载失败——2026-08-19 踩过）
+        // width 用普通属性（声明 300）+ onWidthChanged 写 manualWidth：若用绑定
+        // 「width: userResized ? manualWidth : 300」+ onWidthChanged 写 manualWidth，
+        // qmlcachegen 静态检测报「循环值绑定」（运行时标志无法打破静态检测）
         height: userResized ? manualHeight : Math.max(220, floatCol.implicitHeight + 4)
-        onHeightChanged: { if (floatWindow.userResized) floatWindow.manualHeight = floatWindow.height }
+        onWidthChanged: {
+            if (floatWindow.userResized) {
+                floatWindow.manualWidth = floatWindow.width
+                floatPosSaveTimer.restart()
+            }
+        }
+        onHeightChanged: {
+            if (floatWindow.userResized) {
+                floatWindow.manualHeight = floatWindow.height
+                floatPosSaveTimer.restart()
+            }
+        }
+        Component.onCompleted: {
+            // 兜底：创建完成后延迟恢复位置（首次可见可能不触发 onVisibleChanged）
+            floatPosRestoreTimer.restart()
+        }
         color: "transparent"
         // 恢复位置期间抑制实时保存（避免把未映射时的无效 x/y 存进 config）
         property bool restoringPos: false
@@ -2272,18 +2556,16 @@ FluContentPage {
                 floatWindow.close()
             }
         }
-        // 兜底：创建完成后延迟恢复位置（首次可见可能不触发 onVisibleChanged）
-        Component.onCompleted: {
-            floatPosRestoreTimer.restart()
-        }
 
         // 自绘卡片（透明窗口 + 圆角 + 边框，保持 Fluent 观感）
+        // 注：不加 layer/MultiEffect 阴影——layer 离屏渲染在非整数 DPI 缩放下文字模糊
+        //（2026-08-19 用户实测，与编辑器卡片同因）
         Rectangle {
             anchors.fill: parent
-            radius: page.cardRadius   // 内联 Window 组件内经 page 属性中转
+            radius: tokens.radiusCard   // 内联 Window 组件内经 page 属性中转
             border.width: 1
             border.color: FluTheme.dividerColor
-            color: page.bgFloatWindow
+            color: tokens.bgFloatWindow
             clip: true
 
             ColumnLayout {
@@ -2302,7 +2584,7 @@ FluContentPage {
                         anchors.rightMargin: 12
                         FluText {
                             text: qsTr("翻译工具")
-                            font.pixelSize: 13
+                            font.pixelSize: tokens.fontMenu
                             font.bold: true
                             color: FluTheme.fontPrimaryColor
                             Layout.fillWidth: true

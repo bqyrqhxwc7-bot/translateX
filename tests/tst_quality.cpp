@@ -82,6 +82,10 @@ private slots:
     void glossaryAffectsCacheKey();
     void extractCandidatesBasic();
     void extractCandidatesFiltering();
+    void extractCandidatesEnhanced();
+    void parseTermSuggestionsFormats();
+    void extractCandidatesUnlimited();
+    void echoExemptsNonTranslatable();
     void emptyTranslationPlaceholder();
 };
 
@@ -190,6 +194,23 @@ void TestQuality::qualityGateEcho()
     QVERIFY(QualityGate::notJustEcho("The quick brown fox", "The quick browm fox"));
     // 完全一致仍拦截（跨语言）
     QVERIFY(!QualityGate::notJustEcho("hello world", "hello world"));
+}
+
+// 回显豁免：无实质可翻译内容（型号/编号/日期/纯缩写）译文=原文是正确翻译，不算未翻译；
+// 有实质内容（普通词）的回显仍拦截
+void TestQuality::echoExemptsNonTranslatable()
+{
+    QVERIFY(QualityGate::notJustEcho(QStringLiteral("P2899R1"), QStringLiteral("P2899R1")));
+    QVERIFY(QualityGate::notJustEcho(QStringLiteral("2025-03-14"), QStringLiteral("2025-03-14")));
+    QVERIFY(QualityGate::notJustEcho(QStringLiteral("API"), QStringLiteral("API")));
+    QVERIFY(QualityGate::notJustEcho(QStringLiteral("15"), QStringLiteral("15")));
+    // 含普通词的原文：完全回显仍拦截（模型该翻译 "Prior Art"）
+    QVERIFY(!QualityGate::notJustEcho(QStringLiteral("2.5 Prior Art 16"),
+                                      QStringLiteral("2.5 Prior Art 16")));
+    // 长度规则：短行放宽（0.1x~8x），极端异常仍拦截
+    QVERIFY(QualityGate::lengthReasonable(QStringLiteral("OK"), QStringLiteral("好")));
+    QVERIFY(QualityGate::lengthReasonable(QStringLiteral("AI"), QStringLiteral("人工智能")));
+    QVERIFY(!QualityGate::lengthReasonable(QStringLiteral("hi"), QString(30, QChar(0x957F))));
 }
 
 void TestQuality::qualityGateLength()
@@ -399,6 +420,79 @@ void TestQuality::extractCandidatesFiltering()
     // minFreq/maxCount 边界：minFreq 0 → 视为 1；maxCount 0 → 视为 1
     const auto edge = g.extractCandidates(lines, 0, 0);
     QCOMPARE(edge.size(), 1);
+}
+
+// 提取增强：技术标识符（数字/连字符/加号词形）与中文高频词
+void TestQuality::extractCandidatesEnhanced()
+{
+    TermGlossary g;
+    const QStringList lines{
+        QStringLiteral("The API supports P2899R1 and C++ contracts."),
+        QStringLiteral("API P2899R1 C++ API"),
+        QStringLiteral("x86-64 API x86-64 C++ P2899R1 x86-64"),
+        QStringLiteral("翻译质量取决于术语表，术语表需要人工维护。"),
+        QStringLiteral("术语表质量好翻译质量才好。"),
+        QStringLiteral("术语表更新后翻译质量提升。"),
+    };
+    // 英文/标识符：API(4) C++(3) P2899R1(3) x86-64(3)
+    // 中文 2-3 字 n-gram：术语表(4) 翻译质量(3) 等
+    const auto candidates = g.extractCandidates(lines, 3, 12);
+    QStringList words;
+    for (const auto &c : candidates) {
+        words.append(c.first);
+    }
+    QVERIFY(words.contains(QStringLiteral("API")));
+    QVERIFY(words.contains(QStringLiteral("C++")));
+    QVERIFY(words.contains(QStringLiteral("P2899R1")));
+    QVERIFY(words.contains(QStringLiteral("x86-64")));
+    QVERIFY(words.contains(QStringLiteral("术语表")));
+    QVERIFY(words.contains(QStringLiteral("翻译")));
+    QVERIFY(words.contains(QStringLiteral("质量")));
+    // 停用词与纯数字仍被排除
+    QVERIFY(!words.contains(QStringLiteral("The")));
+    QVERIFY(!words.contains(QStringLiteral("the")));
+    QVERIFY(!words.contains(QStringLiteral("1234")));
+}
+
+// AI 建议译文解析：容忍多种分隔符/行首序号/引号；键大小写不敏感匹配
+void TestQuality::parseTermSuggestionsFormats()
+{
+    const QStringList terms{ QStringLiteral("API"), QStringLiteral("C++"),
+                             QStringLiteral("P2899R1"), QStringLiteral("翻译") };
+    // 混合格式：= / ：/ 序号 / 引号 / 大小写差异 / 无关行
+    const QString output =
+        QStringLiteral("1. API = 应用程序接口\n")
+        + QStringLiteral("C++：C++ 语言\n")
+        + QStringLiteral("p2899r1 → “提案 P2899R1”\n")
+        + QStringLiteral("翻译: 翻译\n")
+        + QStringLiteral("以下是术语对照：\n");
+    const QVariantMap map =
+        TranslationService::parseTermSuggestions(output, terms);
+    QCOMPARE(map.value(QStringLiteral("API")).toString(), QStringLiteral("应用程序接口"));
+    QCOMPARE(map.value(QStringLiteral("C++")).toString(), QStringLiteral("C++ 语言"));
+    QCOMPARE(map.value(QStringLiteral("P2899R1")).toString(), QStringLiteral("提案 P2899R1"));
+    // 「翻译: 翻译」自译（模型回显）→ 结果为空，不采用
+    QVERIFY(!map.contains(QStringLiteral("翻译")));
+    // 无关行不解析
+    QCOMPARE(map.size(), 3);
+}
+
+// 候选不限：maxCount = -1 → 达标全部返回（放宽上限，用户要求「达标都可候选」）
+void TestQuality::extractCandidatesUnlimited()
+{
+    TermGlossary g;
+    const QStringList lines{
+        QStringLiteral("alpha beta alpha beta alpha beta"),   // alpha(3) beta(3)
+        QStringLiteral("gamma gamma gamma"),                 // gamma(3)
+        QStringLiteral("delta delta"),                       // delta(2) < 3
+    };
+    const auto limited = g.extractCandidates(lines, 3, 1);
+    QCOMPARE(limited.size(), 1);
+    const auto unlimited = g.extractCandidates(lines, 3, -1);
+    QCOMPARE(unlimited.size(), 3);   // alpha/beta/gamma 全部候选
+    QCOMPARE(unlimited[0].first, QStringLiteral("alpha"));
+    QCOMPARE(unlimited[1].first, QStringLiteral("beta"));
+    QCOMPARE(unlimited[2].first, QStringLiteral("gamma"));
 }
 
 // 空译文占位：不注入提示词、不参与质量校验（review fd8d1f3 🟡8）

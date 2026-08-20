@@ -37,4 +37,6 @@ public:
 private:
     // 提取数字、代码片段等需要保留的 token
     static QStringList extractTokens(const QString &text);
+    // 原文是否含实质可翻译内容（去除数字/型号/代码 token 后仍有普通词或 CJK）
+    static bool hasTranslatableContent(const QString &text);
 };
